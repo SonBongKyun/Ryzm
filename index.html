@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ryzm Terminal — Cyberpunk Bloomberg</title>
+  <meta name="description"
+    content="Ryzm Terminal: Professional cryptocurrency trading dashboard with cyberpunk Bloomberg aesthetics" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap"
+    rel="stylesheet" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="/static/styles.css?v=3.0" />
+</head>
+
+<body>
+  <canvas id="matrix-bg"></canvas>
+
+  <!-- ═══════════════════════════════════════
+       HEADER
+       ═══════════════════════════════════════ -->
+  <header class="header">
+    <!-- Logo -->
+    <div class="logo">
+      <span class="logo-dot"></span>
+      Ryzm_OS
+    </div>
+
+    <!-- BGM Player -->
+    <div class="bgm-player">
+      <button id="bgm-play" title="Play / Pause">
+        <i data-lucide="play" style="width:14px;height:14px;"></i>
+      </button>
+      <span id="bgm-track-name" class="bgm-track-name">Stopped</span>
+      <button title="Skip">
+        <i data-lucide="skip-forward" style="width:12px;height:12px;"></i>
+      </button>
+      <i data-lucide="volume-2" style="width:12px;height:12px;color:var(--text-muted);"></i>
+      <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="60" />
+    </div>
+
+    <!-- Dual Clock -->
+    <div class="dual-clock">
+      <div class="clock-item">
+        <div class="clock-label">Seoul · KST</div>
+        <div class="clock-time" id="clock-kst">--:--:--</div>
+      </div>
+      <div class="clock-divider"></div>
+      <div class="clock-item">
+        <div class="clock-label">New York · EST</div>
+        <div class="clock-time" id="clock-est">--:--:--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Macro Ticker (New) -->
+  <div class="macro-ticker-container">
+    <div class="ticker-wrapper">
+      <div id="macro-ticker" class="ticker-content">
+        <span class="ticker-loading">INITIALIZING MARKET DATA FEED...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vibe Bar HUD -->
+  <div id="vibe-bar" class="vibe-bar">
+    <div class="vibe-label">MARKET VIBE:</div>
+    <div id="vibe-status" class="vibe-status">LOADING...</div>
+    <div id="vibe-message" class="vibe-marquee">Ryzm System Initializing...</div>
+  </div>
+
+  <!-- Quick Action Toolbar -->
+  <div class="quick-actions">
+    <div class="tooltip-wrapper">
+      <button class="quick-btn" id="btn-refresh-all" title="Refresh All Data">
+        <i data-lucide="refresh-cw" style="width:18px;height:18px;"></i>
+      </button>
+      <span class="tooltip">Refresh All</span>
+    </div>
+    <div class="tooltip-wrapper">
+      <button class="quick-btn" id="btn-fullscreen" title="Toggle Fullscreen">
+        <i data-lucide="maximize-2" style="width:18px;height:18px;"></i>
+      </button>
+      <span class="tooltip">Fullscreen</span>
+    </div>
+    <div class="tooltip-wrapper">
+      <button class="quick-btn" id="btn-notifications" title="Notification Settings">
+        <i data-lucide="bell" style="width:18px;height:18px;"></i>
+      </button>
+      <span class="tooltip">Notifications</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       MAIN 3-COLUMN GRID
+       ═══════════════════════════════════════ -->
+  <main class="main-grid">
+
+    <div class="panel">
+      <div class="glass-panel" style="flex: 1; position: relative; overflow: hidden;">
+        <div class="panel-title">
+          <i data-lucide="radar"></i> Narrative Radar
+        </div>
+        <div id="bubble-chart" class="bubble-chart">
+          <svg id="bubble-svg" width="100%" height="100%" style="position: absolute; top: 40px; left: 0;">
+            <!-- Bubbles will be rendered here by JavaScript -->
+          </svg>
+          <div style="text-align:center; padding:80px 20px; color:var(--text-muted); font-size:0.8rem; position: relative; z-index: 1;">
+            Waiting for Council Analysis...
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-panel" style="height: 120px; min-height:120px;">
+        <div class="panel-title"><i data-lucide="flame"></i> Kimchi Premium</div>
+        <div class="kp-gauge">
+          <div class="kp-value" id="kp-value" style="font-size:1.5rem; font-family:var(--font-mono); color:var(--neon-green);">+3.42%
+          </div>
+          <div id="kp-status" style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Arb Opportunity: LOW</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="center-panel">
+
+      <div class="council-container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+          <span style="font-family:var(--font-head); font-size:0.8rem; color:var(--neon-cyan);">///
+            COUNCIL_LINK__ACTIVE</span>
+          <span id="consensus-score" style="font-family:var(--font-mono); font-weight:bold; color:#fff;">SCORE:
+            --</span>
+        </div>
+        <div class="agents-grid" id="agents-grid">
+          <div class="agent-card">
+            <div class="agent-icon">R</div>
+            <div class="agent-name">SYSTEM</div>
+            <div class="agent-msg">Standby...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-panel chart-container" id="chart-panel"
+        style="height:450px; padding:0; border:1px solid var(--border-bright);">
+        <div class="tradingview-widget-container" style="height:100%; width:100%;">
+          <div id="tradingview_b1e30" style="height:100%; width:100%;"></div>
+          <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+          <script type="text/javascript">
+            new TradingView.widget({
+              "autosize": true,
+              "symbol": "BINANCE:BTCUSDT",
+              "interval": "D",
+              "timezone": "Asia/Seoul",
+              "theme": "light",
+              "style": "1",
+              "locale": "en",
+              "enable_publishing": false,
+              "backgroundColor": "rgba(255, 255, 255, 1)",
+              "gridColor": "rgba(0, 0, 0, 0.05)",
+              "hide_top_toolbar": false,
+              "hide_legend": false,
+              "save_image": false,
+              "container_id": "tradingview_b1e30"
+            });
+          </script>
+        </div>
+      </div>
+
+      <button class="ai-scan-btn" id="btn-council-start">
+        <i data-lucide="zap"></i> EXECUTE ANALYSIS PROTOCOL
+      </button>
+
+      <button id="btn-copy-report" class="ai-scan-btn secondary-btn"
+        style="display:none; margin-top:10px; background:var(--bg-panel); border:1px solid var(--neon-magenta); color:var(--neon-magenta);">
+        <i data-lucide="copy"></i> COPY REPORT FOR X
+      </button>
+
+      <button id="btn-snapshot" class="ai-scan-btn secondary-btn" style="margin-top:10px; background:#333; color:#fff;">
+        <i data-lucide="camera"></i> EXPORT SNAPSHOT
+      </button>
+    </div>
+
+    <div class="panel">
+      <!-- Real-time Price Panel (NEW) -->
+      <div class="glass-panel" style="flex: 1; max-height: calc(100vh - 150px);">
+        <div class="panel-title"><i data-lucide="trending-up"></i> 실시간 가격</div>
+        <div id="realtime-prices" class="price-panel">
+          <!-- Price cards will be populated by JS -->
+          <div style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.8rem;">
+            Loading prices...
+          </div>
+        </div>
+      </div>
+
+      <!-- L/S Ratio Panel -->
+      <div class="glass-panel" style="margin-bottom:15px;">
+        <div class="panel-title"><i data-lucide="scale"></i> Long/Short Ratio</div>
+        <div class="ls-container">
+          <div class="ls-bar">
+            <div id="ls-long" class="ls-fill long" style="width: 50%;">50%</div>
+            <div id="ls-short" class="ls-fill short" style="width: 50%;">50%</div>
+          </div>
+          <div class="ls-labels">
+            <span style="color:var(--neon-green)">LONG POSITIONS</span>
+            <span style="color:var(--neon-red)">SHORT POSITIONS</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-panel" style="flex: 1;">
+        <div class="panel-title"><i data-lucide="rss"></i> Live Wire</div>
+        <div id="news-feed" style="overflow-y:auto; font-size:0.8rem;">
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Ask Ryzm Chat Float Button -->
+  <button id="chat-float-btn" class="chat-float-btn" title="Ask Ryzm">
+    <i data-lucide="message-circle"></i>
+  </button>
+
+  <!-- Chat Overlay -->
+  <div id="chat-overlay" class="chat-overlay">
+    <div class="chat-header">
+      <span><i data-lucide="bot"></i> Ask Ryzm</span>
+      <button id="chat-close" class="chat-close-btn">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div class="chat-input-container">
+      <input type="text" id="chat-input" placeholder="Ask anything about the market..." />
+      <button id="chat-send">
+        <i data-lucide="send"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-item">
+      <span class="status-dot" id="connection-status"></span>
+      <span>SYSTEM ONLINE</span>
+    </div>
+    <div class="status-item">
+      <i data-lucide="activity" style="width:12px;height:12px;"></i>
+      <span id="last-update">Last Update: --:--</span>
+    </div>
+    <div class="status-item">
+      <i data-lucide="database" style="width:12px;height:12px;"></i>
+      <span id="data-sources">7 Sources Active</span>
+    </div>
+    <div class="status-item">
+      <i data-lucide="zap" style="width:12px;height:12px;"></i>
+      <span>Ryzm Terminal v1.0</span>
+    </div>
+  </div>
+
+  <!-- App Script -->
+  <script src="/static/app.js"></script>
+
+</body>
+
+</html>

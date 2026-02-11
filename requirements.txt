@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-dotenv
+requests
+feedparser
+yfinance
+google-generativeai
+pydantic

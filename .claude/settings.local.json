@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(timeout 3 tail:*)",
+      "Bash(.venvScriptspip install google-generativeai)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(curl:*)",
+      "Bash(pip install:*)"
+    ]
+  }
+}
