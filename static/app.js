@@ -535,7 +535,7 @@ async function fetchWhaleFeed() {
     const container = document.getElementById('whale-feed');
     if (!container) return;
     if (!data.trades || data.trades.length === 0) {
-      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">No whale activity detected</div>';
+      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">' + t('no_whale') + '</div>';
       return;
     }
     container.innerHTML = data.trades.map(t => {
@@ -563,7 +563,7 @@ async function fetchCalendar() {
     const container = document.getElementById('calendar-feed');
     if (!container) return;
     if (!data.events || data.events.length === 0) {
-      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">No upcoming events</div>';
+      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">' + t('no_events') + '</div>';
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
@@ -1137,7 +1137,7 @@ function setupEventListeners() {
   if (btnCouncil) {
     btnCouncil.addEventListener('click', async () => {
       playSound('click');
-      btnCouncil.innerHTML = '<i data-lucide="loader-2" class="spin"></i> ACCESSING NEURAL NET...';
+      btnCouncil.innerHTML = '<i data-lucide="loader-2" class="spin"></i> ' + t('accessing');
       btnCouncil.disabled = true;
 
       const agentsGrid = document.getElementById('agents-grid');
@@ -1145,7 +1145,7 @@ function setupEventListeners() {
         agentsGrid.innerHTML = `
                     <div style="grid-column: span 5; text-align:center; padding:40px; color:var(--text-muted);">
                         <i data-lucide="radio-tower" style="width:32px; height:32px; margin-bottom:10px; animation:pulse 1s infinite;"></i><br>
-                        SUMMONING AGENTS...
+                        ${t('summoning')}
                     </div>
                 `;
         lucide.createIcons();
@@ -1157,7 +1157,7 @@ function setupEventListeners() {
         renderCouncil(data);
         playSound('alert');
 
-        btnCouncil.innerHTML = '<i data-lucide="zap"></i> RE-RUN ANALYSIS';
+        btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
         if (btnCopy) btnCopy.style.display = 'flex';
 
         // Refresh council prediction history after each analysis
@@ -1165,7 +1165,7 @@ function setupEventListeners() {
 
       } catch (e) {
         console.error(e);
-        if (agentsGrid) agentsGrid.innerHTML = '<div style="color:var(--neon-red); grid-column:span 5; text-align:center;">CONNECTION FAILED</div>';
+        if (agentsGrid) agentsGrid.innerHTML = '<div style="color:var(--neon-red); grid-column:span 5; text-align:center;">' + t('connection_failed') + '</div>';
         btnCouncil.innerHTML = '<i data-lucide="alert-triangle"></i> RETRY';
       } finally {
         btnCouncil.disabled = false;
@@ -1758,13 +1758,13 @@ async function updateKimchiDisplay() {
       // Update status text
       if (kpStatus) {
         if (Math.abs(p) > 3) {
-          kpStatus.innerText = 'Arb Opportunity: HIGH';
+          kpStatus.innerText = t('arb_high');
           kpStatus.style.color = 'var(--neon-cyan)';
         } else if (Math.abs(p) > 1) {
-          kpStatus.innerText = 'Arb Opportunity: MEDIUM';
+          kpStatus.innerText = t('arb_medium');
           kpStatus.style.color = 'var(--text-muted)';
         } else {
-          kpStatus.innerText = 'Arb Opportunity: LOW';
+          kpStatus.innerText = t('arb_low');
           kpStatus.style.color = 'var(--text-muted)';
         }
       }
@@ -2494,6 +2494,7 @@ const _translations = {
     refresh_all: "Refresh All",
     fullscreen: "Fullscreen",
     notifications: "Notifications",
+    re_run: "RE-RUN ANALYSIS",
     // Status
     system_online: "SYSTEM ONLINE",
     last_update: "Last Update",
@@ -2501,16 +2502,42 @@ const _translations = {
     // Chat
     ask_ryzm: "Ask Ryzm",
     chat_placeholder: "Ask anything about the market...",
-    // MTF
+    // MTF table
     tf: "TF", rsi: "RSI", ema: "EMA", signal: "Signal",
     // On-chain
     open_interest: "Open Interest",
     mempool_fees: "BTC Mempool Fees (sat/vB)",
     network_hashrate: "Network Hashrate",
-    // F&G
+    // Council stats
     sessions: "SESSIONS", hit_rate: "HIT RATE", hits: "HITS",
-    // Council
-    strategic_narrative: "STRATEGIC NARRATIVE"
+    // Strategic narrative
+    strategic_narrative: "STRATEGIC NARRATIVE",
+    // Risk gauge component labels
+    rc_sentiment: "SENTIMENT",
+    rc_volatility: "VOLATILITY",
+    rc_leverage: "LEVERAGE",
+    rc_funding: "FUNDING",
+    rc_kimchi: "KIMCHI P.",
+    // L/S
+    ls_long: "LONG", ls_short: "SHORT",
+    // Funding
+    fr_label: "FUNDING:",
+    // KP
+    arb_low: "Arb Opportunity: LOW",
+    arb_medium: "Arb Opportunity: MEDIUM",
+    arb_high: "Arb Opportunity: HIGH",
+    // Council history
+    council_run_msg: "Run Council to start tracking...",
+    // Briefing
+    briefing: "BRIEFING",
+    // Misc
+    loading: "Loading...",
+    heatmap_loading: "Loading heatmap...",
+    no_whale: "No whale activity detected",
+    no_events: "No upcoming events",
+    connection_failed: "CONNECTION FAILED",
+    summoning: "SUMMONING AGENTS...",
+    accessing: "ACCESSING NEURAL NET..."
   },
   ko: {
     market_vibe: "시장 분위기:",
@@ -2533,6 +2560,7 @@ const _translations = {
     refresh_all: "전체 새로고침",
     fullscreen: "전체화면",
     notifications: "알림",
+    re_run: "분석 재실행",
     system_online: "시스템 온라인",
     last_update: "마지막 업데이트",
     sources: "데이터 소스",
@@ -2543,7 +2571,26 @@ const _translations = {
     mempool_fees: "BTC 멤풀 수수료 (sat/vB)",
     network_hashrate: "네트워크 해시레이트",
     sessions: "세션", hit_rate: "적중률", hits: "적중",
-    strategic_narrative: "전략적 내러티브"
+    strategic_narrative: "전략적 내러티브",
+    rc_sentiment: "심리지수",
+    rc_volatility: "변동성",
+    rc_leverage: "레버리지",
+    rc_funding: "펀딩비",
+    rc_kimchi: "김프",
+    ls_long: "롱", ls_short: "숏",
+    fr_label: "펀딩비:",
+    arb_low: "차익 기회: 낮음",
+    arb_medium: "차익 기회: 보통",
+    arb_high: "차익 기회: 높음",
+    council_run_msg: "분석을 실행하면 추적이 시작됩니다...",
+    briefing: "브리핑",
+    loading: "로딩 중...",
+    heatmap_loading: "히트맵 로딩 중...",
+    no_whale: "고래 활동이 감지되지 않았습니다",
+    no_events: "예정된 이벤트가 없습니다",
+    connection_failed: "연결 실패",
+    summoning: "에이전트 소환 중...",
+    accessing: "뉴럴넷 접속 중..."
   }
 };
 
@@ -2578,21 +2625,70 @@ function t(key) {
 function applyTranslations(lang) {
   const dict = _translations[lang] || _translations['en'];
 
-  // Update data-i18n elements (panel titles)
+  // 1) Panel titles with data-i18n (preserve Lucide icons + collapse icon)
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
-    if (dict[key]) {
-      // Preserve icons inside panel-title
-      const icons = el.querySelectorAll('i');
+    if (!dict[key]) return;
+    // Collect leading icon(s) (not collapse-icon)
+    const leadIcons = [];
+    el.querySelectorAll('i:not(.collapse-icon)').forEach(ic => leadIcons.push(ic.outerHTML));
+    const hasCollapse = el.querySelector('.collapse-icon');
+    const collapseHTML = hasCollapse ? ' <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i>' : '';
+    el.innerHTML = (leadIcons.length ? leadIcons.join(' ') + ' ' : '') + dict[key] + collapseHTML;
+  });
+
+  // 2) Simple text elements with data-i18n-text
+  document.querySelectorAll('[data-i18n-text]').forEach(el => {
+    const key = el.getAttribute('data-i18n-text');
+    if (!dict[key]) return;
+    // If element has child icons, preserve them
+    const icons = el.querySelectorAll('i');
+    if (icons.length > 0) {
       const iconHTML = Array.from(icons).map(i => i.outerHTML).join(' ');
-      const hasCollapse = el.querySelector('.collapse-icon');
-      const collapseHTML = hasCollapse ? ' <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i>' : '';
-      el.innerHTML = iconHTML.split('<i data-lucide="chevron-down"')[0] + ' ' + dict[key] + collapseHTML;
-      lucide.createIcons();
+      el.innerHTML = iconHTML + ' ' + dict[key];
+    } else {
+      el.textContent = dict[key];
     }
   });
 
-  // MTF table header
+  // 3) Prefix elements (e.g. "Last Update: 14:30")
+  document.querySelectorAll('[data-i18n-prefix]').forEach(el => {
+    const key = el.getAttribute('data-i18n-prefix');
+    if (!dict[key]) return;
+    const txt = el.textContent;
+    const colonIdx = txt.indexOf(':');
+    const suffix = colonIdx !== -1 ? txt.substring(colonIdx + 1) : '';
+    el.textContent = dict[key] + ':' + suffix;
+  });
+
+  // 4) Risk gauge component labels
+  const rcLabels = {
+    'rc-fg-bar': 'rc_sentiment',
+    'rc-vix-bar': 'rc_volatility',
+    'rc-ls-bar': 'rc_leverage',
+    'rc-fr-bar': 'rc_funding',
+    'rc-kp-bar': 'rc_kimchi'
+  };
+  Object.entries(rcLabels).forEach(([barId, tKey]) => {
+    const bar = document.getElementById(barId);
+    if (!bar) return;
+    const row = bar.closest('.rc-row');
+    if (!row) return;
+    const label = row.querySelector('.rc-label');
+    if (label && dict[tKey]) label.textContent = dict[tKey];
+  });
+
+  // 4) L/S Ratio labels  
+  const longLabel = document.querySelector('.ls-indicator.long-ind .ls-ind-label');
+  const shortLabel = document.querySelector('.ls-indicator.short-ind .ls-ind-label');
+  if (longLabel && dict.ls_long) longLabel.textContent = dict.ls_long;
+  if (shortLabel && dict.ls_short) shortLabel.textContent = dict.ls_short;
+
+  // 5) Funding rate label
+  const frLabel = document.querySelector('.fr-label');
+  if (frLabel && dict.fr_label) frLabel.textContent = dict.fr_label;
+
+  // 6) MTF table header
   const mtfTh = document.querySelectorAll('.mtf-table thead th');
   if (mtfTh.length >= 4) {
     mtfTh[0].textContent = dict.tf || 'TF';
@@ -2601,19 +2697,22 @@ function applyTranslations(lang) {
     mtfTh[3].textContent = dict.signal || 'Signal';
   }
 
-  // On-chain subtitles
+  // 7) On-chain subtitles
   const ocSubs = document.querySelectorAll('.oc-subtitle');
   if (ocSubs[0]) ocSubs[0].textContent = dict.open_interest || 'Open Interest';
   if (ocSubs[1]) ocSubs[1].textContent = dict.mempool_fees || 'BTC Mempool Fees (sat/vB)';
   if (ocSubs[2]) ocSubs[2].textContent = dict.network_hashrate || 'Network Hashrate';
 
-  // Stat labels
+  // 8) Council stat labels
   const statLabels = document.querySelectorAll('.ch-stat-label');
   if (statLabels[0]) statLabels[0].textContent = dict.sessions || 'SESSIONS';
   if (statLabels[1]) statLabels[1].textContent = dict.hit_rate || 'HIT RATE';
   if (statLabels[2]) statLabels[2].textContent = dict.hits || 'HITS';
 
-  // Chat placeholder
+  // 9) Chat placeholder
   const chatInput = document.getElementById('chat-input');
   if (chatInput) chatInput.placeholder = dict.chat_placeholder || 'Ask anything about the market...';
+
+  // 10) Refresh all Lucide icons after innerHTML changes
+  try { lucide.createIcons(); } catch (e) {}
 }
