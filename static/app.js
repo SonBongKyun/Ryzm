@@ -5,10 +5,11 @@ let validatorCredits = 3;
 const MAX_FREE_VALIDATIONS = 3;
 
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
   initClock();
   initDataFeeds();
   setupEventListeners();
-  initAudioEngine(); // 오디오 엔진 가동
+  initAudioEngine(); // Start audio engine
   initValidator(); // Trade Validator
   initChat(); // Ask Ryzm Chat
   loadValidatorCredits(); // Load saved credits
@@ -23,8 +24,13 @@ const sfx = {
 };
 
 const playlist = [
-  { title: "Cyber City (Synth)", url: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/KieLoKaz/Free_Ganymed/KieLoKaz_-_01_-_Reunion_of_the_Spaceducks.mp3" },
-  { title: "Night Drive", url: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Chad_Crouch/Arps/Chad_Crouch_-_Elips.mp3" }
+  { title: "Echoes of Time", url: "/static/audio/Echoes%20of%20Time.mp3" },
+  { title: "Invisible Room", url: "/static/audio/Invisible%20Room.mp3" },
+  { title: "Morning Glow", url: "/static/audio/Morning%20Glow.mp3" },
+  { title: "Morning Light", url: "/static/audio/Morning%20Light.mp3" },
+  { title: "Quiet Gravity", url: "/static/audio/Quiet%20Gravity.mp3" },
+  { title: "Raindrops in D Minor", url: "/static/audio/Raindrops%20in%20D%20Minor.mp3" },
+  { title: "Sunrise Over Waves", url: "/static/audio/Sunrise%20Over%20Waves.mp3" }
 ];
 let currentTrack = 0;
 let bgmAudio = new Audio();
@@ -35,19 +41,33 @@ function initAudioEngine() {
   sfx.alert.volume = 0.3;
   sfx.hover.volume = 0.05;
 
-  bgmAudio.src = playlist[0].url;
-  bgmAudio.loop = true;
-  bgmAudio.volume = 0.3;
-
   const btnPlay = document.getElementById('bgm-play');
+  const btnSkip = document.getElementById('bgm-skip');
   const slider = document.getElementById('bgm-volume');
   const trackName = document.getElementById('bgm-track-name');
 
-  if (trackName) trackName.innerText = `READY: ${playlist[0].title}`;
+  bgmAudio.loop = true;
+  bgmAudio.volume = 0.3;
+  loadTrack(0, trackName);
+
+  bgmAudio.addEventListener('error', () => {
+    if (trackName) {
+      trackName.innerText = 'BGM LOAD FAILED';
+      trackName.style.color = 'var(--neon-red)';
+      trackName.style.textShadow = 'none';
+    }
+  });
 
   if (btnPlay) {
     btnPlay.addEventListener('click', () => {
       toggleBGM();
+      playSound('click');
+    });
+  }
+
+  if (btnSkip) {
+    btnSkip.addEventListener('click', () => {
+      skipTrack(trackName);
       playSound('click');
     });
   }
@@ -64,6 +84,33 @@ function initAudioEngine() {
   });
 }
 
+function loadTrack(index, trackNameEl) {
+  const track = playlist[index];
+  if (!track) return;
+  currentTrack = index;
+  bgmAudio.src = track.url;
+  bgmAudio.load();
+  if (trackNameEl) {
+    trackNameEl.innerText = `READY: ${track.title}`;
+    trackNameEl.style.color = 'var(--text-muted)';
+    trackNameEl.style.textShadow = 'none';
+  }
+}
+
+function skipTrack(trackNameEl) {
+  const next = (currentTrack + 1) % playlist.length;
+  loadTrack(next, trackNameEl);
+  if (isPlaying) {
+    bgmAudio.play().catch(() => {
+      isPlaying = false;
+      if (trackNameEl) {
+        trackNameEl.innerText = 'BGM BLOCKED';
+        trackNameEl.style.color = 'var(--neon-red)';
+      }
+    });
+  }
+}
+
 function toggleBGM() {
   const btnPlay = document.getElementById('bgm-play');
   const trackName = document.getElementById('bgm-track-name');
@@ -75,15 +122,24 @@ function toggleBGM() {
       trackName.style.color = 'var(--text-muted)';
       trackName.style.textShadow = 'none';
     }
+    isPlaying = false;
   } else {
-    bgmAudio.play().catch(e => alert("Please interact with the page first!"));
-    if (btnPlay) btnPlay.innerHTML = '<i data-lucide="pause" style="width:14px;height:14px;"></i>';
-    if (trackName) {
-      trackName.style.color = 'var(--neon-cyan)';
-      trackName.style.textShadow = '0 0 5px var(--neon-cyan)';
-    }
+    bgmAudio.play().then(() => {
+      isPlaying = true;
+      if (btnPlay) btnPlay.innerHTML = '<i data-lucide="pause" style="width:14px;height:14px;"></i>';
+      if (trackName) {
+        trackName.style.color = 'var(--neon-cyan)';
+        trackName.style.textShadow = '0 0 5px var(--neon-cyan)';
+      }
+    }).catch(() => {
+      isPlaying = false;
+      if (trackName) {
+        trackName.innerText = 'BGM BLOCKED';
+        trackName.style.color = 'var(--neon-red)';
+        trackName.style.textShadow = 'none';
+      }
+    });
   }
-  isPlaying = !isPlaying;
   lucide.createIcons();
 }
 
@@ -94,7 +150,7 @@ function playSound(type) {
   }
 }
 
-/* ── 1. 시계 ── */
+/* ── 1. Clock ── */
 function initClock() {
   const updateTime = () => {
     const now = new Date();
@@ -107,14 +163,326 @@ function initClock() {
   updateTime();
 }
 
-/* ── 2. 데이터 피드 ── */
+/* ── 2. Data Feeds ── */
 function initDataFeeds() {
   fetchMacroTicker();
   fetchNews();
-  fetchRealtimePrices(); // NEW
+  fetchRealtimePrices();
+  fetchLongShortRatio();
+  fetchBriefing();
+  fetchFundingRate();
+  fetchWhaleFeed();
+  fetchCalendar();
+  fetchRiskGauge();
+  fetchMuseumOfScars();
+  fetchHeatmap();
+  fetchHealthCheck();
   setInterval(fetchMacroTicker, 10000);
   setInterval(fetchNews, 60000);
-  setInterval(fetchRealtimePrices, 5000); // Update every 5 seconds
+  setInterval(fetchRealtimePrices, 5000);
+  setInterval(fetchLongShortRatio, 60000);
+  setInterval(fetchBriefing, 120000);
+  setInterval(fetchFundingRate, 60000);
+  setInterval(fetchWhaleFeed, 30000);
+  setInterval(fetchCalendar, 300000);
+  setInterval(fetchRiskGauge, 60000);
+  setInterval(fetchHeatmap, 60000);
+  setInterval(fetchHealthCheck, 30000);
+}
+
+async function fetchBriefing() {
+  try {
+    const res = await fetch('/api/briefing');
+    const data = await res.json();
+    const panel = document.getElementById('briefing-panel');
+    const titleEl = document.getElementById('briefing-title');
+    const contentEl = document.getElementById('briefing-content');
+    const timeEl = document.getElementById('briefing-time');
+    const closeBtn = document.getElementById('briefing-close');
+
+    if (!panel || data.status === 'empty' || !data.title) {
+      if (panel) panel.style.display = 'none';
+      return;
+    }
+
+    // Don't re-show if user already dismissed this briefing
+    const dismissedKey = `briefing_dismissed_${data.time}`;
+    if (sessionStorage.getItem(dismissedKey)) return;
+
+    titleEl.innerText = data.title;
+    contentEl.innerText = data.content;
+    timeEl.innerText = data.time;
+    panel.style.display = 'flex';
+
+    // Close handler (only bind once)
+    if (!closeBtn.dataset.bound) {
+      closeBtn.addEventListener('click', () => {
+        panel.style.display = 'none';
+        sessionStorage.setItem(dismissedKey, '1');
+        playSound('click');
+      });
+      closeBtn.dataset.bound = 'true';
+    }
+  } catch (e) {
+    console.error('Briefing Error:', e);
+  }
+}
+
+async function fetchFundingRate() {
+  try {
+    const res = await fetch('/api/funding-rate');
+    const data = await res.json();
+    if (!data.rates || data.rates.length === 0) return;
+    data.rates.forEach(r => {
+      const el = document.getElementById(`fr-${r.symbol.toLowerCase()}`);
+      if (el) {
+        const color = r.rate > 0 ? 'var(--neon-green)' : r.rate < 0 ? 'var(--neon-red)' : 'var(--text-muted)';
+        el.innerHTML = `${r.symbol} <span style="color:${color};font-weight:600;">${r.rate > 0 ? '+' : ''}${r.rate}%</span>`;
+      }
+    });
+  } catch (e) {
+    console.error('Funding Rate Error:', e);
+  }
+}
+
+async function fetchWhaleFeed() {
+  try {
+    const res = await fetch('/api/liquidations');
+    const data = await res.json();
+    const container = document.getElementById('whale-feed');
+    if (!container) return;
+    if (!data.trades || data.trades.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">No whale activity detected</div>';
+      return;
+    }
+    container.innerHTML = data.trades.map(t => {
+      const isBuy = t.side === 'BUY';
+      const icon = isBuy ? '▲' : '▼';
+      const color = isBuy ? 'var(--neon-green)' : 'var(--neon-red)';
+      const usd = t.usd >= 1000000 ? `$${(t.usd/1000000).toFixed(1)}M` : `$${(t.usd/1000).toFixed(0)}K`;
+      const time = new Date(t.time).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      return `<div class="whale-item">
+        <span style="color:${color};font-weight:700;">${icon} ${t.side}</span>
+        <span style="font-weight:600;">${t.symbol}</span>
+        <span style="color:${color};font-family:var(--font-mono);">${usd}</span>
+        <span style="color:var(--text-muted);">${time}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error('Whale Feed Error:', e);
+  }
+}
+
+async function fetchCalendar() {
+  try {
+    const res = await fetch('/api/calendar');
+    const data = await res.json();
+    const container = document.getElementById('calendar-feed');
+    if (!container) return;
+    if (!data.events || data.events.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">No upcoming events</div>';
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    container.innerHTML = data.events.map(e => {
+      const isToday = e.date === today;
+      const isTomorrow = (() => { const d = new Date(); d.setDate(d.getDate()+1); return e.date === d.toISOString().slice(0,10); })();
+      const badge = isToday ? '<span class="cal-badge today">TODAY</span>' : isTomorrow ? '<span class="cal-badge tomorrow">D-1</span>' : '';
+      const dateStr = e.date.slice(5); // MM-DD
+      const impactDot = e.impact === 'HIGH' ? '🔴' : '🟡';
+      return `<div class="cal-item ${isToday ? 'cal-today' : ''}">
+        <span class="cal-date">${dateStr}</span>
+        <span class="cal-event">${impactDot} ${e.event} <span class="cal-region">${e.region}</span></span>
+        ${badge}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error('Calendar Error:', e);
+  }
+}
+
+/* Dark Mode */
+function initTheme() {
+  const saved = localStorage.getItem('ryzm-theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeIcon(saved);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.addEventListener('click', toggleTheme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('ryzm-theme', next);
+  updateThemeIcon(next);
+  playSound('click');
+}
+
+function updateThemeIcon(theme) {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  btn.innerHTML = theme === 'dark'
+    ? '<i data-lucide="sun" style="width:16px;height:16px;"></i>'
+    : '<i data-lucide="moon" style="width:16px;height:16px;"></i>';
+  lucide.createIcons();
+}
+
+/* ── Systemic Risk Gauge ── */
+async function fetchRiskGauge() {
+  try {
+    const res = await fetch('/api/risk-gauge');
+    const data = await res.json();
+
+    const scoreEl = document.getElementById('risk-score');
+    const labelEl = document.getElementById('risk-label');
+    const needleEl = document.getElementById('gauge-needle');
+    const arcEl = document.getElementById('gauge-arc');
+
+    if (!scoreEl) return;
+
+    const score = data.score || 0;
+    scoreEl.innerText = score.toFixed(1);
+    labelEl.innerText = `[${data.label}]`;
+
+    // Color based on level
+    const colors = {
+      'CRITICAL': 'var(--neon-red)',
+      'HIGH': '#f97316',
+      'ELEVATED': '#eab308',
+      'MODERATE': 'var(--neon-cyan)',
+      'LOW': 'var(--neon-green)'
+    };
+    const color = colors[data.level] || 'var(--text-muted)';
+    scoreEl.style.color = color;
+    labelEl.style.color = color;
+    // Arc uses SVG gradient; update gradient stops dynamically for single-color glow
+    if (arcEl) arcEl.setAttribute('stroke', 'url(#gaugeGrad)');
+
+    // Score range: -100 (extreme risk/left) to +100 (safe/right)
+    // Needle: score -100 → -90° (left), 0 → 0° (center/up), +100 → +90° (right)
+    const clampedScore = Math.max(-100, Math.min(100, score));
+    // -100 → -90° (left/danger), 0 → 0° (center/up), +100 → +90° (right/safe)
+    const needleAngle = (clampedScore / 100) * 90;
+    if (needleEl) {
+      needleEl.setAttribute('transform', `rotate(${needleAngle}, 100, 100)`);
+      console.log(`[Gauge] score=${score}, angle=${needleAngle}`);
+    }
+
+    // Arc fill: map -100..+100 to 0..1, then to dashoffset 251..0
+    const pct = (clampedScore + 100) / 200;  // 0..1
+    const arcLen = 251;
+    if (arcEl) arcEl.setAttribute('stroke-dashoffset', arcLen - (pct * arcLen));
+
+    // Update sub-components
+    const c = data.components || {};
+    if (c.vix) {
+      const rcVix = document.getElementById('rc-vix');
+      if (rcVix) rcVix.innerHTML = `<span style="color:${c.vix.value > 25 ? 'var(--neon-red)' : 'var(--neon-green)'}">${c.vix.value}</span>`;
+    }
+    if (c.fear_greed) {
+      const rcFg = document.getElementById('rc-fg');
+      if (rcFg) rcFg.innerHTML = `<span style="color:${c.fear_greed.value < 30 ? 'var(--neon-red)' : c.fear_greed.value > 70 ? 'var(--neon-green)' : 'var(--text-muted)'}">${c.fear_greed.value}/100</span>`;
+    }
+    if (c.long_short) {
+      const rcLs = document.getElementById('rc-ls');
+      if (rcLs) rcLs.innerHTML = `${c.long_short.value}% L`;
+    }
+    if (c.funding_rate) {
+      const rcFr = document.getElementById('rc-fr');
+      if (rcFr) {
+        const frVal = c.funding_rate.value;
+        rcFr.innerHTML = `<span style="color:${frVal > 0.05 ? 'var(--neon-red)' : frVal < -0.05 ? 'var(--neon-red)' : 'var(--neon-green)'}">${frVal > 0 ? '+' : ''}${frVal}%</span>`;
+      }
+    }
+  } catch (e) {
+    console.error('Risk Gauge Error:', e);
+  }
+}
+
+/* ── Museum of Scars ── */
+async function fetchMuseumOfScars() {
+  try {
+    const res = await fetch('/api/scars');
+    const data = await res.json();
+    const container = document.getElementById('scars-feed');
+    if (!container || !data.scars) return;
+
+    container.innerHTML = data.scars.map(s => `
+      <div class="scar-item">
+        <div class="scar-header">
+          <span class="scar-date">${s.date}</span>
+          <span class="scar-event">${s.event.toUpperCase()}</span>
+          <span class="scar-drop">${s.drop}</span>
+        </div>
+        <div class="scar-desc">${s.desc}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Museum of Scars Error:', e);
+  }
+}
+
+/* ── Strategic Narrative (rendered from Council data) ── */
+function renderStrategicNarrative(narrativeData) {
+  const container = document.getElementById('strategic-narrative');
+  const layersEl = document.getElementById('sn-layers');
+  if (!container || !layersEl) return;
+
+  if (!narrativeData || narrativeData.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  const layerColors = ['var(--neon-red)', 'var(--neon-magenta)', 'var(--neon-cyan)'];
+  layersEl.innerHTML = narrativeData.map((layer, i) => `
+    <div class="sn-layer">
+      <div class="sn-layer-title" style="color:${layerColors[i] || 'var(--text-muted)'}">
+        LAYER ${layer.layer}: ${layer.title}
+      </div>
+      <div class="sn-layer-content">${layer.content}</div>
+    </div>
+  `).join('');
+
+  container.style.display = 'block';
+}
+
+async function fetchLongShortRatio() {
+  try {
+    const res = await fetch('/api/long-short');
+    const data = await res.json();
+    
+    const lsLong = document.getElementById('ls-long');
+    const lsShort = document.getElementById('ls-short');
+    
+    if (lsLong && lsShort && data.longAccount) {
+      let finalLong = data.longAccount;
+      if (finalLong <= 1) finalLong *= 100;
+      const finalShort = 100 - finalLong;
+
+      lsLong.style.width = `${finalLong}%`;
+      const lsLongVal = lsLong.querySelector('.ls-val');
+      if (lsLongVal) lsLongVal.textContent = `${finalLong.toFixed(1)}%`;
+
+      lsShort.style.width = `${finalShort}%`;
+      const lsShortVal = lsShort.querySelector('.ls-val');
+      if (lsShortVal) lsShortVal.textContent = `${finalShort.toFixed(1)}%`;
+
+      // Update indicator row
+      const longPct = document.getElementById('ls-long-pct');
+      const shortPct = document.getElementById('ls-short-pct');
+      const ratioNum = document.getElementById('ls-ratio-num');
+      if (longPct) longPct.textContent = `${finalLong.toFixed(1)}%`;
+      if (shortPct) shortPct.textContent = `${finalShort.toFixed(1)}%`;
+      if (ratioNum) {
+        const ratio = finalShort > 0 ? (finalLong / finalShort).toFixed(2) : '∞';
+        ratioNum.textContent = ratio;
+        ratioNum.style.color = finalLong > finalShort ? 'var(--neon-green)' : finalLong < finalShort ? 'var(--neon-red)' : 'var(--neon-cyan)';
+      }
+    }
+  } catch (e) {
+    console.error("L/S Error:", e); 
+  }
 }
 
 async function fetchMacroTicker() {
@@ -125,6 +493,19 @@ async function fetchMacroTicker() {
     const container = document.getElementById('macro-ticker');
 
     if (!market || Object.keys(market).length === 0) return;
+
+    // Update header FX display
+    if (market['USD/KRW']) {
+      const fx = market['USD/KRW'];
+      const fxVal = document.getElementById('fx-usdkrw');
+      const fxChg = document.getElementById('fx-usdkrw-chg');
+      if (fxVal) fxVal.textContent = Number(fx.price).toLocaleString('ko-KR', {minimumFractionDigits:1, maximumFractionDigits:1});
+      if (fxChg) {
+        const sign = fx.change >= 0 ? '+' : '';
+        fxChg.textContent = `${sign}${fx.change}%`;
+        fxChg.className = `fx-change ${fx.change >= 0 ? 'fx-up' : 'fx-down'}`;
+      }
+    }
 
     const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
     let html = '';
@@ -214,15 +595,18 @@ async function fetchNews() {
     if (!data.news || data.news.length === 0) return;
 
     if (feed) {
-      feed.innerHTML = data.news.map(n => `
-                <div style="padding:10px; border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
-                    <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.7rem; margin-bottom:4px;">
-                        <span style="color:var(--neon-cyan);">${n.source}</span>
+      feed.innerHTML = data.news.map(n => {
+        const sClass = n.sentiment === 'BULLISH' ? 'sentiment-bullish' : n.sentiment === 'BEARISH' ? 'sentiment-bearish' : 'sentiment-neutral';
+        const sLabel = n.sentiment || 'NEUTRAL';
+        return `
+                <div style="padding:10px; border-bottom:1px solid var(--border-dim); transition: background 0.2s; cursor:pointer;" onmouseenter="this.style.background='rgba(0,0,0,0.03)'" onmouseleave="this.style.background='transparent'">
+                    <div style="display:flex; justify-content:space-between; align-items:center; color:var(--text-muted); font-size:0.7rem; margin-bottom:4px;">
+                        <span style="display:flex; align-items:center; gap:6px;"><span style="color:var(--neon-cyan);">${n.source}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
                         <span>${n.time}</span>
                     </div>
-                    <a href="${n.link}" target="_blank" style="color:#fff; text-decoration:none; font-size:0.85rem; line-height:1.4; display:block;">${n.title}</a>
-                </div>
-            `).join('');
+                    <a href="${n.link}" target="_blank" style="color:var(--text-main); text-decoration:none; font-size:0.85rem; line-height:1.4; display:block;">${n.title}</a>
+                </div>`;
+      }).join('');
     }
   } catch (e) { console.error("News Error:", e); }
 }
@@ -331,6 +715,10 @@ function renderCouncil(data) {
   }
 
   // Long/Short Ratio
+  // We use real data from /api/long-short now, so we don't overwrite it with AI score anymore
+  // But if real data failed, we could use AI score as fallback? 
+  // For now, let's DISABLE AI override for L/S to keep it real.
+  /*
   const lsLong = document.getElementById('ls-long');
   const lsShort = document.getElementById('ls-short');
   if (lsLong && lsShort) {
@@ -343,6 +731,7 @@ function renderCouncil(data) {
     lsShort.style.width = `${shortRatio}%`;
     lsShort.innerText = `${shortRatio}%`;
   }
+  */
 
   // Render Bubble Chart (NEW)
   if (data.narratives && data.narratives.length > 0) {
@@ -385,6 +774,11 @@ function renderCouncil(data) {
                 <div style="font-size:0.8rem; line-height:1.3;">${s.action}</div>
             </div>
         `).join('');
+  }
+
+  // Strategic Narrative
+  if (data.strategic_narrative) {
+    renderStrategicNarrative(data.strategic_narrative);
   }
 }
 
@@ -527,7 +921,7 @@ if (canvas) {
   const drops = Array(Math.floor(columns)).fill(1);
 
   function drawMatrix() {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.05)"; // 잔상 효과
+    ctx.fillStyle = "rgba(0, 0, 0, 0.05)"; // Afterimage effect
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = "#0f0";
@@ -918,12 +1312,75 @@ function initQuickActions() {
 }
 
 /* ─── Refresh All Data ─── */
+/* ── Mini Heatmap ── */
+async function fetchHeatmap() {
+  try {
+    const res = await fetch('/api/heatmap');
+    const data = await res.json();
+    const grid = document.getElementById('heatmap-grid');
+    if (!grid || !data.coins || data.coins.length === 0) return;
+
+    grid.innerHTML = data.coins.map(c => {
+      const pct = c.change_24h;
+      const abs = Math.abs(pct);
+      let bg, clr;
+      if (pct > 5) { bg = '#059669'; clr = '#fff'; }
+      else if (pct > 0) { bg = `rgba(5,150,105,${0.15 + abs*0.08})`; clr = '#059669'; }
+      else if (pct < -5) { bg = '#dc2626'; clr = '#fff'; }
+      else if (pct < 0) { bg = `rgba(220,38,38,${0.15 + abs*0.08})`; clr = '#dc2626'; }
+      else { bg = 'var(--border-dim)'; clr = 'var(--text-muted)'; }
+
+      const size = c.market_cap_rank <= 5 ? 'heatmap-cell-lg' : c.market_cap_rank <= 10 ? 'heatmap-cell-md' : 'heatmap-cell-sm';
+      return `<div class="heatmap-cell ${size}" style="background:${bg}; color:${clr};" title="${c.name}: ${pct >= 0 ? '+':''}${pct.toFixed(2)}%">
+        <span class="hm-symbol">${c.symbol}</span>
+        <span class="hm-pct">${pct >= 0 ? '+':''}${pct.toFixed(1)}%</span>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('Heatmap Error:', e); }
+}
+
+/* ── Health Check / Connection Status ── */
+async function fetchHealthCheck() {
+  try {
+    const res = await fetch('/api/health-check');
+    const data = await res.json();
+    const dot = document.getElementById('connection-status');
+    const srcEl = document.getElementById('data-sources');
+    const tooltip = document.getElementById('source-tooltip');
+
+    if (dot) {
+      const ok = data.sources.filter(s => s.status === 'ok').length;
+      const total = data.sources.length;
+      dot.className = ok === total ? 'status-dot dot-green' : ok > total/2 ? 'status-dot dot-yellow' : 'status-dot dot-red';
+    }
+    if (srcEl) {
+      const ok = data.sources.filter(s => s.status === 'ok').length;
+      srcEl.textContent = `${ok}/${data.sources.length} Sources`;
+    }
+    if (tooltip) {
+      tooltip.innerHTML = data.sources.map(s => {
+        const icon = s.status === 'ok' ? '🟢' : '🔴';
+        return `<div class="src-row">${icon} ${s.name}</div>`;
+      }).join('');
+    }
+  } catch(e) {
+    const dot = document.getElementById('connection-status');
+    if (dot) dot.className = 'status-dot dot-red';
+    console.error('HealthCheck Error:', e);
+  }
+}
+
 async function refreshAllData() {
   const promises = [
     fetch('/api/market').then(r => r.json()),
     fetch('/api/news').then(r => r.json()),
     fetch('/api/kimchi').then(r => r.json()),
-    fetch('/api/fear-greed').then(r => r.json())
+    fetch('/api/fear-greed').then(r => r.json()),
+    fetch('/api/funding-rate').then(r => r.json()),
+    fetch('/api/liquidations').then(r => r.json()),
+    fetch('/api/calendar').then(r => r.json()),
+    fetch('/api/heatmap').then(r => r.json()),
+    fetch('/api/health-check').then(r => r.json())
   ];
 
   try {

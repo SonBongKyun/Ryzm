@@ -194,6 +194,12 @@
         </div>
 
         <div class="card">
+            <h2><i data-lucide="shield"></i> Admin Token</h2>
+            <input type="password" id="admin-token" placeholder="X-Admin-Token">
+            <div class="status" id="token-status">Not set</div>
+        </div>
+
+        <div class="card">
             <h2><i data-lucide="image"></i> Visual Generator</h2>
             <input type="text" id="img-topic" placeholder="ex) Yield Curve Inversion">
             <button id="btn-gen-img"><i data-lucide="zap"></i> Generate SVG</button>
@@ -223,14 +229,39 @@
     <script>
         lucide.createIcons();
 
-        // 1. 이미지 생성 로직
+        // Admin token handling (local only)
+        const tokenInput = document.getElementById('admin-token');
+        const tokenStatus = document.getElementById('token-status');
+        if (tokenInput && tokenStatus) {
+            const saved = localStorage.getItem('adminToken');
+            if (saved) {
+                tokenInput.value = saved;
+                tokenStatus.innerText = 'Saved';
+                tokenStatus.className = 'status success';
+            }
+            tokenInput.addEventListener('input', () => {
+                const val = tokenInput.value.trim();
+                if (val) {
+                    localStorage.setItem('adminToken', val);
+                    tokenStatus.innerText = 'Saved';
+                    tokenStatus.className = 'status success';
+                } else {
+                    localStorage.removeItem('adminToken');
+                    tokenStatus.innerText = 'Not set';
+                    tokenStatus.className = 'status';
+                }
+            });
+        }
+
+        // 1. Image generation logic
         document.getElementById('btn-gen-img').addEventListener('click', async () => {
             const topic = document.getElementById('img-topic').value;
             const status = document.getElementById('img-status');
             const preview = document.getElementById('svg-preview');
             const btn = document.getElementById('btn-gen-img');
+            const adminToken = localStorage.getItem('adminToken');
 
-            if (!topic) return alert("주제를 입력해주세요!");
+            if (!topic) return alert("Please enter a topic!");
 
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Generating...';
@@ -242,7 +273,10 @@
             try {
                 const res = await fetch('/api/admin/generate-infographic', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': adminToken || ''
+                    },
                     body: JSON.stringify({ topic })
                 });
                 const data = await res.json();
@@ -267,14 +301,15 @@
             }
         });
 
-        // 2. 브리핑 발행 로직
+        // 2. Briefing publish logic
         document.getElementById('btn-publish').addEventListener('click', async () => {
             const title = document.getElementById('brief-title').value;
             const content = document.getElementById('brief-content').value;
             const status = document.getElementById('pub-status');
             const btn = document.getElementById('btn-publish');
+            const adminToken = localStorage.getItem('adminToken');
 
-            if (!title || !content) return alert("제목과 내용을 입력해주세요!");
+            if (!title || !content) return alert("Please enter title and content!");
 
             btn.disabled = true;
             status.innerText = "Sending...";
@@ -283,7 +318,10 @@
             try {
                 const res = await fetch('/api/admin/publish-briefing', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': adminToken || ''
+                    },
                     body: JSON.stringify({ title, content })
                 });
                 const data = await res.json();
@@ -297,7 +335,7 @@
             }
         });
 
-        // 유틸리티: SVG 복사
+        // Utility: Copy SVG
         function copySVG() {
             const svgContent = document.getElementById('svg-preview').innerHTML;
             if (!svgContent.includes('<svg')) return alert("No image to copy");
@@ -306,7 +344,7 @@
             });
         }
 
-        // 유틸리티: SVG 다운로드
+        // Utility: Download SVG
         function downloadSVG() {
             const svgContent = document.getElementById('svg-preview').innerHTML;
             if (!svgContent.includes('<svg')) return alert("No image to download");

@@ -42,11 +42,23 @@
         <i data-lucide="play" style="width:14px;height:14px;"></i>
       </button>
       <span id="bgm-track-name" class="bgm-track-name">Stopped</span>
-      <button title="Skip">
+      <button id="bgm-skip" title="Skip">
         <i data-lucide="skip-forward" style="width:12px;height:12px;"></i>
       </button>
       <i data-lucide="volume-2" style="width:12px;height:12px;color:var(--text-muted);"></i>
       <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="60" />
+    </div>
+
+    <!-- Dark Mode Toggle -->
+    <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">
+      <i data-lucide="moon" style="width:16px;height:16px;"></i>
+    </button>
+
+    <!-- FX Rate -->
+    <div class="header-fx" id="header-fx">
+      <span class="fx-label">USD/KRW</span>
+      <span class="fx-value" id="fx-usdkrw">—</span>
+      <span class="fx-change" id="fx-usdkrw-chg"></span>
     </div>
 
     <!-- Dual Clock -->
@@ -107,17 +119,106 @@
   <main class="main-grid">
 
     <div class="panel">
-      <div class="glass-panel" style="flex: 1; position: relative; overflow: hidden;">
+      <!-- Systemic Risk Gauge -->
+      <div class="glass-panel risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
         <div class="panel-title">
-          <i data-lucide="radar"></i> Narrative Radar
+          <i data-lucide="shield-alert"></i> Systemic Risk Gauge
         </div>
-        <div id="bubble-chart" class="bubble-chart">
-          <svg id="bubble-svg" width="100%" height="100%" style="position: absolute; top: 40px; left: 0;">
-            <!-- Bubbles will be rendered here by JavaScript -->
-          </svg>
-          <div style="text-align:center; padding:80px 20px; color:var(--text-muted); font-size:0.8rem; position: relative; z-index: 1;">
-            Waiting for Council Analysis...
+        <div class="risk-gauge-body">
+          <div class="gauge-container">
+            <svg viewBox="0 0 200 130" class="gauge-svg">
+              <defs>
+                <!-- 3D arc gradient: green → yellow → orange → red -->
+                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#059669"/>
+                  <stop offset="35%" stop-color="#eab308"/>
+                  <stop offset="65%" stop-color="#f97316"/>
+                  <stop offset="100%" stop-color="#dc2626"/>
+                </linearGradient>
+                <!-- Inner shadow gradient for 3D depth -->
+                <linearGradient id="gaugeInner" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="white" stop-opacity="0.5"/>
+                  <stop offset="100%" stop-color="black" stop-opacity="0.15"/>
+                </linearGradient>
+                <!-- Glow filter -->
+                <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+                <!-- Radial shine on center hub -->
+                <radialGradient id="hubGrad" cx="50%" cy="40%" r="50%">
+                  <stop offset="0%" stop-color="#1e293b" stop-opacity="1"/>
+                  <stop offset="60%" stop-color="#1e293b" stop-opacity="0.8"/>
+                  <stop offset="100%" stop-color="#1e293b" stop-opacity="0.4"/>
+                </radialGradient>
+                <radialGradient id="hubGradDark" cx="50%" cy="40%" r="50%">
+                  <stop offset="0%" stop-color="#e2e8f0" stop-opacity="1"/>
+                  <stop offset="60%" stop-color="#e2e8f0" stop-opacity="0.8"/>
+                  <stop offset="100%" stop-color="#e2e8f0" stop-opacity="0.4"/>
+                </radialGradient>
+              </defs>
+
+              <!-- Outer rim (3D bezel) -->
+              <path d="M 16 100 A 84 84 0 0 1 184 100" fill="none" stroke="var(--border-dim)" stroke-width="18" stroke-linecap="round" opacity="0.4"/>
+
+              <!-- Background arc (recessed track) -->
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--border-dim)" stroke-width="14" stroke-linecap="round"/>
+
+              <!-- Inner highlight (top edge light reflection for 3D) -->
+              <path d="M 22 98 A 78 78 0 0 1 178 98" fill="none" stroke="url(#gaugeInner)" stroke-width="10" stroke-linecap="round" opacity="0.5"/>
+
+              <!-- Gradient-filled arc (full background rainbow) -->
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
+
+              <!-- Active arc (filled by JS), with glow -->
+              <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="125" filter="url(#gaugeGlow)"/>
+
+              <!-- Tick marks for scale -->
+              <g stroke="var(--text-muted)" stroke-width="1" opacity="0.4">
+                <line x1="24" y1="100" x2="32" y2="100"/>
+                <line x1="36" y1="62" x2="43" y2="66"/>
+                <line x1="68" y1="34" x2="72" y2="41"/>
+                <line x1="100" y1="24" x2="100" y2="32"/>
+                <line x1="132" y1="34" x2="128" y2="41"/>
+                <line x1="164" y1="62" x2="157" y2="66"/>
+                <line x1="176" y1="100" x2="168" y2="100"/>
+              </g>
+
+              <!-- Scale labels -->
+              <text x="18" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">0</text>
+              <text x="100" y="18" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">50</text>
+              <text x="182" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">100</text>
+
+              <!-- Needle -->
+              <g id="gauge-needle" transform="rotate(0, 100, 100)">
+                <line x1="100" y1="100" x2="100" y2="30" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.2" transform="translate(1,1)"/>
+                <line x1="100" y1="100" x2="100" y2="30" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round"/>
+              </g>
+
+              <!-- Center hub (3D metallic) -->
+              <circle cx="100" cy="100" r="7" fill="#1e293b" class="gauge-hub"/>
+              <circle cx="98.5" cy="97.5" r="2.5" fill="white" opacity="0.35"/>
+            </svg>
+            <div class="gauge-score" id="risk-score">0</div>
+            <div class="gauge-label" id="risk-label">LOADING...</div>
           </div>
+          <div class="risk-components" id="risk-components">
+            <div class="rc-item"><span class="rc-name">VOLATILITY</span><span class="rc-val" id="rc-vix">—</span></div>
+            <div class="rc-item"><span class="rc-name">SENTIMENT</span><span class="rc-val" id="rc-fg">—</span></div>
+            <div class="rc-item"><span class="rc-name">LEVERAGE</span><span class="rc-val" id="rc-ls">—</span></div>
+            <div class="rc-item"><span class="rc-name">FUNDING</span><span class="rc-val" id="rc-fr">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Museum of Scars -->
+      <div class="glass-panel" style="flex: 1; min-height: 140px; position: relative;">
+        <div class="panel-title"><i data-lucide="skull"></i> Museum of Scars</div>
+        <div id="scars-feed" style="overflow-y:auto; max-height: 200px; font-size:0.72rem;">
+          <div style="text-align:center; padding:30px; color:var(--text-muted);">Loading archive...</div>
         </div>
       </div>
 
@@ -127,6 +228,14 @@
           <div class="kp-value" id="kp-value" style="font-size:1.5rem; font-family:var(--font-mono); color:var(--neon-green);">+3.42%
           </div>
           <div id="kp-status" style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Arb Opportunity: LOW</div>
+        </div>
+      </div>
+
+      <!-- Economic Calendar -->
+      <div class="glass-panel" style="height: 150px; min-height:150px;">
+        <div class="panel-title"><i data-lucide="calendar"></i> Economic Calendar</div>
+        <div id="calendar-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
+          <div style="text-align:center; padding:20px; color:var(--text-muted);">Loading events...</div>
         </div>
       </div>
     </div>
@@ -184,15 +293,31 @@
         <i data-lucide="copy"></i> COPY REPORT FOR X
       </button>
 
+      <!-- Strategic Narrative -->
+      <div id="strategic-narrative" class="strategic-narrative" style="display:none;">
+        <div class="sn-header">
+          <i data-lucide="layers" style="width:14px;height:14px;"></i> STRATEGIC NARRATIVE
+        </div>
+        <div id="sn-layers"></div>
+      </div>
+
       <button id="btn-snapshot" class="ai-scan-btn secondary-btn" style="margin-top:10px; background:#333; color:#fff;">
         <i data-lucide="camera"></i> EXPORT SNAPSHOT
       </button>
+
+      <!-- Mini Heatmap -->
+      <div class="glass-panel heatmap-panel" style="margin-top:12px;">
+        <div class="panel-title"><i data-lucide="grid-3x3"></i> Market Heatmap (24h)</div>
+        <div id="heatmap-grid" class="heatmap-grid">
+          <div style="text-align:center; padding:15px; color:var(--text-muted); font-size:0.75rem;">Loading heatmap...</div>
+        </div>
+      </div>
     </div>
 
     <div class="panel">
       <!-- Real-time Price Panel (NEW) -->
-      <div class="glass-panel" style="flex: 1; max-height: calc(100vh - 150px);">
-        <div class="panel-title"><i data-lucide="trending-up"></i> 실시간 가격</div>
+      <div class="glass-panel" style="flex: 1;">
+        <div class="panel-title"><i data-lucide="trending-up"></i> Realtime Prices</div>
         <div id="realtime-prices" class="price-panel">
           <!-- Price cards will be populated by JS -->
           <div style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.8rem;">
@@ -202,28 +327,74 @@
       </div>
 
       <!-- L/S Ratio Panel -->
-      <div class="glass-panel" style="margin-bottom:15px;">
+      <div class="glass-panel ls-panel" style="margin-bottom:15px;">
         <div class="panel-title"><i data-lucide="scale"></i> Long/Short Ratio</div>
         <div class="ls-container">
-          <div class="ls-bar">
-            <div id="ls-long" class="ls-fill long" style="width: 50%;">50%</div>
-            <div id="ls-short" class="ls-fill short" style="width: 50%;">50%</div>
+          <!-- 3D Bar Gauge -->
+          <div class="ls-bar-3d">
+            <div class="ls-bar-track">
+              <div id="ls-long" class="ls-fill long" style="width: 50%;">
+                <span class="ls-val">50%</span>
+              </div>
+              <div id="ls-short" class="ls-fill short" style="width: 50%;">
+                <span class="ls-val">50%</span>
+              </div>
+            </div>
+            <div class="ls-bar-shine"></div>
           </div>
-          <div class="ls-labels">
-            <span style="color:var(--neon-green)">LONG POSITIONS</span>
-            <span style="color:var(--neon-red)">SHORT POSITIONS</span>
+          <!-- Percentage indicators -->
+          <div class="ls-indicators">
+            <div class="ls-indicator long-ind">
+              <span class="ls-dot dot-long"></span>
+              <span class="ls-ind-label">LONG</span>
+              <span class="ls-ind-val" id="ls-long-pct">50%</span>
+            </div>
+            <div class="ls-indicator">
+              <div class="ls-ratio-display" id="ls-ratio-num">1.00</div>
+            </div>
+            <div class="ls-indicator short-ind">
+              <span class="ls-ind-val" id="ls-short-pct">50%</span>
+              <span class="ls-ind-label">SHORT</span>
+              <span class="ls-dot dot-short"></span>
+            </div>
+          </div>
+          <!-- Funding Rate -->
+          <div id="funding-rates" class="funding-rates">
+            <span class="fr-label">FUNDING:</span>
+            <span id="fr-btc" class="fr-item">BTC —</span>
+            <span id="fr-eth" class="fr-item">ETH —</span>
+            <span id="fr-sol" class="fr-item">SOL —</span>
           </div>
         </div>
       </div>
 
-      <div class="glass-panel" style="flex: 1;">
+      <!-- Whale Alert Feed -->
+      <div class="glass-panel" style="height: 150px; min-height:150px;">
+        <div class="panel-title"><i data-lucide="anchor"></i> Whale Alert</div>
+        <div id="whale-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
+          <div style="text-align:center; padding:20px; color:var(--text-muted);">Scanning large trades...</div>
+        </div>
+      </div>
+
+      <div class="glass-panel" style="flex: 1; min-height: 200px;">
         <div class="panel-title"><i data-lucide="rss"></i> Live Wire</div>
-        <div id="news-feed" style="overflow-y:auto; font-size:0.8rem;">
+        <div id="news-feed" style="overflow-y:auto; max-height:400px; font-size:0.8rem;">
         </div>
       </div>
     </div>
 
   </main>
+
+  <!-- Briefing Panel (Floating Bottom) -->
+  <div id="briefing-panel" class="briefing-panel" style="display:none;">
+    <div class="briefing-header">
+      <div class="briefing-badge">BRIEFING</div>
+      <span id="briefing-title" class="briefing-title">—</span>
+      <span id="briefing-time" class="briefing-time"></span>
+      <button id="briefing-close" class="briefing-close"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div id="briefing-content" class="briefing-content"></div>
+  </div>
 
   <!-- Ask Ryzm Chat Float Button -->
   <button id="chat-float-btn" class="chat-float-btn" title="Ask Ryzm">
@@ -257,13 +428,14 @@
       <i data-lucide="activity" style="width:12px;height:12px;"></i>
       <span id="last-update">Last Update: --:--</span>
     </div>
-    <div class="status-item">
+    <div class="status-item source-status" id="source-status">
       <i data-lucide="database" style="width:12px;height:12px;"></i>
-      <span id="data-sources">7 Sources Active</span>
+      <span id="data-sources">-- Sources</span>
+      <div class="source-tooltip" id="source-tooltip"></div>
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v1.0</span>
+      <span>Ryzm Terminal v2.0</span>
     </div>
   </div>
 
