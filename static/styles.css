@@ -3175,3 +3175,211 @@ html[data-theme="dark"] .ch-chart {
 .ch-hit { color: var(--neon-green); }
 .ch-miss { color: var(--neon-red); }
 .ch-pending { color: var(--text-muted); }
+
+/* ═══════════════════════════════════════
+   #12 Language Toggle Button
+   ═══════════════════════════════════════ */
+.lang-toggle {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-head);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--neon-cyan);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lang-toggle:hover {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 6px rgba(6,182,212,0.3);
+}
+
+/* ═══════════════════════════════════════
+   #3 Fear & Greed 30-Day Chart
+   ═══════════════════════════════════════ */
+.fg-chart-panel .fg-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.fg-score-big {
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.fg-label-big {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.fg-chart-panel canvas {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  background: rgba(0,0,0,0.02);
+}
+html[data-theme="dark"] .fg-chart-panel canvas {
+  background: rgba(255,255,255,0.02);
+}
+
+/* ═══════════════════════════════════════
+   #4 Multi-Timeframe Analysis
+   ═══════════════════════════════════════ */
+.mtf-panel .mtf-symbol {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  color: var(--neon-cyan);
+  margin-bottom: 6px;
+}
+.mtf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+.mtf-table th {
+  font-family: var(--font-head);
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-dim);
+  text-transform: uppercase;
+}
+.mtf-table td {
+  padding: 6px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  font-size: 0.72rem;
+}
+html[data-theme="dark"] .mtf-table td {
+  border-bottom-color: rgba(255,255,255,0.04);
+}
+.mtf-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ═══════════════════════════════════════
+   #8 On-Chain Radar Panel
+   ═══════════════════════════════════════ */
+.onchain-panel .oc-section {
+  margin-bottom: 10px;
+}
+.onchain-panel .oc-section:last-child {
+  margin-bottom: 0;
+}
+.oc-subtitle {
+  font-family: var(--font-head);
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.oc-oi-grid {
+  display: flex;
+  gap: 8px;
+}
+.oc-oi-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  background: rgba(0,0,0,0.02);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 6px 4px;
+}
+html[data-theme="dark"] .oc-oi-item {
+  background: rgba(255,255,255,0.04);
+}
+.oc-oi-sym {
+  font-family: var(--font-head);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.oc-oi-val {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--neon-cyan);
+}
+.oc-fees-row {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+.oc-fee-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: rgba(0,0,0,0.02);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 5px 4px;
+}
+html[data-theme="dark"] .oc-fee-item {
+  background: rgba(255,255,255,0.04);
+}
+.oc-fee-label {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+.oc-fee-val {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* ═══════════════════════════════════════
+   #11 Panel Drag & Drop
+   ═══════════════════════════════════════ */
+.panel-title {
+  cursor: grab;
+}
+.panel-title:active {
+  cursor: grabbing;
+}
+.drag-ghost {
+  opacity: 0.4;
+  border: 2px dashed var(--neon-cyan) !important;
+  border-radius: 12px;
+}
+.drag-chosen {
+  box-shadow: 0 0 20px rgba(6,182,212,0.3);
+}
+.drag-active {
+  opacity: 0.8;
+  transform: scale(1.01);
+}
+
+/* ═══════════════════════════════════════
+   Responsive: New Panels
+   ═══════════════════════════════════════ */
+@media (max-width: 768px) {
+  .fg-score-big { font-size: 1.5rem; }
+  .oc-oi-grid { flex-wrap: wrap; }
+  .oc-oi-item { min-width: calc(50% - 4px); }
+  .oc-fees-row { flex-wrap: wrap; }
+  .oc-fee-item { min-width: calc(50% - 3px); }
+  .mtf-table { font-size: 0.65rem; }
+  .lang-toggle { padding: 3px 7px; font-size: 0.6rem; }
+}
+@media (max-width: 480px) {
+  .fg-header { flex-direction: column; gap: 2px; }
+  .fg-score-big { font-size: 1.3rem; }
+  .mtf-table td { padding: 4px 3px; font-size: 0.6rem; }
+}

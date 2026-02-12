@@ -38,6 +38,7 @@ genai.configure(api_key=GENAI_API_KEY)
 
 # ── Admin Configuration ──
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 def require_admin(request: Request) -> None:
     if not ADMIN_TOKEN:
@@ -84,6 +85,9 @@ cache = {
     "funding_rate": {"data": [], "updated": 0},
     "liquidations": {"data": [], "updated": 0},
     "heatmap": {"data": [], "updated": 0},
+    "multi_tf": {"data": {}, "updated": 0},
+    "onchain": {"data": {}, "updated": 0},
+    "auto_council": {"data": {}, "updated": 0},
     "latest_briefing": {"title": "", "content": "", "time": ""},
 }
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
@@ -442,6 +446,132 @@ def fetch_whale_trades():
         return []
 
 
+# ── Technical Analysis Helpers ──
+def calculate_rsi(closes, period=14):
+    """Wilder's RSI calculation"""
+    if len(closes) < period + 1:
+        return None
+    deltas = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+    gains = [max(d, 0) for d in deltas]
+    losses = [max(-d, 0) for d in deltas]
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100 - (100 / (1 + rs)), 1)
+
+
+def calculate_ema(data, period):
+    """Exponential Moving Average"""
+    if len(data) < period:
+        return None
+    mult = 2 / (period + 1)
+    ema = sum(data[:period]) / period
+    for val in data[period:]:
+        ema = (val - ema) * mult + ema
+    return round(ema, 2)
+
+
+def fetch_multi_timeframe(symbol="BTCUSDT"):
+    """Multi-timeframe RSI + MA cross analysis using Binance Klines"""
+    intervals = {"1h": "1h", "4h": "4h", "1d": "1d", "1w": "1w"}
+    results = {}
+    for label, interval in intervals.items():
+        try:
+            url = "https://fapi.binance.com/fapi/v1/klines"
+            resp = requests.get(url, params={"symbol": symbol, "interval": interval, "limit": 100}, timeout=8)
+            resp.raise_for_status()
+            klines = resp.json()
+            closes = [float(k[4]) for k in klines]
+            rsi = calculate_rsi(closes)
+            ema20 = calculate_ema(closes, 20)
+            ema50 = calculate_ema(closes, 50)
+
+            if rsi is None or ema20 is None or ema50 is None:
+                signal, trend = "N/A", "N/A"
+            else:
+                if rsi > 70 and ema20 < ema50:
+                    signal, trend = "SELL", "OVERBOUGHT"
+                elif rsi < 30 and ema20 > ema50:
+                    signal, trend = "BUY", "OVERSOLD"
+                elif ema20 > ema50 and rsi > 50:
+                    signal, trend = "BUY", "BULLISH"
+                elif ema20 < ema50 and rsi < 50:
+                    signal, trend = "SELL", "BEARISH"
+                else:
+                    signal, trend = "HOLD", "NEUTRAL"
+
+            results[label] = {
+                "rsi": rsi or 50,
+                "ema20": ema20 or 0,
+                "ema50": ema50 or 0,
+                "price": closes[-1] if closes else 0,
+                "signal": signal,
+                "trend": trend
+            }
+        except Exception as e:
+            logger.error(f"[MTF] Error for {label}: {e}")
+            results[label] = {"rsi": 50, "ema20": 0, "ema50": 0, "price": 0, "signal": "N/A", "trend": "N/A"}
+    return {"symbol": symbol.replace("USDT", "/USDT"), "timeframes": results}
+
+
+def fetch_onchain_data():
+    """On-chain metrics: Open Interest + Mempool fees + Hashrate"""
+    result = {"open_interest": [], "mempool": {}, "hashrate": None}
+
+    # 1) Binance Futures Open Interest
+    for sym in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+        try:
+            resp = requests.get("https://fapi.binance.com/fapi/v1/openInterest", params={"symbol": sym}, timeout=5)
+            resp.raise_for_status()
+            d = resp.json()
+            oi_val = float(d.get("openInterest", 0))
+            pr = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex", params={"symbol": sym}, timeout=5)
+            pr.raise_for_status()
+            mark = float(pr.json().get("markPrice", 0))
+            oi_usd = oi_val * mark
+            result["open_interest"].append({
+                "symbol": sym.replace("USDT", ""),
+                "oi_coins": round(oi_val, 2),
+                "oi_usd": round(oi_usd, 0),
+                "mark_price": round(mark, 2)
+            })
+        except Exception as e:
+            logger.error(f"[OnChain] OI error for {sym}: {e}")
+
+    # 2) Mempool.space BTC fee estimates
+    try:
+        resp = requests.get("https://mempool.space/api/v1/fees/recommended", timeout=5)
+        resp.raise_for_status()
+        fees = resp.json()
+        result["mempool"] = {
+            "fastest": fees.get("fastestFee", 0),
+            "half_hour": fees.get("halfHourFee", 0),
+            "hour": fees.get("hourFee", 0),
+            "economy": fees.get("economyFee", 0)
+        }
+    except Exception as e:
+        logger.error(f"[OnChain] Mempool error: {e}")
+
+    # 3) Mempool.space hashrate
+    try:
+        resp = requests.get("https://mempool.space/api/v1/mining/hashrate/3d", timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("hashrates"):
+            latest = data["hashrates"][-1]
+            hashrate_eh = latest.get("avgHashrate", 0) / 1e18
+            result["hashrate"] = {"value": round(hashrate_eh, 1), "unit": "EH/s"}
+    except Exception as e:
+        logger.error(f"[OnChain] Hashrate error: {e}")
+
+    return result
+
+
 # ── Economic Calendar (Major Macro Events) ──
 ECONOMIC_CALENDAR = [
     {"date": "2026-02-12", "event": "CPI (Jan YoY)", "impact": "HIGH", "region": "US"},
@@ -749,6 +879,33 @@ def generate_council_debate(market_data, news_data):
     }
 
 
+# ── Auto-Council & Discord Alert ──
+AUTO_COUNCIL_INTERVAL = int(os.getenv("AUTO_COUNCIL_INTERVAL", "3600"))  # 1 hour default
+_last_auto_council = 0
+
+
+def send_discord_alert(title, message, color=0xdc2626):
+    """Send alert to Discord webhook"""
+    if not DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL == "YOUR_DISCORD_WEBHOOK_URL_HERE":
+        return
+    try:
+        payload = {
+            "username": "Ryzm Alert",
+            "avatar_url": "https://i.imgur.com/8QZ7r7s.png",
+            "embeds": [{
+                "title": title,
+                "description": message[:2000],
+                "color": color,
+                "footer": {"text": "Ryzm Terminal Auto-Alert"},
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }]
+        }
+        requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
+        logger.info(f"[Discord] Alert sent: {title}")
+    except Exception as e:
+        logger.error(f"[Discord] Alert error: {e}")
+
+
 # ── Background Data Refresh ──
 def refresh_cache():
     """Cache refresh (every 5 minutes)"""
@@ -818,6 +975,63 @@ def refresh_cache():
                 logger.info(f"[Cache] Heatmap refreshed: {len(cache['heatmap']['data'])} coins")
         except Exception as e:
             logger.error(f"[Cache] Heatmap refresh error: {e}")
+
+        # Multi-timeframe analysis (every 5 mins)
+        try:
+            if now - cache["multi_tf"]["updated"] > CACHE_TTL:
+                cache["multi_tf"]["data"] = fetch_multi_timeframe()
+                cache["multi_tf"]["updated"] = now
+                logger.info("[Cache] Multi-timeframe refreshed")
+        except Exception as e:
+            logger.error(f"[Cache] MTF refresh error: {e}")
+
+        # On-chain data (every 5 mins)
+        try:
+            if now - cache["onchain"]["updated"] > CACHE_TTL:
+                cache["onchain"]["data"] = fetch_onchain_data()
+                cache["onchain"]["updated"] = now
+                logger.info("[Cache] On-chain data refreshed")
+        except Exception as e:
+            logger.error(f"[Cache] On-chain refresh error: {e}")
+
+        # Auto Council (hourly) — uses gemini-2.0-flash (cheap)
+        global _last_auto_council
+        try:
+            if now - _last_auto_council > AUTO_COUNCIL_INTERVAL:
+                market = cache["market"]["data"]
+                news = cache["news"]["data"]
+                if market:
+                    logger.info("[AutoCouncil] Running scheduled analysis...")
+                    result = generate_council_debate(market, news)
+                    cache["auto_council"]["data"] = result
+                    cache["auto_council"]["updated"] = now
+                    _last_auto_council = now
+                    btc_price = market.get("BTC", {}).get("price", 0.0) if isinstance(market, dict) else 0.0
+                    save_council_record(result, btc_price)
+                    score = result.get("consensus_score", 50)
+                    vibe = result.get("vibe", {}).get("status", "UNKNOWN")
+                    send_discord_alert(
+                        f"\U0001f9e0 Auto Council — Score: {score}/100",
+                        f"**Vibe:** {vibe}\n**Score:** {score}/100\n\n" +
+                        "\n".join([f"• {a['name']}: {a['message']}" for a in result.get("agents", [])[:4]]),
+                        color=0x06b6d4
+                    )
+                    evaluate_council_accuracy()
+                    logger.info(f"[AutoCouncil] Completed — score={score}, vibe={vibe}")
+        except Exception as e:
+            logger.error(f"[Cache] Auto-council error: {e}")
+
+        # Risk gauge critical alert to Discord
+        try:
+            risk = compute_risk_gauge()
+            if risk.get("level") == "CRITICAL":
+                send_discord_alert(
+                    "\U0001f6a8 CRITICAL RISK ALERT",
+                    f"Risk Score: {risk['score']}\nLevel: {risk['label']}\n\nImmediate attention required!",
+                    color=0xdc2626
+                )
+        except Exception:
+            pass
 
         time.sleep(60)  # Check every 1 minute
 
@@ -1034,6 +1248,24 @@ async def get_council_history_api(limit: int = 50):
         }
     }
 
+@app.get("/api/multi-timeframe")
+async def get_multi_timeframe():
+    """Multi-Timeframe Technical Analysis (RSI + EMA Cross)"""
+    try:
+        return cache["multi_tf"]["data"] or fetch_multi_timeframe()
+    except Exception as e:
+        logger.error(f"[API] MTF error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch multi-timeframe data")
+
+@app.get("/api/onchain")
+async def get_onchain():
+    """On-Chain Data (Open Interest + Mempool + Hashrate)"""
+    try:
+        return cache["onchain"]["data"] or fetch_onchain_data()
+    except Exception as e:
+        logger.error(f"[API] On-chain error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch on-chain data")
+
 # ─── Trade Validator ───
 @app.post("/api/validate")
 async def validate_trade(request: TradeValidationRequest):
@@ -1188,7 +1420,6 @@ async def generate_infographic_api(request: InfographicRequest, http_request: Re
 
 
 # ─── Admin: Discord Briefing Publisher ───
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 @app.post("/api/admin/publish-briefing")
 async def publish_briefing(request: BriefingRequest, http_request: Request):
@@ -1257,6 +1488,8 @@ if __name__ == "__main__":
     logger.info("   /api/funding-rate— Funding Rate")
     logger.info("   /api/liquidations— Whale Alerts")
     logger.info("   /api/calendar    — Economic Calendar")
+    logger.info("   /api/multi-timeframe — Multi-TF Analysis")
+    logger.info("   /api/onchain     — On-Chain Data")
     logger.info("   /admin           — Operator Console")
 
     uvicorn.run(app, host=host, port=port)

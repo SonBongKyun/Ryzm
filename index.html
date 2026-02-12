@@ -18,6 +18,7 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
   <!-- App Styles -->
   <link rel="stylesheet" href="/static/styles.css?v=3.0" />
@@ -78,6 +79,11 @@
     <!-- Dark Mode Toggle -->
     <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">
       <i data-lucide="moon" style="width:16px;height:16px;"></i>
+    </button>
+
+    <!-- Language Toggle (i18n) -->
+    <button id="lang-toggle" class="lang-toggle" title="한국어/English">
+      <span id="lang-label">EN</span>
     </button>
 
     <!-- FX Rate -->
@@ -146,9 +152,9 @@
   <!-- ═══════════════════════════════════════
        MAIN 3-COLUMN GRID
        ═══════════════════════════════════════ -->
-  <main class="main-grid">
+  <main class="main-grid" id="main-grid">
 
-    <div class="panel">
+    <div class="panel" id="panel-left" data-panel-id="left">
       <!-- Systemic Risk Gauge -->
       <div class="glass-panel risk-gauge-panel" id="risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
         <div class="panel-title">
@@ -290,11 +296,39 @@
 
       <!-- Museum of Scars -->
       <div class="glass-panel" style="flex: 1; min-height: 140px; position: relative;">
-        <div class="panel-title"><i data-lucide="skull"></i> Museum of Scars <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-title" data-i18n="museum_scars"><i data-lucide="skull"></i> Museum of Scars <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
         <div class="panel-body">
         <div id="scars-feed" style="overflow-y:auto; max-height: 200px; font-size:0.72rem;">
           <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div>
         </div>
+        </div>
+      </div>
+
+      <!-- Fear & Greed 30-Day Chart -->
+      <div class="glass-panel fg-chart-panel" style="min-height:160px;">
+        <div class="panel-title" data-i18n="fg_chart"><i data-lucide="thermometer"></i> Fear & Greed (30D) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div class="fg-header">
+            <span class="fg-score-big" id="fg-score-big">—</span>
+            <span class="fg-label-big" id="fg-label-big">Loading...</span>
+          </div>
+          <canvas id="fg-canvas" width="320" height="90" style="width:100%;height:90px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Multi-Timeframe Analysis -->
+      <div class="glass-panel mtf-panel" style="min-height:160px;">
+        <div class="panel-title" data-i18n="mtf_analysis"><i data-lucide="layers"></i> Multi-TF Analysis <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div class="mtf-symbol" id="mtf-symbol">BTC/USDT</div>
+          <table class="mtf-table" id="mtf-table">
+            <thead>
+              <tr><th>TF</th><th>RSI</th><th>EMA</th><th>Signal</th></tr>
+            </thead>
+            <tbody id="mtf-tbody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -318,7 +352,7 @@
       </div>
     </div>
 
-    <div class="center-panel">
+    <div class="center-panel" id="panel-center" data-panel-id="center">
 
       <div class="council-container">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
@@ -414,7 +448,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panel-right" data-panel-id="right">
       <!-- Real-time Price Panel (NEW) -->
       <div class="glass-panel" style="flex: 1;">
         <div class="panel-title"><i data-lucide="trending-up"></i> Realtime Prices <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
@@ -469,11 +503,37 @@
 
       <!-- Whale Alert Feed -->
       <div class="glass-panel" style="height: 150px; min-height:150px;">
-        <div class="panel-title"><i data-lucide="anchor"></i> Whale Alert <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-title" data-i18n="whale_alert"><i data-lucide="anchor"></i> Whale Alert <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
         <div class="panel-body">
         <div id="whale-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
           <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
         </div>
+        </div>
+      </div>
+
+      <!-- On-Chain Radar -->
+      <div class="glass-panel onchain-panel" style="min-height:180px;">
+        <div class="panel-title" data-i18n="onchain_radar"><i data-lucide="link"></i> On-Chain Radar <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div class="oc-section">
+            <div class="oc-subtitle">Open Interest</div>
+            <div id="oc-oi" class="oc-oi-grid">
+              <div class="skeleton-loader"><div class="skeleton skeleton-line"></div></div>
+            </div>
+          </div>
+          <div class="oc-section">
+            <div class="oc-subtitle">BTC Mempool Fees (sat/vB)</div>
+            <div id="oc-mempool" class="oc-fees-row">
+              <span class="oc-fee-item"><span class="oc-fee-label">⚡</span><span class="oc-fee-val" id="oc-fee-fast">—</span></span>
+              <span class="oc-fee-item"><span class="oc-fee-label">30m</span><span class="oc-fee-val" id="oc-fee-30m">—</span></span>
+              <span class="oc-fee-item"><span class="oc-fee-label">1h</span><span class="oc-fee-val" id="oc-fee-1h">—</span></span>
+              <span class="oc-fee-item"><span class="oc-fee-label">🐢</span><span class="oc-fee-val" id="oc-fee-eco">—</span></span>
+            </div>
+          </div>
+          <div class="oc-section">
+            <div class="oc-subtitle">Network Hashrate</div>
+            <div id="oc-hashrate" class="oc-hashrate" style="font-family:var(--font-mono);font-size:1.1rem;font-weight:700;color:var(--neon-cyan);">—</div>
+          </div>
         </div>
       </div>
 
@@ -539,7 +599,7 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v2.0</span>
+      <span>Ryzm Terminal v2.1</span>
     </div>
   </div>
 

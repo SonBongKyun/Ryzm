@@ -6,6 +6,7 @@ const MAX_FREE_VALIDATIONS = 3;
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initI18n();             // i18n system
   initClock();
   initPanelCollapse();  // Panel collapse toggle
   initChartTabs();      // Multi-symbol chart tabs
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initValidator(); // Trade Validator
   initChat(); // Ask Ryzm Chat
   loadValidatorCredits(); // Load saved credits
+  initPanelDragDrop();    // Panel drag & drop customization
   lucide.createIcons();
 });
 
@@ -452,6 +454,9 @@ function initDataFeeds() {
   fetchMuseumOfScars();
   fetchHeatmap();
   fetchHealthCheck();
+  fetchFearGreedChart();
+  fetchMultiTimeframe();
+  fetchOnChainData();
   setInterval(fetchMacroTicker, 10000);
   setInterval(fetchNews, 60000);
   setInterval(fetchRealtimePrices, 10000);
@@ -463,6 +468,9 @@ function initDataFeeds() {
   setInterval(fetchRiskGauge, 60000);
   setInterval(fetchHeatmap, 60000);
   setInterval(fetchHealthCheck, 30000);
+  setInterval(fetchFearGreedChart, 300000);
+  setInterval(fetchMultiTimeframe, 300000);
+  setInterval(fetchOnChainData, 300000);
 }
 
 async function fetchBriefing() {
@@ -2194,4 +2202,418 @@ if (window.performance && window.performance.memory) {
     const total = (memory.totalJSHeapSize / 1048576).toFixed(2);
     console.log(`Memory: ${used}MB / ${total}MB`);
   }, 60000); // Every minute
+}
+
+/* ═══════════════════════════════════════
+   #3 Fear & Greed 30-Day Chart
+   ═══════════════════════════════════════ */
+async function fetchFearGreedChart() {
+  try {
+    const res = await fetch('/api/fear-greed');
+    const data = await res.json();
+
+    // Update score display
+    const scoreEl = document.getElementById('fg-score-big');
+    const labelEl = document.getElementById('fg-label-big');
+    if (scoreEl && data.score !== undefined) {
+      scoreEl.textContent = data.score;
+      const c = data.score < 25 ? '#dc2626' : data.score < 45 ? '#f97316' : data.score < 55 ? '#eab308' : data.score < 75 ? '#06b6d4' : '#059669';
+      scoreEl.style.color = c;
+    }
+    if (labelEl && data.label) {
+      labelEl.textContent = data.label;
+    }
+
+    // Draw 30-day chart
+    if (data.history && data.history.length > 0) {
+      drawFGChart(data.history);
+    }
+  } catch (e) {
+    console.error('[FG Chart]', e);
+  }
+}
+
+function drawFGChart(history) {
+  const canvas = document.getElementById('fg-canvas');
+  if (!canvas || !history.length) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  const pad = 6;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Zone backgrounds
+  const zoneColors = [
+    { y: 0, h: 0.25, color: 'rgba(5,150,105,0.08)' },     // 75-100 Greed
+    { y: 0.25, h: 0.2, color: 'rgba(6,182,212,0.06)' },    // 55-75
+    { y: 0.45, h: 0.1, color: 'rgba(234,179,8,0.06)' },    // 45-55 Neutral
+    { y: 0.55, h: 0.2, color: 'rgba(249,115,22,0.06)' },   // 25-45
+    { y: 0.75, h: 0.25, color: 'rgba(220,38,38,0.08)' }    // 0-25 Fear
+  ];
+  zoneColors.forEach(z => {
+    ctx.fillStyle = z.color;
+    ctx.fillRect(pad, pad + z.y * (h - 2 * pad), w - 2 * pad, z.h * (h - 2 * pad));
+  });
+
+  // 50-line
+  const mid = pad + (h - 2 * pad) * 0.5;
+  ctx.strokeStyle = 'rgba(100,116,139,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pad, mid);
+  ctx.lineTo(w - pad, mid);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const values = history.map(h => h.value);
+  const step = (w - 2 * pad) / Math.max(values.length - 1, 1);
+
+  // Gradient fill
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, 'rgba(5,150,105,0.25)');
+  gradient.addColorStop(0.5, 'rgba(234,179,8,0.1)');
+  gradient.addColorStop(1, 'rgba(220,38,38,0.25)');
+
+  ctx.beginPath();
+  ctx.moveTo(pad, h - pad);
+  values.forEach((v, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - 2 * pad) * (1 - v / 100);
+    ctx.lineTo(x, y);
+  });
+  ctx.lineTo(pad + (values.length - 1) * step, h - pad);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - 2 * pad) * (1 - v / 100);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#eab308';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dots — color by zone
+  values.forEach((v, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - 2 * pad) * (1 - v / 100);
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = v < 25 ? '#dc2626' : v < 45 ? '#f97316' : v < 55 ? '#eab308' : v < 75 ? '#06b6d4' : '#059669';
+    ctx.fill();
+  });
+
+  // Last value label
+  const last = values[values.length - 1];
+  const lx = pad + (values.length - 1) * step;
+  const ly = pad + (h - 2 * pad) * (1 - last / 100);
+  ctx.font = 'bold 9px sans-serif';
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'right';
+  ctx.fillText(last, lx - 4, ly - 5);
+}
+
+/* ═══════════════════════════════════════
+   #4 Multi-Timeframe Analysis
+   ═══════════════════════════════════════ */
+async function fetchMultiTimeframe() {
+  try {
+    const res = await fetch('/api/multi-timeframe');
+    const data = await res.json();
+    renderMultiTimeframe(data);
+  } catch (e) {
+    console.error('[MTF]', e);
+  }
+}
+
+function renderMultiTimeframe(data) {
+  const symbolEl = document.getElementById('mtf-symbol');
+  const tbody = document.getElementById('mtf-tbody');
+  if (!tbody) return;
+
+  if (symbolEl && data.symbol) symbolEl.textContent = data.symbol;
+
+  const tf = data.timeframes || {};
+  const order = ['1h', '4h', '1d', '1w'];
+  const labels = { '1h': '1H', '4h': '4H', '1d': '1D', '1w': '1W' };
+
+  tbody.innerHTML = order.map(key => {
+    const d = tf[key];
+    if (!d) return '';
+
+    const rsiColor = d.rsi > 70 ? '#dc2626' : d.rsi < 30 ? '#059669' : 'var(--text-main)';
+    const emaStatus = d.ema20 > d.ema50 ? '🟢' : d.ema20 < d.ema50 ? '🔴' : '⚪';
+
+    const signalColors = {
+      'BUY': '#059669', 'SELL': '#dc2626', 'HOLD': '#eab308', 'N/A': 'var(--text-muted)'
+    };
+    const signalEmoji = {
+      'BUY': '▲', 'SELL': '▼', 'HOLD': '—', 'N/A': '?'
+    };
+    const sc = signalColors[d.signal] || 'var(--text-muted)';
+
+    return `<tr>
+      <td style="font-weight:700;font-family:var(--font-mono);">${labels[key]}</td>
+      <td style="color:${rsiColor};font-family:var(--font-mono);">${d.rsi}</td>
+      <td>${emaStatus} <span style="font-size:0.65rem;color:var(--text-muted);">${d.ema20 > d.ema50 ? 'Bull' : d.ema20 < d.ema50 ? 'Bear' : '—'}</span></td>
+      <td style="color:${sc};font-weight:700;">${signalEmoji[d.signal] || ''} ${d.signal}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════
+   #8 On-Chain Data Panel
+   ═══════════════════════════════════════ */
+async function fetchOnChainData() {
+  try {
+    const res = await fetch('/api/onchain');
+    const data = await res.json();
+    renderOnChainData(data);
+  } catch (e) {
+    console.error('[OnChain]', e);
+  }
+}
+
+function renderOnChainData(data) {
+  // Open Interest
+  const oiGrid = document.getElementById('oc-oi');
+  if (oiGrid && data.open_interest && data.open_interest.length > 0) {
+    oiGrid.innerHTML = data.open_interest.map(o => {
+      const oiStr = o.oi_usd >= 1e9 ? `$${(o.oi_usd/1e9).toFixed(2)}B` : `$${(o.oi_usd/1e6).toFixed(0)}M`;
+      return `<div class="oc-oi-item">
+        <span class="oc-oi-sym">${o.symbol}</span>
+        <span class="oc-oi-val">${oiStr}</span>
+        <span class="oc-oi-coins" style="font-size:0.65rem;color:var(--text-muted);">${o.oi_coins.toLocaleString()} coins</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Mempool fees
+  if (data.mempool) {
+    const fm = data.mempool;
+    const elFast = document.getElementById('oc-fee-fast');
+    const el30m = document.getElementById('oc-fee-30m');
+    const el1h = document.getElementById('oc-fee-1h');
+    const elEco = document.getElementById('oc-fee-eco');
+    if (elFast) elFast.textContent = fm.fastest || '—';
+    if (el30m) el30m.textContent = fm.half_hour || '—';
+    if (el1h) el1h.textContent = fm.hour || '—';
+    if (elEco) elEco.textContent = fm.economy || '—';
+  }
+
+  // Hashrate
+  const hrEl = document.getElementById('oc-hashrate');
+  if (hrEl && data.hashrate) {
+    hrEl.textContent = `${data.hashrate.value} ${data.hashrate.unit}`;
+  }
+}
+
+/* ═══════════════════════════════════════
+   #11 Panel Drag & Drop Customization
+   ═══════════════════════════════════════ */
+function initPanelDragDrop() {
+  const panels = ['panel-left', 'panel-center', 'panel-right'];
+
+  panels.forEach(panelId => {
+    const container = document.getElementById(panelId);
+    if (!container || typeof Sortable === 'undefined') return;
+
+    // Restore saved order
+    const savedOrder = JSON.parse(localStorage.getItem(`ryzm_panel_order_${panelId}`) || '[]');
+    if (savedOrder.length > 0) {
+      const childMap = {};
+      Array.from(container.children).forEach(child => {
+        if (child.classList.contains('glass-panel') || child.classList.contains('council-container') || child.tagName === 'BUTTON') {
+          const key = child.id || child.className.split(' ').slice(0, 2).join('_');
+          childMap[key] = child;
+        }
+      });
+      savedOrder.forEach(key => {
+        if (childMap[key]) container.appendChild(childMap[key]);
+      });
+    }
+
+    Sortable.create(container, {
+      animation: 200,
+      ghostClass: 'drag-ghost',
+      chosenClass: 'drag-chosen',
+      dragClass: 'drag-active',
+      handle: '.panel-title',
+      filter: '.chart-container, .council-container, .ai-scan-btn',
+      preventOnFilter: false,
+      onEnd: () => {
+        // Save order
+        const order = Array.from(container.children)
+          .filter(c => c.classList.contains('glass-panel') || c.classList.contains('council-container') || c.tagName === 'BUTTON')
+          .map(c => c.id || c.className.split(' ').slice(0, 2).join('_'));
+        localStorage.setItem(`ryzm_panel_order_${panelId}`, JSON.stringify(order));
+      }
+    });
+  });
+}
+
+/* ═══════════════════════════════════════
+   #12 Multi-Language Support (i18n)
+   ═══════════════════════════════════════ */
+const _translations = {
+  en: {
+    // Header
+    market_vibe: "MARKET VIBE:",
+    // Panel titles  
+    risk_gauge: "Systemic Risk Gauge",
+    museum_scars: "Museum of Scars",
+    fg_chart: "Fear & Greed (30D)",
+    mtf_analysis: "Multi-TF Analysis",
+    kimchi_premium: "Kimchi Premium",
+    econ_calendar: "Economic Calendar",
+    realtime_prices: "Realtime Prices",
+    long_short: "Long/Short Ratio",
+    whale_alert: "Whale Alert",
+    onchain_radar: "On-Chain Radar",
+    live_wire: "Live Wire",
+    ai_tracker: "AI Prediction Tracker",
+    market_heatmap: "Market Heatmap (24h)",
+    // Buttons
+    execute_analysis: "EXECUTE ANALYSIS PROTOCOL",
+    copy_report: "COPY REPORT FOR X",
+    export_snapshot: "EXPORT SNAPSHOT",
+    refresh_all: "Refresh All",
+    fullscreen: "Fullscreen",
+    notifications: "Notifications",
+    // Status
+    system_online: "SYSTEM ONLINE",
+    last_update: "Last Update",
+    sources: "Sources",
+    // Chat
+    ask_ryzm: "Ask Ryzm",
+    chat_placeholder: "Ask anything about the market...",
+    // MTF
+    tf: "TF", rsi: "RSI", ema: "EMA", signal: "Signal",
+    // On-chain
+    open_interest: "Open Interest",
+    mempool_fees: "BTC Mempool Fees (sat/vB)",
+    network_hashrate: "Network Hashrate",
+    // F&G
+    sessions: "SESSIONS", hit_rate: "HIT RATE", hits: "HITS",
+    // Council
+    strategic_narrative: "STRATEGIC NARRATIVE"
+  },
+  ko: {
+    market_vibe: "시장 분위기:",
+    risk_gauge: "시스템 리스크 게이지",
+    museum_scars: "상흔의 박물관",
+    fg_chart: "공포 & 탐욕 (30일)",
+    mtf_analysis: "멀티 타임프레임 분석",
+    kimchi_premium: "김치 프리미엄",
+    econ_calendar: "경제 캘린더",
+    realtime_prices: "실시간 시세",
+    long_short: "롱/숏 비율",
+    whale_alert: "고래 알림",
+    onchain_radar: "온체인 레이더",
+    live_wire: "뉴스 피드",
+    ai_tracker: "AI 예측 추적기",
+    market_heatmap: "시장 히트맵 (24h)",
+    execute_analysis: "분석 프로토콜 실행",
+    copy_report: "X용 리포트 복사",
+    export_snapshot: "스냅샷 내보내기",
+    refresh_all: "전체 새로고침",
+    fullscreen: "전체화면",
+    notifications: "알림",
+    system_online: "시스템 온라인",
+    last_update: "마지막 업데이트",
+    sources: "데이터 소스",
+    ask_ryzm: "Ryzm에게 물어보기",
+    chat_placeholder: "시장에 대해 무엇이든 물어보세요...",
+    tf: "주기", rsi: "RSI", ema: "EMA", signal: "시그널",
+    open_interest: "미결제약정",
+    mempool_fees: "BTC 멤풀 수수료 (sat/vB)",
+    network_hashrate: "네트워크 해시레이트",
+    sessions: "세션", hit_rate: "적중률", hits: "적중",
+    strategic_narrative: "전략적 내러티브"
+  }
+};
+
+let _currentLang = 'en';
+
+function initI18n() {
+  _currentLang = localStorage.getItem('ryzm_lang') || 'en';
+  applyTranslations(_currentLang);
+  updateLangToggle();
+
+  const btn = document.getElementById('lang-toggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      _currentLang = _currentLang === 'en' ? 'ko' : 'en';
+      localStorage.setItem('ryzm_lang', _currentLang);
+      applyTranslations(_currentLang);
+      updateLangToggle();
+      playSound('click');
+    });
+  }
+}
+
+function updateLangToggle() {
+  const label = document.getElementById('lang-label');
+  if (label) label.textContent = _currentLang === 'en' ? 'KO' : 'EN';
+}
+
+function t(key) {
+  return (_translations[_currentLang] && _translations[_currentLang][key]) || (_translations['en'][key]) || key;
+}
+
+function applyTranslations(lang) {
+  const dict = _translations[lang] || _translations['en'];
+
+  // Update data-i18n elements (panel titles)
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key]) {
+      // Preserve icons inside panel-title
+      const icons = el.querySelectorAll('i');
+      const iconHTML = Array.from(icons).map(i => i.outerHTML).join(' ');
+      const hasCollapse = el.querySelector('.collapse-icon');
+      const collapseHTML = hasCollapse ? ' <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i>' : '';
+      el.innerHTML = iconHTML.split('<i data-lucide="chevron-down"')[0] + ' ' + dict[key] + collapseHTML;
+      lucide.createIcons();
+    }
+  });
+
+  // MTF table header
+  const mtfTh = document.querySelectorAll('.mtf-table thead th');
+  if (mtfTh.length >= 4) {
+    mtfTh[0].textContent = dict.tf || 'TF';
+    mtfTh[1].textContent = dict.rsi || 'RSI';
+    mtfTh[2].textContent = dict.ema || 'EMA';
+    mtfTh[3].textContent = dict.signal || 'Signal';
+  }
+
+  // On-chain subtitles
+  const ocSubs = document.querySelectorAll('.oc-subtitle');
+  if (ocSubs[0]) ocSubs[0].textContent = dict.open_interest || 'Open Interest';
+  if (ocSubs[1]) ocSubs[1].textContent = dict.mempool_fees || 'BTC Mempool Fees (sat/vB)';
+  if (ocSubs[2]) ocSubs[2].textContent = dict.network_hashrate || 'Network Hashrate';
+
+  // Stat labels
+  const statLabels = document.querySelectorAll('.ch-stat-label');
+  if (statLabels[0]) statLabels[0].textContent = dict.sessions || 'SESSIONS';
+  if (statLabels[1]) statLabels[1].textContent = dict.hit_rate || 'HIT RATE';
+  if (statLabels[2]) statLabels[2].textContent = dict.hits || 'HITS';
+
+  // Chat placeholder
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) chatInput.placeholder = dict.chat_placeholder || 'Ask anything about the market...';
 }
