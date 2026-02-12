@@ -457,6 +457,7 @@ function initDataFeeds() {
   fetchFearGreedChart();
   fetchMultiTimeframe();
   fetchOnChainData();
+  fetchScanner();
   setInterval(fetchMacroTicker, 10000);
   setInterval(fetchNews, 60000);
   setInterval(fetchRealtimePrices, 10000);
@@ -471,6 +472,7 @@ function initDataFeeds() {
   setInterval(fetchFearGreedChart, 300000);
   setInterval(fetchMultiTimeframe, 300000);
   setInterval(fetchOnChainData, 300000);
+  setInterval(fetchScanner, 60000);
 }
 
 async function fetchBriefing() {
@@ -1833,6 +1835,54 @@ function initQuickActions() {
 }
 
 /* ─── Refresh All Data ─── */
+
+/* ── Alpha Scanner ── */
+async function fetchScanner() {
+  try {
+    const res = await fetch('/api/scanner');
+    const data = await res.json();
+    const feed = document.getElementById('scanner-feed');
+    if (!feed) return;
+
+    if (data.alerts && data.alerts.length > 0) {
+      // Animate live dot
+      const dot = document.querySelector('.scanner-live-dot');
+      if (dot) dot.classList.add('active');
+      setTimeout(() => { if (dot) dot.classList.remove('active'); }, 3000);
+
+      feed.innerHTML = data.alerts.map(a => {
+        const typeLabel = {
+          'PUMP_ALERT': t('scanner_pump'),
+          'OVERSOLD_BOUNCE': t('scanner_bounce'),
+          'VOL_SPIKE': t('scanner_vol')
+        }[a.type] || a.type;
+
+        const icon = a.type === 'PUMP_ALERT' ? '🚀' : a.type === 'OVERSOLD_BOUNCE' ? '🎯' : '💥';
+
+        return `<div class="scanner-alert" style="border-left-color:${a.color};">
+          <div class="scanner-alert-left">
+            <span class="scanner-symbol">${icon} ${a.symbol}</span>
+            <span class="scanner-type" style="color:${a.color};">${typeLabel}</span>
+          </div>
+          <div class="scanner-alert-right">
+            <span class="scanner-msg">${a.msg}</span>
+            <span class="scanner-change" style="color:${a.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}">${a.change >= 0 ? '+' : ''}${a.change}%</span>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Play alert sound for high priority
+      if (data.alerts.some(a => a.type === 'PUMP_ALERT' || a.type === 'OVERSOLD_BOUNCE')) {
+        playSound('alert');
+      }
+    } else {
+      feed.innerHTML = `<div class="scanner-empty">${t('scanner_calm')}</div>`;
+    }
+  } catch (e) {
+    console.error('Scanner Error:', e);
+  }
+}
+
 /* ── Mini Heatmap ── */
 async function fetchHeatmap() {
   try {
@@ -2537,7 +2587,14 @@ const _translations = {
     no_events: "No upcoming events",
     connection_failed: "CONNECTION FAILED",
     summoning: "SUMMONING AGENTS...",
-    accessing: "ACCESSING NEURAL NET..."
+    accessing: "ACCESSING NEURAL NET...",
+    // Scanner
+    alpha_scanner: "Alpha Scanner (15m)",
+    scanner_pump: "PUMP ALERT",
+    scanner_bounce: "OVERSOLD BOUNCE",
+    scanner_vol: "VOL SPIKE",
+    scanner_calm: "No anomalies detected. Market is calm.",
+    scanner_scanning: "Scanning markets..."
   },
   ko: {
     market_vibe: "시장 분위기:",
@@ -2590,7 +2647,14 @@ const _translations = {
     no_events: "예정된 이벤트가 없습니다",
     connection_failed: "연결 실패",
     summoning: "에이전트 소환 중...",
-    accessing: "뉴럴넷 접속 중..."
+    accessing: "뉴럴넷 접속 중...",
+    // Scanner
+    alpha_scanner: "알파 스캐너 (15분)",
+    scanner_pump: "급등 포착",
+    scanner_bounce: "과매도 반등",
+    scanner_vol: "거래량 폭발",
+    scanner_calm: "이상 감지되지 않음. 시장이 안정적입니다.",
+    scanner_scanning: "시장 스캐닝 중..."
   }
 };
 

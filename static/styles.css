@@ -3198,6 +3198,116 @@ html[data-theme="dark"] .ch-chart {
 }
 
 /* ═══════════════════════════════════════
+   Alpha Scanner Panel
+   ═══════════════════════════════════════ */
+.scanner-panel {
+  border: 1px solid var(--neon-purple, #8b5cf6) !important;
+  position: relative;
+}
+.scanner-panel .panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.scanner-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+  transition: all 0.3s;
+}
+.scanner-live-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981, 0 0 16px rgba(16,185,129,0.4);
+  animation: scanner-blink 0.6s ease-in-out 3;
+}
+@keyframes scanner-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.scanner-alert {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid var(--neon-cyan);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s, transform 0.15s;
+  animation: scanner-slide-in 0.3s ease-out;
+}
+.scanner-alert:hover {
+  background: rgba(255,255,255,0.06);
+  transform: translateX(2px);
+}
+@keyframes scanner-slide-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.scanner-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.scanner-symbol {
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+.scanner-type {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.05);
+}
+
+.scanner-alert-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.scanner-msg {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.scanner-change {
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.scanner-empty {
+  text-align: center;
+  padding: 20px 10px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* White theme scanner overrides */
+body:not(.dark-mode) .scanner-panel {
+  border-color: rgba(139,92,246,0.3) !important;
+}
+body:not(.dark-mode) .scanner-alert {
+  background: rgba(0,0,0,0.02);
+  border-color: rgba(0,0,0,0.06);
+}
+body:not(.dark-mode) .scanner-alert:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+/* ═══════════════════════════════════════
    #3 Fear & Greed 30-Day Chart
    ═══════════════════════════════════════ */
 .fg-chart-panel .fg-header {

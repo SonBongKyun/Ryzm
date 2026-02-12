@@ -88,6 +88,7 @@ cache = {
     "multi_tf": {"data": {}, "updated": 0},
     "onchain": {"data": {}, "updated": 0},
     "auto_council": {"data": {}, "updated": 0},
+    "scanner": {"data": [], "updated": 0},
     "latest_briefing": {"title": "", "content": "", "time": ""},
 }
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
@@ -446,6 +447,14 @@ def fetch_whale_trades():
         return []
 
 
+# ── Alpha Scanner Configuration ──
+TARGET_COINS = [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT",
+    "ADAUSDT", "AVAXUSDT", "TRXUSDT", "LINKUSDT", "MATICUSDT",
+    "DOTUSDT", "LTCUSDT", "SHIBUSDT", "UNIUSDT", "ATOMUSDT"
+]
+
+
 # ── Technical Analysis Helpers ──
 def calculate_rsi(closes, period=14):
     """Wilder's RSI calculation"""
@@ -474,6 +483,78 @@ def calculate_ema(data, period):
     for val in data[period:]:
         ema = (val - ema) * mult + ema
     return round(ema, 2)
+
+
+def calculate_vol_spike(volumes, period=20):
+    """Calculate volume spike ratio vs trailing average"""
+    if len(volumes) < period:
+        return 0
+    avg_vol = sum(volumes[-period:-1]) / (period - 1)
+    curr_vol = volumes[-1]
+    if avg_vol == 0:
+        return 0
+    return round((curr_vol / avg_vol) * 100, 1)
+
+
+def fetch_alpha_scanner():
+    """
+    Alpha Scanner — Scan top coins for:
+    1. RSI Overbought (>70) + Volume Spike (>200%) → PUMP_ALERT
+    2. RSI Oversold (<30) + Volume Spike (>150%) → OVERSOLD_BOUNCE
+    3. Mega Volume (>300%) without RSI extreme → VOL_SPIKE
+    """
+    alerts = []
+    for symbol in TARGET_COINS:
+        try:
+            url = "https://fapi.binance.com/fapi/v1/klines"
+            params = {"symbol": symbol, "interval": "15m", "limit": 30}
+            resp = requests.get(url, params=params, timeout=3)
+            data = resp.json()
+            if not data or not isinstance(data, list):
+                continue
+
+            closes = [float(x[4]) for x in data]
+            volumes = [float(x[5]) for x in data]
+            highs = [float(x[2]) for x in data]
+            lows = [float(x[3]) for x in data]
+
+            rsi = calculate_rsi(closes, 14) or 50
+            vol_spike = calculate_vol_spike(volumes)
+            price_change = round(((closes[-1] - closes[0]) / closes[0]) * 100, 2)
+            price_range = round(((highs[-1] - lows[-1]) / lows[-1]) * 100, 2) if lows[-1] else 0
+
+            coin = symbol.replace("USDT", "")
+
+            # Pump alert: Overbought + massive volume
+            if rsi > 70 and vol_spike > 200:
+                alerts.append({
+                    "symbol": coin, "type": "PUMP_ALERT",
+                    "rsi": rsi, "vol": int(vol_spike), "change": price_change,
+                    "msg": f"RSI {rsi} · Vol {int(vol_spike)}%",
+                    "color": "#10b981", "priority": 1
+                })
+            # Oversold bounce: Oversold + volume building
+            elif rsi < 30 and vol_spike > 150:
+                alerts.append({
+                    "symbol": coin, "type": "OVERSOLD_BOUNCE",
+                    "rsi": rsi, "vol": int(vol_spike), "change": price_change,
+                    "msg": f"RSI {rsi} · Vol {int(vol_spike)}%",
+                    "color": "#f59e0b", "priority": 2
+                })
+            # Volume spike without RSI extreme
+            elif vol_spike > 300:
+                alerts.append({
+                    "symbol": coin, "type": "VOL_SPIKE",
+                    "rsi": rsi, "vol": int(vol_spike), "change": price_change,
+                    "msg": f"Vol {int(vol_spike)}% · {'+' if price_change > 0 else ''}{price_change}%",
+                    "color": "#8b5cf6", "priority": 3
+                })
+        except Exception:
+            continue
+
+    # Sort by priority
+    alerts.sort(key=lambda x: x.get("priority", 99))
+    return alerts
 
 
 def fetch_multi_timeframe(symbol="BTCUSDT"):
@@ -1021,6 +1102,17 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[Cache] Auto-council error: {e}")
 
+        # Alpha Scanner (every 60s)
+        try:
+            if now - cache["scanner"]["updated"] > 60:
+                cache["scanner"]["data"] = fetch_alpha_scanner()
+                cache["scanner"]["updated"] = now
+                cnt = len(cache["scanner"]["data"])
+                if cnt > 0:
+                    logger.info(f"[Scanner] Found {cnt} opportunities")
+        except Exception as e:
+            logger.error(f"[Scanner] Error: {e}")
+
         # Risk gauge critical alert to Discord
         try:
             risk = compute_risk_gauge()
@@ -1265,6 +1357,19 @@ async def get_onchain():
     except Exception as e:
         logger.error(f"[API] On-chain error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch on-chain data")
+
+@app.get("/api/scanner")
+async def get_scanner():
+    """Alpha Scanner — Oversold/Overbought + Volume Spike Alerts"""
+    try:
+        data = cache["scanner"]["data"]
+        if not data:
+            data = fetch_alpha_scanner()
+        return {"alerts": data, "count": len(data), "ts": int(time.time())}
+    except Exception as e:
+        logger.error(f"[API] Scanner error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to scan markets")
+
 
 # ─── Trade Validator ───
 @app.post("/api/validate")
