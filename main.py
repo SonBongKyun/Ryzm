@@ -3,8 +3,9 @@ import json
 import time
 import threading
 import logging
+import sqlite3
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -385,7 +386,6 @@ def fetch_long_short_ratio():
         logger.error(f"[LS Ratio] Error: {e}")
     
     return {"longAccount": 50.0, "shortAccount": 50.0, "ratio": 1.0}
-    return {"premium": 0, "upbit_price": 0, "binance_price": 0, "usd_krw": 0}
 
 
 def fetch_funding_rate():
@@ -556,6 +556,122 @@ def compute_risk_gauge():
         "components": components,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     }
+
+
+# ── Council History Database (SQLite) ──
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "council_history.db")
+
+def init_council_db():
+    """Initialize SQLite DB for council history"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS council_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            consensus_score INTEGER,
+            vibe_status TEXT,
+            btc_price REAL,
+            btc_price_after TEXT DEFAULT NULL,
+            hit INTEGER DEFAULT NULL,
+            full_result TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+    logger.info("[DB] Council history database initialized")
+
+def save_council_record(result: dict, btc_price: float = 0.0):
+    """Save a council analysis to the DB"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO council_history (timestamp, consensus_score, vibe_status, btc_price, full_result) VALUES (?, ?, ?, ?, ?)",
+            (
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                result.get("consensus_score", 50),
+                result.get("vibe", {}).get("status", "UNKNOWN"),
+                btc_price,
+                json.dumps(result, ensure_ascii=False)
+            )
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"[DB] Council record saved — score={result.get('consensus_score')}, btc=${btc_price:.0f}")
+    except Exception as e:
+        logger.error(f"[DB] Failed to save council record: {e}")
+
+def get_council_history(limit: int = 50) -> List[dict]:
+    """Retrieve recent council records"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, timestamp, consensus_score, vibe_status, btc_price, btc_price_after, hit FROM council_history ORDER BY id DESC LIMIT ?",
+            (limit,)
+        )
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        logger.error(f"[DB] Failed to read council history: {e}")
+        return []
+
+def evaluate_council_accuracy():
+    """Check past predictions: if score>50 meant bullish, did BTC go up?"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        # Get records older than 1 hour that haven't been evaluated yet
+        c.execute("""
+            SELECT id, consensus_score, btc_price FROM council_history
+            WHERE hit IS NULL AND btc_price > 0
+            AND datetime(timestamp) < datetime('now', '-1 hour')
+            ORDER BY id ASC LIMIT 20
+        """)
+        rows = c.fetchall()
+
+        if not rows:
+            conn.close()
+            return
+
+        # Get current BTC price from cache
+        market = cache.get("market", {}).get("data", {})
+        current_btc = 0.0
+        if isinstance(market, dict):
+            current_btc = market.get("BTC", {}).get("price", 0.0)
+        elif isinstance(market, list):
+            for coin in market:
+                if coin.get("symbol", "").upper() == "BTC":
+                    current_btc = coin.get("price", 0.0)
+                    break
+
+        if current_btc <= 0:
+            conn.close()
+            return
+
+        for row in rows:
+            score = row["consensus_score"]
+            old_price = row["btc_price"]
+            predicted_bull = score > 50
+            actual_bull = current_btc > old_price
+            hit = 1 if predicted_bull == actual_bull else 0
+            c.execute(
+                "UPDATE council_history SET btc_price_after = ?, hit = ? WHERE id = ?",
+                (f"{current_btc:.2f}", hit, row["id"])
+            )
+
+        conn.commit()
+        conn.close()
+        logger.info(f"[DB] Evaluated {len(rows)} council predictions")
+    except Exception as e:
+        logger.error(f"[DB] Accuracy evaluation error: {e}")
+
+# Initialize DB on module load
+init_council_db()
 
 
 # ── AI Round Table (The Council) Logic ──
@@ -877,12 +993,46 @@ async def get_council():
 
         # Request analysis from Gemini
         result = generate_council_debate(market, news)
+
+        # Save to SQLite history
+        btc_price = 0.0
+        if isinstance(market, dict):
+            btc_price = market.get("BTC", {}).get("price", 0.0)
+        elif isinstance(market, list):
+            for coin in market:
+                if coin.get("symbol", "").upper() == "BTC":
+                    btc_price = coin.get("price", 0.0)
+                    break
+        save_council_record(result, btc_price)
+
+        # Evaluate past predictions in background
+        threading.Thread(target=evaluate_council_accuracy, daemon=True).start()
+
         return result
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[API] Council endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate council analysis")
+
+@app.get("/api/council/history")
+async def get_council_history_api(limit: int = 50):
+    """Retrieve AI Council prediction history & accuracy stats"""
+    records = get_council_history(limit)
+    # Compute accuracy stats
+    evaluated = [r for r in records if r["hit"] is not None]
+    total_eval = len(evaluated)
+    hits = sum(1 for r in evaluated if r["hit"] == 1)
+    accuracy = round((hits / total_eval) * 100, 1) if total_eval > 0 else None
+    return {
+        "records": records,
+        "stats": {
+            "total_sessions": len(records),
+            "evaluated": total_eval,
+            "hits": hits,
+            "accuracy_pct": accuracy
+        }
+    }
 
 # ─── Trade Validator ───
 @app.post("/api/validate")

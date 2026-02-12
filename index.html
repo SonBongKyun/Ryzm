@@ -36,17 +36,43 @@
       Ryzm_OS
     </div>
 
-    <!-- BGM Player -->
-    <div class="bgm-player">
-      <button id="bgm-play" title="Play / Pause">
-        <i data-lucide="play" style="width:14px;height:14px;"></i>
+    <!-- BGM Player (v2) -->
+    <div class="bgm-player" id="bgm-player">
+      <!-- Playback controls -->
+      <div class="bgm-controls">
+        <button id="bgm-prev" title="Previous" class="bgm-btn bgm-btn-sm">
+          <i data-lucide="skip-back" style="width:11px;height:11px;"></i>
+        </button>
+        <button id="bgm-play" title="Play / Pause" class="bgm-btn bgm-btn-play">
+          <i data-lucide="play" style="width:14px;height:14px;"></i>
+        </button>
+        <button id="bgm-skip" title="Next" class="bgm-btn bgm-btn-sm">
+          <i data-lucide="skip-forward" style="width:11px;height:11px;"></i>
+        </button>
+      </div>
+      <!-- Track info + progress -->
+      <div class="bgm-info">
+        <div class="bgm-info-row">
+          <span id="bgm-track-name" class="bgm-track-name">Stopped</span>
+          <span id="bgm-time" class="bgm-time">0:00 / 0:00</span>
+        </div>
+        <div class="bgm-progress-track" id="bgm-progress-track">
+          <div class="bgm-progress-fill" id="bgm-progress-fill"></div>
+        </div>
+      </div>
+      <!-- Volume -->
+      <div class="bgm-vol-group">
+        <button id="bgm-mute" class="bgm-btn bgm-btn-sm" title="Mute">
+          <i data-lucide="volume-2" style="width:12px;height:12px;"></i>
+        </button>
+        <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="60" />
+      </div>
+      <!-- Playlist toggle -->
+      <button id="bgm-list-toggle" class="bgm-btn bgm-btn-sm" title="Playlist">
+        <i data-lucide="list-music" style="width:12px;height:12px;"></i>
       </button>
-      <span id="bgm-track-name" class="bgm-track-name">Stopped</span>
-      <button id="bgm-skip" title="Skip">
-        <i data-lucide="skip-forward" style="width:12px;height:12px;"></i>
-      </button>
-      <i data-lucide="volume-2" style="width:12px;height:12px;color:var(--text-muted);"></i>
-      <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="60" />
+      <!-- Playlist dropdown -->
+      <div class="bgm-playlist" id="bgm-playlist" style="display:none;"></div>
     </div>
 
     <!-- Dark Mode Toggle -->
@@ -59,6 +85,10 @@
       <span class="fx-label">USD/KRW</span>
       <span class="fx-value" id="fx-usdkrw">—</span>
       <span class="fx-change" id="fx-usdkrw-chg"></span>
+      <span class="fx-divider">|</span>
+      <span class="fx-label">USD/JPY</span>
+      <span class="fx-value" id="fx-usdjpy">—</span>
+      <span class="fx-change" id="fx-usdjpy-chg"></span>
     </div>
 
     <!-- Dual Clock -->
@@ -120,13 +150,13 @@
 
     <div class="panel">
       <!-- Systemic Risk Gauge -->
-      <div class="glass-panel risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
+      <div class="glass-panel risk-gauge-panel" id="risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
         <div class="panel-title">
           <i data-lucide="shield-alert"></i> Systemic Risk Gauge
         </div>
         <div class="risk-gauge-body">
           <div class="gauge-container">
-            <svg viewBox="0 0 200 130" class="gauge-svg">
+            <svg viewBox="0 0 200 140" class="gauge-svg">
               <defs>
                 <!-- 3D arc gradient: green → yellow → orange → red -->
                 <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -143,6 +173,14 @@
                 <!-- Glow filter -->
                 <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
                   <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+                <!-- Needle glow filter -->
+                <filter id="needleGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
                   <feMerge>
                     <feMergeNode in="blur"/>
                     <feMergeNode in="SourceGraphic"/>
@@ -174,7 +212,7 @@
               <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
 
               <!-- Active arc (filled by JS), with glow -->
-              <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="125" filter="url(#gaugeGlow)"/>
+              <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="125" filter="url(#gaugeGlow)" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);"/>
 
               <!-- Tick marks for scale -->
               <g stroke="var(--text-muted)" stroke-width="1" opacity="0.4">
@@ -187,38 +225,76 @@
                 <line x1="176" y1="100" x2="168" y2="100"/>
               </g>
 
-              <!-- Scale labels -->
-              <text x="18" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">0</text>
-              <text x="100" y="18" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">50</text>
-              <text x="182" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">100</text>
+              <!-- Zone labels on arc -->
+              <text x="28" y="88" fill="#dc2626" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">CRIT</text>
+              <text x="50" y="55" fill="#f97316" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">HIGH</text>
+              <text x="80" y="35" fill="#eab308" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6" letter-spacing="0.5px">ELEV</text>
+              <text x="120" y="35" fill="#06b6d4" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6" letter-spacing="0.5px">MOD</text>
+              <text x="155" y="55" fill="#059669" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">LOW</text>
 
-              <!-- Needle -->
-              <g id="gauge-needle" transform="rotate(0, 100, 100)">
+              <!-- Scale labels -->
+              <text x="18" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">-100</text>
+              <text x="100" y="18" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">0</text>
+              <text x="182" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">+100</text>
+
+              <!-- Needle with smooth CSS transition -->
+              <g id="gauge-needle" transform="rotate(0, 100, 100)" style="transition: transform 1.2s cubic-bezier(0.4,0,0.2,1);">
                 <line x1="100" y1="100" x2="100" y2="30" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.2" transform="translate(1,1)"/>
-                <line x1="100" y1="100" x2="100" y2="30" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round"/>
+                <line id="needle-line" x1="100" y1="100" x2="100" y2="28" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round" filter="url(#needleGlow)"/>
               </g>
 
               <!-- Center hub (3D metallic) -->
-              <circle cx="100" cy="100" r="7" fill="#1e293b" class="gauge-hub"/>
-              <circle cx="98.5" cy="97.5" r="2.5" fill="white" opacity="0.35"/>
+              <circle cx="100" cy="100" r="8" fill="#1e293b" class="gauge-hub"/>
+              <circle cx="98" cy="97" r="3" fill="white" opacity="0.35"/>
+
+              <!-- Score inside SVG for tighter layout -->
+              <text id="gauge-score-svg" x="100" y="125" text-anchor="middle" fill="#1e293b" font-size="16" font-family="var(--font-mono)" font-weight="900">0</text>
+              <text id="gauge-label-svg" x="100" y="136" text-anchor="middle" fill="#1e293b" font-size="6" font-family="var(--font-head)" letter-spacing="1.5px">[LOADING]</text>
             </svg>
-            <div class="gauge-score" id="risk-score">0</div>
-            <div class="gauge-label" id="risk-label">LOADING...</div>
+            <!-- Delta indicator -->
+            <div class="gauge-delta" id="risk-delta"></div>
           </div>
-          <div class="risk-components" id="risk-components">
-            <div class="rc-item"><span class="rc-name">VOLATILITY</span><span class="rc-val" id="rc-vix">—</span></div>
-            <div class="rc-item"><span class="rc-name">SENTIMENT</span><span class="rc-val" id="rc-fg">—</span></div>
-            <div class="rc-item"><span class="rc-name">LEVERAGE</span><span class="rc-val" id="rc-ls">—</span></div>
-            <div class="rc-item"><span class="rc-name">FUNDING</span><span class="rc-val" id="rc-fr">—</span></div>
+
+          <!-- Component contribution bars -->
+          <div class="risk-components-v2" id="risk-components">
+            <div class="rc-row">
+              <span class="rc-label">SENTIMENT</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fg-bar"></div></div>
+              <span class="rc-value" id="rc-fg">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">VOLATILITY</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-vix-bar"></div></div>
+              <span class="rc-value" id="rc-vix">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">LEVERAGE</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-ls-bar"></div></div>
+              <span class="rc-value" id="rc-ls">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">FUNDING</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fr-bar"></div></div>
+              <span class="rc-value" id="rc-fr">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">KIMCHI P.</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-kp-bar"></div></div>
+              <span class="rc-value" id="rc-kp">—</span>
+            </div>
           </div>
+          <!-- Timestamp -->
+          <div class="gauge-timestamp" id="gauge-timestamp"></div>
         </div>
       </div>
 
       <!-- Museum of Scars -->
       <div class="glass-panel" style="flex: 1; min-height: 140px; position: relative;">
-        <div class="panel-title"><i data-lucide="skull"></i> Museum of Scars</div>
+        <div class="panel-title"><i data-lucide="skull"></i> Museum of Scars <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
         <div id="scars-feed" style="overflow-y:auto; max-height: 200px; font-size:0.72rem;">
-          <div style="text-align:center; padding:30px; color:var(--text-muted);">Loading archive...</div>
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div>
+        </div>
         </div>
       </div>
 
@@ -233,9 +309,11 @@
 
       <!-- Economic Calendar -->
       <div class="glass-panel" style="height: 150px; min-height:150px;">
-        <div class="panel-title"><i data-lucide="calendar"></i> Economic Calendar</div>
+        <div class="panel-title"><i data-lucide="calendar"></i> Economic Calendar <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
         <div id="calendar-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
-          <div style="text-align:center; padding:20px; color:var(--text-muted);">Loading events...</div>
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div>
+        </div>
         </div>
       </div>
     </div>
@@ -260,27 +338,19 @@
 
       <div class="glass-panel chart-container" id="chart-panel"
         style="height:450px; padding:0; border:1px solid var(--border-bright);">
-        <div class="tradingview-widget-container" style="height:100%; width:100%;">
+        <!-- Multi-Symbol Tabs -->
+        <div class="chart-tabs" id="chart-tabs">
+          <button class="chart-tab active" data-symbol="BINANCE:BTCUSDT" data-name="BTC/USDT">BTC</button>
+          <button class="chart-tab" data-symbol="BINANCE:ETHUSDT" data-name="ETH/USDT">ETH</button>
+          <button class="chart-tab" data-symbol="BINANCE:SOLUSDT" data-name="SOL/USDT">SOL</button>
+          <button class="chart-tab" data-symbol="BINANCE:XRPUSDT" data-name="XRP/USDT">XRP</button>
+          <button class="chart-tab" data-symbol="FX:USDJPY" data-name="USD/JPY">USD/JPY</button>
+          <button class="chart-tab" data-symbol="TVC:DXY" data-name="DXY">DXY</button>
+        </div>
+        <div class="tradingview-widget-container" style="height:calc(100% - 36px); width:100%;">
           <div id="tradingview_b1e30" style="height:100%; width:100%;"></div>
           <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-          <script type="text/javascript">
-            new TradingView.widget({
-              "autosize": true,
-              "symbol": "BINANCE:BTCUSDT",
-              "interval": "D",
-              "timezone": "Asia/Seoul",
-              "theme": "light",
-              "style": "1",
-              "locale": "en",
-              "enable_publishing": false,
-              "backgroundColor": "rgba(255, 255, 255, 1)",
-              "gridColor": "rgba(0, 0, 0, 0.05)",
-              "hide_top_toolbar": false,
-              "hide_legend": false,
-              "save_image": false,
-              "container_id": "tradingview_b1e30"
-            });
-          </script>
+          <!-- Initial chart loaded by initChartTabs() in app.js -->
         </div>
       </div>
 
@@ -305,6 +375,36 @@
         <i data-lucide="camera"></i> EXPORT SNAPSHOT
       </button>
 
+      <!-- AI Council Prediction History -->
+      <div class="glass-panel council-history-panel" id="council-history-panel" style="margin-top:12px;">
+        <div class="panel-title">
+          <i data-lucide="brain-circuit"></i> AI Prediction Tracker
+          <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i>
+        </div>
+        <div class="panel-body">
+          <div class="ch-stats" id="ch-stats">
+            <div class="ch-stat-box">
+              <div class="ch-stat-value" id="ch-total">—</div>
+              <div class="ch-stat-label">SESSIONS</div>
+            </div>
+            <div class="ch-stat-box ch-accuracy">
+              <div class="ch-stat-value" id="ch-accuracy">—</div>
+              <div class="ch-stat-label">HIT RATE</div>
+            </div>
+            <div class="ch-stat-box">
+              <div class="ch-stat-value" id="ch-hits">—</div>
+              <div class="ch-stat-label">HITS</div>
+            </div>
+          </div>
+          <div class="ch-chart" id="ch-chart">
+            <canvas id="ch-canvas" width="400" height="80"></canvas>
+          </div>
+          <div class="ch-records" id="ch-records" style="max-height:120px; overflow-y:auto; font-size:0.7rem;">
+            <div style="text-align:center; color:var(--text-muted); padding:10px;">Run Council to start tracking...</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Mini Heatmap -->
       <div class="glass-panel heatmap-panel" style="margin-top:12px;">
         <div class="panel-title"><i data-lucide="grid-3x3"></i> Market Heatmap (24h)</div>
@@ -317,12 +417,11 @@
     <div class="panel">
       <!-- Real-time Price Panel (NEW) -->
       <div class="glass-panel" style="flex: 1;">
-        <div class="panel-title"><i data-lucide="trending-up"></i> Realtime Prices</div>
+        <div class="panel-title"><i data-lucide="trending-up"></i> Realtime Prices <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
         <div id="realtime-prices" class="price-panel">
-          <!-- Price cards will be populated by JS -->
-          <div style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.8rem;">
-            Loading prices...
-          </div>
+          <div class="skeleton-loader"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div></div>
+        </div>
         </div>
       </div>
 
@@ -370,15 +469,20 @@
 
       <!-- Whale Alert Feed -->
       <div class="glass-panel" style="height: 150px; min-height:150px;">
-        <div class="panel-title"><i data-lucide="anchor"></i> Whale Alert</div>
+        <div class="panel-title"><i data-lucide="anchor"></i> Whale Alert <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
         <div id="whale-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
-          <div style="text-align:center; padding:20px; color:var(--text-muted);">Scanning large trades...</div>
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+        </div>
         </div>
       </div>
 
       <div class="glass-panel" style="flex: 1; min-height: 200px;">
-        <div class="panel-title"><i data-lucide="rss"></i> Live Wire</div>
+        <div class="panel-title"><i data-lucide="rss"></i> Live Wire <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
         <div id="news-feed" style="overflow-y:auto; max-height:400px; font-size:0.8rem;">
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line"></div></div>
+        </div>
         </div>
       </div>
     </div>

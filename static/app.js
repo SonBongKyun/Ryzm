@@ -7,6 +7,8 @@ const MAX_FREE_VALIDATIONS = 3;
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initClock();
+  initPanelCollapse();  // Panel collapse toggle
+  initChartTabs();      // Multi-symbol chart tabs
   initDataFeeds();
   setupEventListeners();
   initAudioEngine(); // Start audio engine
@@ -36,6 +38,9 @@ let currentTrack = 0;
 let bgmAudio = new Audio();
 let isPlaying = false;
 
+let _bgmMuted = false;
+let _bgmPrevVol = 0.3;
+
 function initAudioEngine() {
   sfx.click.volume = 0.2;
   sfx.alert.volume = 0.3;
@@ -43,31 +48,70 @@ function initAudioEngine() {
 
   const btnPlay = document.getElementById('bgm-play');
   const btnSkip = document.getElementById('bgm-skip');
+  const btnPrev = document.getElementById('bgm-prev');
+  const btnMute = document.getElementById('bgm-mute');
+  const btnListToggle = document.getElementById('bgm-list-toggle');
   const slider = document.getElementById('bgm-volume');
   const trackName = document.getElementById('bgm-track-name');
+  const progressTrack = document.getElementById('bgm-progress-track');
 
-  bgmAudio.loop = true;
   bgmAudio.volume = 0.3;
   loadTrack(0, trackName);
 
+  // Auto-advance to next track when current ends
+  bgmAudio.addEventListener('ended', () => {
+    skipTrack(trackName);
+    if (isPlaying) bgmAudio.play().catch(() => {});
+  });
+
   bgmAudio.addEventListener('error', () => {
     if (trackName) {
-      trackName.innerText = 'BGM LOAD FAILED';
-      trackName.style.color = 'var(--neon-red)';
-      trackName.style.textShadow = 'none';
+      trackName.innerText = 'LOAD FAILED';
+      trackName.className = 'bgm-track-name';
     }
   });
 
-  if (btnPlay) {
-    btnPlay.addEventListener('click', () => {
-      toggleBGM();
-      playSound('click');
+  // Progress & time update
+  bgmAudio.addEventListener('timeupdate', () => {
+    const fill = document.getElementById('bgm-progress-fill');
+    const timeEl = document.getElementById('bgm-time');
+    if (fill && bgmAudio.duration) {
+      fill.style.width = (bgmAudio.currentTime / bgmAudio.duration * 100) + '%';
+    }
+    if (timeEl) {
+      timeEl.textContent = `${fmtTime(bgmAudio.currentTime)} / ${fmtTime(bgmAudio.duration || 0)}`;
+    }
+  });
+
+  // Click on progress bar to seek
+  if (progressTrack) {
+    progressTrack.addEventListener('click', (e) => {
+      if (!bgmAudio.duration) return;
+      const rect = progressTrack.getBoundingClientRect();
+      const pct = (e.clientX - rect.left) / rect.width;
+      bgmAudio.currentTime = pct * bgmAudio.duration;
     });
   }
 
-  if (btnSkip) {
-    btnSkip.addEventListener('click', () => {
-      skipTrack(trackName);
+  if (btnPlay) btnPlay.addEventListener('click', () => { toggleBGM(); playSound('click'); });
+  if (btnSkip) btnSkip.addEventListener('click', () => { skipTrack(trackName); playSound('click'); });
+  if (btnPrev) btnPrev.addEventListener('click', () => { prevTrack(trackName); playSound('click'); });
+
+  // Mute toggle
+  if (btnMute) {
+    btnMute.addEventListener('click', () => {
+      _bgmMuted = !_bgmMuted;
+      if (_bgmMuted) {
+        _bgmPrevVol = bgmAudio.volume;
+        bgmAudio.volume = 0;
+        if (slider) slider.value = 0;
+        btnMute.innerHTML = '<i data-lucide="volume-x" style="width:12px;height:12px;"></i>';
+      } else {
+        bgmAudio.volume = _bgmPrevVol;
+        if (slider) slider.value = _bgmPrevVol * 100;
+        btnMute.innerHTML = '<i data-lucide="volume-2" style="width:12px;height:12px;"></i>';
+      }
+      lucide.createIcons();
       playSound('click');
     });
   }
@@ -75,13 +119,47 @@ function initAudioEngine() {
   if (slider) {
     slider.addEventListener('input', (e) => {
       bgmAudio.volume = e.target.value / 100;
+      _bgmMuted = false;
+      if (btnMute) {
+        const icon = e.target.value == 0 ? 'volume-x' : 'volume-2';
+        btnMute.innerHTML = `<i data-lucide="${icon}" style="width:12px;height:12px;"></i>`;
+        lucide.createIcons();
+      }
     });
   }
+
+  // Playlist toggle
+  if (btnListToggle) {
+    btnListToggle.addEventListener('click', () => {
+      const pl = document.getElementById('bgm-playlist');
+      if (pl) {
+        const show = pl.style.display === 'none';
+        pl.style.display = show ? 'block' : 'none';
+        if (show) renderPlaylist();
+      }
+      playSound('click');
+    });
+    // Close playlist on outside click
+    document.addEventListener('click', (e) => {
+      const pl = document.getElementById('bgm-playlist');
+      const player = document.getElementById('bgm-player');
+      if (pl && player && !player.contains(e.target)) pl.style.display = 'none';
+    });
+  }
+
+  buildPlaylist();
 
   document.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => playSound('click'));
     btn.addEventListener('mouseenter', () => playSound('hover'));
   });
+}
+
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec < 10 ? '0' : ''}${sec}`;
 }
 
 function loadTrack(index, trackNameEl) {
@@ -91,10 +169,10 @@ function loadTrack(index, trackNameEl) {
   bgmAudio.src = track.url;
   bgmAudio.load();
   if (trackNameEl) {
-    trackNameEl.innerText = `READY: ${track.title}`;
-    trackNameEl.style.color = 'var(--text-muted)';
-    trackNameEl.style.textShadow = 'none';
+    trackNameEl.innerText = track.title;
+    trackNameEl.className = 'bgm-track-name';
   }
+  updatePlaylistHighlight();
 }
 
 function skipTrack(trackNameEl) {
@@ -103,44 +181,105 @@ function skipTrack(trackNameEl) {
   if (isPlaying) {
     bgmAudio.play().catch(() => {
       isPlaying = false;
-      if (trackNameEl) {
-        trackNameEl.innerText = 'BGM BLOCKED';
-        trackNameEl.style.color = 'var(--neon-red)';
-      }
+      updateBGMUI();
+    });
+  }
+}
+
+function prevTrack(trackNameEl) {
+  // If >3s into track, restart; otherwise go to previous
+  if (bgmAudio.currentTime > 3) {
+    bgmAudio.currentTime = 0;
+    return;
+  }
+  const prev = (currentTrack - 1 + playlist.length) % playlist.length;
+  loadTrack(prev, trackNameEl);
+  if (isPlaying) {
+    bgmAudio.play().catch(() => {
+      isPlaying = false;
+      updateBGMUI();
     });
   }
 }
 
 function toggleBGM() {
-  const btnPlay = document.getElementById('bgm-play');
   const trackName = document.getElementById('bgm-track-name');
-
   if (isPlaying) {
     bgmAudio.pause();
-    if (btnPlay) btnPlay.innerHTML = '<i data-lucide="play" style="width:14px;height:14px;"></i>';
-    if (trackName) {
-      trackName.style.color = 'var(--text-muted)';
-      trackName.style.textShadow = 'none';
-    }
     isPlaying = false;
   } else {
     bgmAudio.play().then(() => {
       isPlaying = true;
-      if (btnPlay) btnPlay.innerHTML = '<i data-lucide="pause" style="width:14px;height:14px;"></i>';
-      if (trackName) {
-        trackName.style.color = 'var(--neon-cyan)';
-        trackName.style.textShadow = '0 0 5px var(--neon-cyan)';
-      }
+      if (trackName) trackName.innerText = playlist[currentTrack]?.title || 'Unknown';
     }).catch(() => {
       isPlaying = false;
-      if (trackName) {
-        trackName.innerText = 'BGM BLOCKED';
-        trackName.style.color = 'var(--neon-red)';
-        trackName.style.textShadow = 'none';
-      }
+      if (trackName) trackName.innerText = 'BLOCKED';
     });
   }
+  updateBGMUI();
+}
+
+function updateBGMUI() {
+  const btnPlay = document.getElementById('bgm-play');
+  const trackName = document.getElementById('bgm-track-name');
+  const player = document.getElementById('bgm-player');
+
+  if (btnPlay) {
+    const icon = isPlaying ? 'pause' : 'play';
+    btnPlay.innerHTML = `<i data-lucide="${icon}" style="width:14px;height:14px;"></i>`;
+    btnPlay.classList.toggle('playing', isPlaying);
+  }
+  if (trackName) {
+    trackName.classList.toggle('active', isPlaying);
+  }
+  if (player) {
+    player.classList.toggle('bgm-active', isPlaying);
+  }
+  updatePlaylistHighlight();
   lucide.createIcons();
+}
+
+function buildPlaylist() {
+  renderPlaylist();
+}
+
+function renderPlaylist() {
+  const pl = document.getElementById('bgm-playlist');
+  if (!pl) return;
+  pl.innerHTML = playlist.map((t, i) => {
+    const isActive = i === currentTrack && isPlaying;
+    const eqBars = isActive ? '<span class="pl-eq"><span></span><span></span><span></span></span>' : `<span class="pl-num">${i + 1}</span>`;
+    return `<div class="bgm-playlist-item ${i === currentTrack ? 'active' : ''}" data-index="${i}">
+      ${eqBars}
+      <span>${t.title}</span>
+    </div>`;
+  }).join('');
+  // Click to play
+  pl.querySelectorAll('.bgm-playlist-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const idx = parseInt(item.dataset.index);
+      const trackName = document.getElementById('bgm-track-name');
+      loadTrack(idx, trackName);
+      bgmAudio.play().then(() => { isPlaying = true; updateBGMUI(); }).catch(() => {});
+      playSound('click');
+    });
+  });
+}
+
+function updatePlaylistHighlight() {
+  const items = document.querySelectorAll('.bgm-playlist-item');
+  items.forEach((item, i) => {
+    const isThis = i === currentTrack;
+    item.classList.toggle('active', isThis);
+    const numOrEq = item.querySelector('.pl-num, .pl-eq');
+    if (numOrEq && isThis && isPlaying) {
+      if (!numOrEq.classList.contains('pl-eq')) {
+        numOrEq.outerHTML = '<span class="pl-eq"><span></span><span></span><span></span></span>';
+      }
+    } else if (numOrEq && numOrEq.classList.contains('pl-eq')) {
+      numOrEq.outerHTML = `<span class="pl-num">${i + 1}</span>`;
+    }
+  });
 }
 
 function playSound(type) {
@@ -163,10 +302,146 @@ function initClock() {
   updateTime();
 }
 
+/* ── Panel Collapse Toggle ── */
+function initPanelCollapse() {
+  const saved = JSON.parse(localStorage.getItem('ryzm_collapsed') || '{}');
+
+  document.querySelectorAll('.panel-title').forEach(title => {
+    const icon = title.querySelector('.collapse-icon');
+    if (!icon) return; // Only panels with collapse-icon
+
+    const panel = title.closest('.glass-panel');
+    if (!panel) return;
+
+    // Find or wrap panel body
+    const body = panel.querySelector('.panel-body');
+    if (!body) return;
+
+    // Generate a stable key from panel title text
+    const key = title.textContent.trim().replace(/\s+/g, '_').substring(0, 30);
+
+    // Restore saved state
+    if (saved[key]) {
+      panel.classList.add('panel-collapsed');
+    }
+
+    title.addEventListener('click', (e) => {
+      // Don't collapse if clicking a link or button inside title
+      if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+
+      panel.classList.toggle('panel-collapsed');
+      const isCollapsed = panel.classList.contains('panel-collapsed');
+
+      // Save state
+      const states = JSON.parse(localStorage.getItem('ryzm_collapsed') || '{}');
+      if (isCollapsed) states[key] = true;
+      else delete states[key];
+      localStorage.setItem('ryzm_collapsed', JSON.stringify(states));
+
+      playSound('click');
+    });
+  });
+}
+
+/* ── Chart Multi-Symbol Tabs ── */
+let _tvWidget = null;
+
+function initChartTabs() {
+  const tabContainer = document.getElementById('chart-tabs');
+  if (!tabContainer) return;
+
+  // Load initial chart (BTC)
+  setTimeout(() => loadTradingViewChart('BINANCE:BTCUSDT'), 300);
+
+  tabContainer.addEventListener('click', (e) => {
+    const tab = e.target.closest('.chart-tab');
+    if (!tab) return;
+
+    // Update active state
+    tabContainer.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const symbol = tab.dataset.symbol;
+    loadTradingViewChart(symbol);
+    playSound('click');
+  });
+}
+
+function loadTradingViewChart(symbol) {
+  const container = document.getElementById('tradingview_b1e30');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+  try {
+    _tvWidget = new TradingView.widget({
+      autosize: true,
+      symbol: symbol,
+      interval: 'D',
+      timezone: 'Asia/Seoul',
+      theme: isDark ? 'dark' : 'light',
+      style: '1',
+      locale: 'en',
+      enable_publishing: false,
+      backgroundColor: isDark ? 'rgba(15,23,42,1)' : 'rgba(255,255,255,1)',
+      gridColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+      hide_top_toolbar: false,
+      hide_legend: false,
+      save_image: false,
+      container_id: 'tradingview_b1e30'
+    });
+  } catch (e) {
+    console.error('TradingView load error:', e);
+  }
+}
+
+/* ── Number Countup Animation ── */
+function animateCountup(element, newValue, options = {}) {
+  const {
+    duration = 600,
+    decimals = 2,
+    prefix = '',
+    suffix = '',
+    useComma = true
+  } = options;
+
+  const text = element.textContent.replace(/[^0-9.\-]/g, '');
+  const startValue = parseFloat(text) || 0;
+  const endValue = parseFloat(newValue) || 0;
+
+  if (Math.abs(startValue - endValue) < 0.001) return;
+
+  const startTime = performance.now();
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // easeOutExpo
+    const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+    const current = startValue + (endValue - startValue) * eased;
+
+    let formatted = current.toFixed(decimals);
+    if (useComma) formatted = Number(formatted).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+    element.textContent = `${prefix}${formatted}${suffix}`;
+
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    } else {
+      element.classList.add('countup-flash');
+      setTimeout(() => element.classList.remove('countup-flash'), 400);
+    }
+  }
+  requestAnimationFrame(update);
+}
+
 /* ── 2. Data Feeds ── */
 function initDataFeeds() {
   fetchMacroTicker();
   fetchNews();
+  buildPriceCards();
+  initBinanceWebSocket();
   fetchRealtimePrices();
   fetchLongShortRatio();
   fetchBriefing();
@@ -179,7 +454,7 @@ function initDataFeeds() {
   fetchHealthCheck();
   setInterval(fetchMacroTicker, 10000);
   setInterval(fetchNews, 60000);
-  setInterval(fetchRealtimePrices, 5000);
+  setInterval(fetchRealtimePrices, 10000);
   setInterval(fetchLongShortRatio, 60000);
   setInterval(fetchBriefing, 120000);
   setInterval(fetchFundingRate, 60000);
@@ -316,6 +591,9 @@ function toggleTheme() {
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('ryzm-theme', next);
   updateThemeIcon(next);
+  // Reload chart with correct theme
+  const activeTab = document.querySelector('.chart-tab.active');
+  if (activeTab) loadTradingViewChart(activeTab.dataset.symbol);
   playSound('click');
 }
 
@@ -328,72 +606,132 @@ function updateThemeIcon(theme) {
   lucide.createIcons();
 }
 
-/* ── Systemic Risk Gauge ── */
+/* ── Systemic Risk Gauge (v2 — animated, contribution bars, pulse glow) ── */
+let _prevRiskScore = null;
+
 async function fetchRiskGauge() {
   try {
     const res = await fetch('/api/risk-gauge');
     const data = await res.json();
 
-    const scoreEl = document.getElementById('risk-score');
-    const labelEl = document.getElementById('risk-label');
     const needleEl = document.getElementById('gauge-needle');
     const arcEl = document.getElementById('gauge-arc');
+    const scoreSvg = document.getElementById('gauge-score-svg');
+    const labelSvg = document.getElementById('gauge-label-svg');
+    const deltaEl = document.getElementById('risk-delta');
+    const panel = document.getElementById('risk-gauge-panel');
+    const tsEl = document.getElementById('gauge-timestamp');
+    const needleLine = document.getElementById('needle-line');
 
-    if (!scoreEl) return;
+    if (!scoreSvg) return;
 
     const score = data.score || 0;
-    scoreEl.innerText = score.toFixed(1);
-    labelEl.innerText = `[${data.label}]`;
+    const clampedScore = Math.max(-100, Math.min(100, score));
 
-    // Color based on level
-    const colors = {
-      'CRITICAL': 'var(--neon-red)',
+    // Color mapping
+    const levelColors = {
+      'CRITICAL': '#dc2626',
       'HIGH': '#f97316',
       'ELEVATED': '#eab308',
-      'MODERATE': 'var(--neon-cyan)',
-      'LOW': 'var(--neon-green)'
+      'MODERATE': '#06b6d4',
+      'LOW': '#059669'
     };
-    const color = colors[data.level] || 'var(--text-muted)';
-    scoreEl.style.color = color;
-    labelEl.style.color = color;
-    // Arc uses SVG gradient; update gradient stops dynamically for single-color glow
-    if (arcEl) arcEl.setAttribute('stroke', 'url(#gaugeGrad)');
+    const color = levelColors[data.level] || '#64748b';
 
-    // Score range: -100 (extreme risk/left) to +100 (safe/right)
-    // Needle: score -100 → -90° (left), 0 → 0° (center/up), +100 → +90° (right)
-    const clampedScore = Math.max(-100, Math.min(100, score));
-    // -100 → -90° (left/danger), 0 → 0° (center/up), +100 → +90° (right/safe)
+    // Update SVG score/label with countup animation
+    animateCountup(scoreSvg, score, { duration: 800, decimals: 1, useComma: false });
+    scoreSvg.setAttribute('fill', color);
+    labelSvg.textContent = `[${data.label}]`;
+    labelSvg.setAttribute('fill', color);
+
+    // Needle color matches risk
+    if (needleLine) needleLine.setAttribute('stroke', color);
+
+    // Needle rotation (CSS transition handles animation)
     const needleAngle = (clampedScore / 100) * 90;
     if (needleEl) {
       needleEl.setAttribute('transform', `rotate(${needleAngle}, 100, 100)`);
-      console.log(`[Gauge] score=${score}, angle=${needleAngle}`);
     }
 
-    // Arc fill: map -100..+100 to 0..1, then to dashoffset 251..0
-    const pct = (clampedScore + 100) / 200;  // 0..1
+    // Arc fill (CSS transition handles animation)
+    const pct = (clampedScore + 100) / 200;
     const arcLen = 251;
     if (arcEl) arcEl.setAttribute('stroke-dashoffset', arcLen - (pct * arcLen));
 
-    // Update sub-components
-    const c = data.components || {};
-    if (c.vix) {
-      const rcVix = document.getElementById('rc-vix');
-      if (rcVix) rcVix.innerHTML = `<span style="color:${c.vix.value > 25 ? 'var(--neon-red)' : 'var(--neon-green)'}">${c.vix.value}</span>`;
+    // Delta indicator (▲/▼)
+    if (deltaEl && _prevRiskScore !== null) {
+      const diff = score - _prevRiskScore;
+      if (Math.abs(diff) > 0.5) {
+        const arrow = diff > 0 ? '▲' : '▼';
+        const dColor = diff > 0 ? '#059669' : '#dc2626';
+        deltaEl.innerHTML = `<span style="color:${dColor}">${arrow} ${Math.abs(diff).toFixed(1)}</span>`;
+        deltaEl.classList.add('delta-flash');
+        setTimeout(() => deltaEl.classList.remove('delta-flash'), 2000);
+      } else {
+        deltaEl.innerHTML = '<span style="color:var(--text-muted)">— 0.0</span>';
+      }
     }
+    _prevRiskScore = score;
+
+    // Panel pulse glow based on risk level
+    if (panel) {
+      panel.classList.remove('risk-pulse-critical', 'risk-pulse-high', 'risk-pulse-elevated', 'risk-pulse-moderate', 'risk-pulse-low');
+      const pulseClass = {
+        'CRITICAL': 'risk-pulse-critical',
+        'HIGH': 'risk-pulse-high',
+        'ELEVATED': 'risk-pulse-elevated',
+        'MODERATE': 'risk-pulse-moderate',
+        'LOW': 'risk-pulse-low'
+      }[data.level];
+      if (pulseClass) panel.classList.add(pulseClass);
+    }
+
+    // Timestamp
+    if (tsEl) tsEl.textContent = `Updated ${data.timestamp || new Date().toLocaleTimeString('en-US', {hour12:false})}`;
+
+    // Component contribution bars
+    const c = data.components || {};
+
+    // Helper: render a component bar
+    function updateBar(barId, valId, contrib, maxContrib, displayText, val) {
+      const bar = document.getElementById(barId);
+      const valEl = document.getElementById(valId);
+      if (bar) {
+        const pct = Math.min(100, Math.abs(contrib) / maxContrib * 100);
+        const barColor = contrib >= 0 ? '#059669' : '#dc2626';
+        bar.style.width = pct + '%';
+        bar.style.background = barColor;
+        bar.style.boxShadow = `0 0 6px ${barColor}40`;
+      }
+      if (valEl) valEl.innerHTML = displayText;
+    }
+
     if (c.fear_greed) {
-      const rcFg = document.getElementById('rc-fg');
-      if (rcFg) rcFg.innerHTML = `<span style="color:${c.fear_greed.value < 30 ? 'var(--neon-red)' : c.fear_greed.value > 70 ? 'var(--neon-green)' : 'var(--text-muted)'}">${c.fear_greed.value}/100</span>`;
+      const fgVal = c.fear_greed.value;
+      const fgColor = fgVal < 30 ? '#dc2626' : fgVal > 70 ? '#059669' : '#eab308';
+      updateBar('rc-fg-bar', 'rc-fg', c.fear_greed.contrib, 50,
+        `<span style="color:${fgColor}">${fgVal}/100</span>`, fgVal);
+    }
+    if (c.vix) {
+      const vColor = c.vix.value > 25 ? '#dc2626' : '#059669';
+      updateBar('rc-vix-bar', 'rc-vix', c.vix.contrib, 25,
+        `<span style="color:${vColor}">${c.vix.value}</span>`, c.vix.value);
     }
     if (c.long_short) {
-      const rcLs = document.getElementById('rc-ls');
-      if (rcLs) rcLs.innerHTML = `${c.long_short.value}% L`;
+      updateBar('rc-ls-bar', 'rc-ls', c.long_short.contrib, 30,
+        `${c.long_short.value}% L`, c.long_short.value);
     }
     if (c.funding_rate) {
-      const rcFr = document.getElementById('rc-fr');
-      if (rcFr) {
-        const frVal = c.funding_rate.value;
-        rcFr.innerHTML = `<span style="color:${frVal > 0.05 ? 'var(--neon-red)' : frVal < -0.05 ? 'var(--neon-red)' : 'var(--neon-green)'}">${frVal > 0 ? '+' : ''}${frVal}%</span>`;
-      }
+      const frVal = c.funding_rate.value;
+      const frColor = Math.abs(frVal) > 0.05 ? '#dc2626' : '#059669';
+      updateBar('rc-fr-bar', 'rc-fr', c.funding_rate.contrib, 20,
+        `<span style="color:${frColor}">${frVal > 0 ? '+' : ''}${frVal}%</span>`, frVal);
+    }
+    if (c.kimchi) {
+      const kpVal = c.kimchi.value;
+      const kpColor = Math.abs(kpVal) > 3 ? '#f97316' : '#059669';
+      updateBar('rc-kp-bar', 'rc-kp', c.kimchi.contrib, 15,
+        `<span style="color:${kpColor}">${kpVal > 0 ? '+' : ''}${kpVal}%</span>`, kpVal);
     }
   } catch (e) {
     console.error('Risk Gauge Error:', e);
@@ -506,19 +844,36 @@ async function fetchMacroTicker() {
         fxChg.className = `fx-change ${fx.change >= 0 ? 'fx-up' : 'fx-down'}`;
       }
     }
+    if (market['USD/JPY']) {
+      const fx2 = market['USD/JPY'];
+      const fxVal2 = document.getElementById('fx-usdjpy');
+      const fxChg2 = document.getElementById('fx-usdjpy-chg');
+      if (fxVal2) fxVal2.textContent = Number(fx2.price).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      if (fxChg2) {
+        const sign2 = fx2.change >= 0 ? '+' : '';
+        fxChg2.textContent = `${sign2}${fx2.change}%`;
+        fxChg2.className = `fx-change ${fx2.change >= 0 ? 'fx-up' : 'fx-down'}`;
+      }
+    }
 
     const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
     let html = '';
 
     order.forEach(key => {
-      if (market[key]) {
-        const item = market[key];
+      // Prefer live WebSocket prices for crypto
+      const live = _livePrices[key];
+      const backend = market[key];
+      const item = (live && live.price) ? { price: live.price, change: live.change } : backend;
+      if (item) {
         const colorClass = item.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
         const sign = item.change >= 0 ? '+' : '';
+        const decimals = item.price >= 100 ? 2 : item.price >= 1 ? 4 : 6;
+        const priceStr = key.startsWith('USD/') ? Number(item.price).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+          : '$' + Number(item.price).toLocaleString('en-US', {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
         html += `
                     <span style="margin-right:30px; font-family:'Share Tech Mono'; display:inline-flex; align-items:center;">
                         <span style="color:var(--text-muted); margin-right:8px;">${key}</span>
-                        <span style="color:#fff; margin-right:8px;">${item.price.toLocaleString()}</span>
+                        <span style="color:#fff; margin-right:8px;">${priceStr}</span>
                         <span style="color:${colorClass}; font-size:0.85rem;">${sign}${item.change}%</span>
                     </span>
                 `;
@@ -544,45 +899,200 @@ async function fetchKimchi() {
   } catch (e) { console.error("KP Error:", e); }
 }
 
-/* ── Real-time Price Panel (NEW) ── */
+/* ── Real-time Price Panel (Binance WebSocket + Backend Macro) ── */
+const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol}, ... }
+let _priceWs = null;
+let _priceWsRetry = 0;
+
+function initBinanceWebSocket() {
+  if (_priceWs && _priceWs.readyState <= 1) return; // already open/connecting
+  const streams = 'btcusdt@miniTicker/ethusdt@miniTicker/solusdt@miniTicker';
+  const url = `wss://stream.binance.com:9443/stream?streams=${streams}`;
+  _priceWs = new WebSocket(url);
+
+  _priceWs.onopen = () => { _priceWsRetry = 0; console.log('[WS] Binance connected'); };
+
+  _priceWs.onmessage = (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      const d = msg.data;
+      if (!d || !d.s) return;
+      const symbolMap = { BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL' };
+      const key = symbolMap[d.s];
+      if (!key) return;
+
+      const newPrice = parseFloat(d.c);  // current close
+      const openPrice = parseFloat(d.o); // 24h open
+      const high = parseFloat(d.h);
+      const low = parseFloat(d.l);
+      const vol = parseFloat(d.v);
+      const change24h = openPrice ? ((newPrice - openPrice) / openPrice * 100) : 0;
+
+      const prev = _livePrices[key];
+      _livePrices[key] = {
+        price: newPrice,
+        change: round2(change24h),
+        prevPrice: prev ? prev.price : newPrice,
+        high: high,
+        low: low,
+        vol: vol
+      };
+      renderPriceCard(key);
+    } catch (e) { /* ignore parse errors */ }
+  };
+
+  _priceWs.onclose = () => {
+    console.log('[WS] Binance disconnected, reconnecting...');
+    const delay = Math.min(5000, 1000 * Math.pow(2, _priceWsRetry++));
+    setTimeout(initBinanceWebSocket, delay);
+  };
+  _priceWs.onerror = () => _priceWs.close();
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
+
+function formatVol(v) {
+  if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+  return v.toFixed(0);
+}
+
+function renderPriceCard(key) {
+  const container = document.getElementById('realtime-prices');
+  if (!container) return;
+  const data = _livePrices[key];
+  if (!data) return;
+
+  let card = document.getElementById(`price-card-${key}`);
+  if (!card) return; // card not yet built
+
+  const valEl = card.querySelector('.price-value');
+  const chgEl = card.querySelector('.price-change');
+  const volEl = card.querySelector('.price-vol');
+  const timeEl = card.querySelector('.price-time');
+
+  if (!valEl) return;
+
+  // Determine direction
+  const dir = data.price > data.prevPrice ? 'up' : data.price < data.prevPrice ? 'down' : null;
+
+  // Format price — use countup animation for crypto
+  const decimals = data.price >= 100 ? 2 : data.price >= 1 ? 4 : 6;
+  animateCountup(valEl, data.price, { duration: 400, decimals, prefix: '$', useComma: true });
+
+  // Flash effect
+  if (dir) {
+    card.classList.remove('price-flash-up', 'price-flash-down');
+    void card.offsetWidth; // force reflow
+    card.classList.add(dir === 'up' ? 'price-flash-up' : 'price-flash-down');
+    valEl.style.color = dir === 'up' ? 'var(--neon-green)' : 'var(--neon-red)';
+    setTimeout(() => { valEl.style.color = ''; }, 1200);
+  }
+
+  // Change %
+  if (chgEl) {
+    const sign = data.change >= 0 ? '+' : '';
+    chgEl.textContent = `${sign}${data.change}%`;
+    chgEl.className = `price-change ${data.change >= 0 ? 'up' : 'down'}`;
+  }
+
+  // Volume
+  if (volEl && data.vol) volEl.textContent = 'Vol: ' + formatVol(data.vol);
+  if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+// Build all price cards once, then let WebSocket + polling update them
+// Inline SVG icons for each ticker
+const _tickerIcons = {
+  BTC: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#f7931a"/><path d="M22.5 14.2c.3-2-1.2-3.1-3.3-3.8l.7-2.7-1.6-.4-.6 2.6c-.4-.1-.9-.2-1.3-.3l.7-2.6-1.7-.4-.7 2.7c-.4-.1-.7-.2-1-.2l-2.3-.6-.4 1.7s1.2.3 1.2.3c.7.2.8.6.8 1l-.8 3.3c0 .1.1.1.1.1l-.1 0-1.2 4.7c-.1.2-.3.6-.8.4 0 0-1.2-.3-1.2-.3l-.8 1.9 2.2.5c.4.1.8.2 1.2.3l-.7 2.8 1.6.4.7-2.7c.5.1.9.2 1.3.3l-.7 2.7 1.7.4.7-2.8c2.8.5 4.9.3 5.8-2.2.7-2 0-3.2-1.5-3.9 1.1-.3 1.9-1 2.1-2.5zm-3.7 5.2c-.5 2-3.9.9-5 .7l.9-3.6c1.1.3 4.7.8 4.1 2.9zm.5-5.3c-.5 1.8-3.3.9-4.2.7l.8-3.2c.9.2 3.9.7 3.4 2.5z" fill="#fff"/></svg>`,
+  ETH: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#627eea"/><path d="M16.5 4v8.9l7.5 3.3z" fill="#fff" opacity=".6"/><path d="M16.5 4L9 16.2l7.5-3.3z" fill="#fff"/><path d="M16.5 21.9v6.1l7.5-10.4z" fill="#fff" opacity=".6"/><path d="M16.5 28V21.9L9 17.6z" fill="#fff"/><path d="M16.5 20.6l7.5-4.4-7.5-3.3z" fill="#fff" opacity=".2"/><path d="M9 16.2l7.5 4.4v-7.7z" fill="#fff" opacity=".5"/></svg>`,
+  SOL: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#000"/><linearGradient id="sol-g" x1="5" y1="27" x2="27" y2="5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9945ff"/><stop offset=".5" stop-color="#14f195"/><stop offset="1" stop-color="#00d1ff"/></linearGradient><path d="M9.5 20.1h13.6l-3 3H6.5z M9.5 14.5h13.6l-3-3H6.5z M9.5 8.9h13.6l-3 3H6.5z" fill="url(#sol-g)" transform="translate(0,0.5)"/></svg>`,
+  VIX: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><path d="M8 22l4-8 3 5 3-10 3 7 3-6" stroke="#f97316" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  DXY: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#06b6d4" font-size="14" font-weight="bold" font-family="sans-serif">$</text></svg>`,
+  'USD/KRW': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#eab308" font-size="12" font-weight="bold" font-family="sans-serif">₩</text></svg>`,
+  'USD/JPY': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold" font-family="sans-serif">¥</text></svg>`
+};
+
+function buildPriceCards() {
+  const container = document.getElementById('realtime-prices');
+  if (!container) return;
+
+  const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
+  let html = '';
+  order.forEach(key => {
+    const icon = _tickerIcons[key] || '';
+    html += `
+      <div class="price-card" id="price-card-${key.replace('/', '')}">
+        <div class="price-card-header">
+          <span class="price-symbol">${icon} ${key}</span>
+          <span class="price-live-dot" title="Live">&bull;</span>
+        </div>
+        <div class="price-value">—</div>
+        <div class="price-change">—</div>
+        <div class="price-details">
+          <span class="price-vol">Vol: —</span>
+          <span class="price-time">--:--:--</span>
+        </div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+// Fetch macro/FX from backend (VIX, DXY, USD/KRW, USD/JPY) for price panel
 async function fetchRealtimePrices() {
   try {
     const res = await fetch('/api/market');
     const data = await res.json();
     const market = data.market;
-    const container = document.getElementById('realtime-prices');
+    if (!market) return;
 
-    if (!market || Object.keys(market).length === 0 || !container) return;
+    const macroKeys = ['VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
+    macroKeys.forEach(key => {
+      if (!market[key]) return;
+      const item = market[key];
+      const cardKey = key.replace('/', '');
+      const prev = _livePrices[key];
+      _livePrices[key] = {
+        price: item.price,
+        change: item.change,
+        prevPrice: prev ? prev.price : item.price,
+        high: 0, low: 0, vol: 0
+      };
 
-    const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
-    let html = '';
+      const card = document.getElementById(`price-card-${cardKey}`);
+      if (!card) return;
+      const valEl = card.querySelector('.price-value');
+      const chgEl = card.querySelector('.price-change');
+      const timeEl = card.querySelector('.price-time');
+      if (!valEl) return;
 
-    order.forEach(key => {
-      if (market[key]) {
-        const item = market[key];
-        const changeClass = item.change >= 0 ? 'up' : 'down';
-        const sign = item.change >= 0 ? '+' : '';
+      // Direction flash
+      const dir = prev && item.price > prev.price ? 'up' : prev && item.price < prev.price ? 'down' : null;
 
-        html += `
-          <div class="price-card">
-            <div class="price-card-header">
-              <span class="price-symbol">${key}</span>
-            </div>
-            <div class="price-value">${item.price.toLocaleString()}</div>
-            <div class="price-change ${changeClass}">${sign}${item.change}%</div>
-            <div class="price-details">
-              <span>24h Vol: N/A</span>
-              <span>${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-          </div>
-        `;
+      const isFx = key.startsWith('USD/');
+      valEl.textContent = isFx
+        ? Number(item.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      if (dir) {
+        card.classList.remove('price-flash-up', 'price-flash-down');
+        void card.offsetWidth;
+        card.classList.add(dir === 'up' ? 'price-flash-up' : 'price-flash-down');
+        valEl.style.color = dir === 'up' ? 'var(--neon-green)' : 'var(--neon-red)';
+        setTimeout(() => { valEl.style.color = ''; }, 1200);
       }
-    });
 
-    container.innerHTML = html;
-    lucide.createIcons();
+      if (chgEl) {
+        const sign = item.change >= 0 ? '+' : '';
+        chgEl.textContent = `${sign}${item.change}%`;
+        chgEl.className = `price-change ${item.change >= 0 ? 'up' : 'down'}`;
+      }
+      if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+    });
   } catch (e) {
-    console.error("Realtime Price Error:", e);
+    console.error('Realtime Price Error:', e);
   }
 }
 
@@ -641,6 +1151,9 @@ function setupEventListeners() {
 
         btnCouncil.innerHTML = '<i data-lucide="zap"></i> RE-RUN ANALYSIS';
         if (btnCopy) btnCopy.style.display = 'flex';
+
+        // Refresh council prediction history after each analysis
+        setTimeout(() => fetchCouncilHistory(), 1500);
 
       } catch (e) {
         console.error(e);
@@ -1532,6 +2045,134 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+/* ─── AI Council Prediction History ─── */
+async function fetchCouncilHistory() {
+  try {
+    const res = await fetch('/api/council/history?limit=30');
+    const data = await res.json();
+    renderCouncilHistory(data);
+  } catch (e) {
+    console.error('[CouncilHistory]', e);
+  }
+}
+
+function renderCouncilHistory(data) {
+  const { records, stats } = data;
+
+  // Stats boxes
+  const elTotal = document.getElementById('ch-total');
+  const elAccuracy = document.getElementById('ch-accuracy');
+  const elHits = document.getElementById('ch-hits');
+  if (elTotal) elTotal.textContent = stats.total_sessions;
+  if (elAccuracy) {
+    elAccuracy.textContent = stats.accuracy_pct !== null ? `${stats.accuracy_pct}%` : '—';
+    if (stats.accuracy_pct !== null) {
+      elAccuracy.style.color = stats.accuracy_pct >= 60 ? 'var(--neon-green)' :
+        stats.accuracy_pct >= 40 ? 'var(--neon-cyan)' : 'var(--neon-red)';
+    }
+  }
+  if (elHits) elHits.textContent = `${stats.hits}/${stats.evaluated}`;
+
+  // Score sparkline chart
+  drawCouncilSparkline(records.slice().reverse());
+
+  // Records list
+  const container = document.getElementById('ch-records');
+  if (!container || !records.length) return;
+
+  container.innerHTML = records.slice(0, 15).map(r => {
+    const scoreColor = r.consensus_score > 60 ? 'var(--neon-green)' :
+      r.consensus_score < 40 ? 'var(--neon-red)' : 'var(--text-main)';
+    const hitIcon = r.hit === 1 ? '<span class="ch-hit">✓</span>' :
+      r.hit === 0 ? '<span class="ch-miss">✗</span>' :
+      '<span class="ch-pending">⏳</span>';
+    const time = r.timestamp ? r.timestamp.split(' ')[1] || r.timestamp : '—';
+    return `<div class="ch-record-row">
+      <span class="ch-record-time">${time}</span>
+      <span class="ch-record-score" style="color:${scoreColor}">${r.consensus_score}</span>
+      <span class="ch-record-vibe">${r.vibe_status || '—'}</span>
+      <span class="ch-record-hit">${hitIcon}</span>
+    </div>`;
+  }).join('');
+}
+
+function drawCouncilSparkline(records) {
+  const canvas = document.getElementById('ch-canvas');
+  if (!canvas || !records.length) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  const pad = 4;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw 50-line (neutral)
+  const mid = pad + (h - 2 * pad) * (1 - 50 / 100);
+  ctx.strokeStyle = 'rgba(100,116,139,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pad, mid);
+  ctx.lineTo(w - pad, mid);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const scores = records.map(r => r.consensus_score || 50);
+  const step = (w - 2 * pad) / Math.max(scores.length - 1, 1);
+
+  // Gradient fill
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, 'rgba(5,150,105,0.2)');
+  gradient.addColorStop(0.5, 'rgba(2,132,199,0.08)');
+  gradient.addColorStop(1, 'rgba(220,38,38,0.2)');
+
+  ctx.beginPath();
+  ctx.moveTo(pad, h - pad);
+  scores.forEach((s, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - 2 * pad) * (1 - s / 100);
+    if (i === 0) ctx.lineTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(pad + (scores.length - 1) * step, h - pad);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  scores.forEach((s, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - 2 * pad) * (1 - s / 100);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = 'var(--neon-cyan, #0284c7)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Dots with hit/miss color
+  records.forEach((r, i) => {
+    const x = pad + i * step;
+    const y = pad + (h - 2 * pad) * (1 - (r.consensus_score || 50) / 100);
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = r.hit === 1 ? '#059669' : r.hit === 0 ? '#dc2626' : '#94a3b8';
+    ctx.fill();
+  });
+}
+
+// Load council history on page load
+setTimeout(() => fetchCouncilHistory(), 3000);
+
 
 /* ─── Page Visibility API - Pause updates when tab inactive ─── */
 let isPageVisible = true;
