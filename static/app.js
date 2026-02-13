@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initChat(); // Ask Ryzm Chat
   loadValidatorCredits(); // Load saved credits
   initPanelDragDrop();    // Panel drag & drop customization
+  initTradingViewModal();  // TradingView chart popup
+  registerServiceWorker(); // PWA
   lucide.createIcons();
 });
 
@@ -458,6 +460,10 @@ function initDataFeeds() {
   fetchMultiTimeframe();
   fetchOnChainData();
   fetchScanner();
+  fetchRegime();
+  fetchCorrelation();
+  fetchWhaleWallets();
+  fetchLiqZones();
   setInterval(fetchMacroTicker, 10000);
   setInterval(fetchNews, 60000);
   setInterval(fetchRealtimePrices, 10000);
@@ -473,6 +479,10 @@ function initDataFeeds() {
   setInterval(fetchMultiTimeframe, 300000);
   setInterval(fetchOnChainData, 300000);
   setInterval(fetchScanner, 60000);
+  setInterval(fetchRegime, 300000);
+  setInterval(fetchCorrelation, 600000);
+  setInterval(fetchWhaleWallets, 120000);
+  setInterval(fetchLiqZones, 120000);
 }
 
 async function fetchBriefing() {
@@ -1883,6 +1893,193 @@ async function fetchScanner() {
   }
 }
 
+/* ── Regime Detector ── */
+async function fetchRegime() {
+  try {
+    const res = await fetch('/api/regime');
+    const data = await res.json();
+    const badge = document.getElementById('regime-badge');
+    if (!badge) return;
+    if (data.regime) {
+      const labels = {
+        BTC_SEASON: t('regime_btc'), ALT_SEASON: t('regime_alt'),
+        RISK_OFF: t('regime_risk_off'), FULL_BULL: t('regime_bull'),
+        ROTATION: t('regime_rotation')
+      };
+      badge.textContent = labels[data.regime] || data.regime;
+      badge.style.background = data.color || '#666';
+      badge.style.color = '#000';
+      badge.title = data.advice || '';
+    } else {
+      badge.textContent = '--';
+      badge.style.background = '#333';
+    }
+  } catch (e) { console.error('Regime Error:', e); }
+}
+
+/* ── Correlation Matrix ── */
+async function fetchCorrelation() {
+  try {
+    const res = await fetch('/api/correlation');
+    const data = await res.json();
+    const el = document.getElementById('corr-matrix');
+    if (!el || !data.matrix) return;
+
+    const assets = data.assets || Object.keys(data.matrix);
+    let html = '<table class="corr-table"><thead><tr><th></th>';
+    assets.forEach(a => html += `<th>${a}</th>`);
+    html += '</tr></thead><tbody>';
+
+    assets.forEach(row => {
+      html += `<tr><td class="corr-label">${row}</td>`;
+      assets.forEach(col => {
+        const v = data.matrix[row]?.[col];
+        const val = v !== undefined ? v.toFixed(2) : '--';
+        const intensity = v !== undefined ? Math.abs(v) : 0;
+        let bg;
+        if (v === undefined) bg = 'transparent';
+        else if (v >= 0.7) bg = `rgba(5,150,105,${0.3 + intensity * 0.5})`;
+        else if (v >= 0.3) bg = `rgba(5,150,105,${0.1 + intensity * 0.3})`;
+        else if (v <= -0.3) bg = `rgba(220,38,38,${0.1 + intensity * 0.3})`;
+        else if (v <= -0.7) bg = `rgba(220,38,38,${0.3 + intensity * 0.5})`;
+        else bg = 'rgba(128,128,128,0.1)';
+        html += `<td class="corr-cell" style="background:${bg};" title="${row}↔${col}: ${val}">${val}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch (e) { console.error('Correlation Error:', e); }
+}
+
+/* ── Whale Wallet Tracker ── */
+async function fetchWhaleWallets() {
+  try {
+    const res = await fetch('/api/whale-wallets');
+    const data = await res.json();
+    const feed = document.getElementById('whale-wallet-feed');
+    if (!feed) return;
+
+    if (data.transactions && data.transactions.length > 0) {
+      feed.innerHTML = data.transactions.map(tx => {
+        const icon = tx.type === 'INFLOW' ? '📥' : '📤';
+        const color = tx.type === 'INFLOW' ? 'var(--neon-green)' : 'var(--neon-red)';
+        return `<div class="whale-tx-item">
+          <span class="whale-tx-icon">${icon}</span>
+          <span class="whale-tx-amount" style="color:${color}">${tx.btc.toFixed(2)} BTC</span>
+          <span class="whale-tx-usd">≈ $${(tx.usd/1e6).toFixed(1)}M</span>
+          <span class="whale-tx-time">${new Date(tx.time * 1000).toLocaleTimeString()}</span>
+        </div>`;
+      }).join('');
+    } else {
+      feed.innerHTML = `<div style="text-align:center;padding:12px;color:var(--text-muted);font-size:0.72rem;">${t('no_whale_wallets')}</div>`;
+    }
+  } catch (e) { console.error('Whale Wallets Error:', e); }
+}
+
+/* ── Liquidation Kill Zone ── */
+async function fetchLiqZones() {
+  try {
+    const res = await fetch('/api/liq-zones');
+    const data = await res.json();
+    const el = document.getElementById('liq-zones');
+    if (!el) return;
+
+    if (data.current_price && data.zones) {
+      const price = data.current_price;
+      let html = `<div class="liq-current-price">BTC: $${price.toLocaleString()}</div>`;
+      html += `<div class="liq-bias" style="color:${data.bias_color || '#888'};">${data.bias || ''}</div>`;
+      html += '<div class="liq-bar-container">';
+
+      data.zones.forEach(z => {
+        const dist = ((z.price - price) / price * 100).toFixed(1);
+        const isAbove = z.price > price;
+        const barColor = isAbove ? 'var(--neon-red)' : 'var(--neon-green)';
+        const width = Math.min(Math.abs(dist) * 3, 80);
+        html += `<div class="liq-zone-row">
+          <span class="liq-lev">${z.leverage}x</span>
+          <div class="liq-bar-track">
+            <div class="liq-bar-fill ${isAbove ? 'liq-short' : 'liq-long'}" style="width:${width}%;background:${barColor};"></div>
+          </div>
+          <span class="liq-price">$${z.price.toLocaleString()} <small>(${dist > 0 ? '+' : ''}${dist}%)</small></span>
+        </div>`;
+      });
+
+      html += '</div>';
+      el.innerHTML = html;
+    }
+  } catch (e) { console.error('LiqZones Error:', e); }
+}
+
+/* ── TradingView Chart Modal ── */
+function initTradingViewModal() {
+  const modal = document.getElementById('tv-modal');
+  const closeBtn = document.getElementById('tv-modal-close');
+  if (!modal || !closeBtn) return;
+
+  closeBtn.addEventListener('click', () => {
+    modal.style.display = 'none';
+    document.getElementById('tv-chart-container').innerHTML = '';
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.style.display = 'none';
+      document.getElementById('tv-chart-container').innerHTML = '';
+    }
+  });
+
+  // Attach click to price cards
+  document.addEventListener('click', (e) => {
+    const card = e.target.closest('.price-card');
+    if (!card) return;
+    const symbol = card.querySelector('.coin-name')?.textContent?.trim();
+    if (!symbol) return;
+    openTradingViewChart(symbol);
+  });
+}
+
+function openTradingViewChart(symbol) {
+  const modal = document.getElementById('tv-modal');
+  const title = document.getElementById('tv-modal-title');
+  const container = document.getElementById('tv-chart-container');
+  if (!modal || !container) return;
+
+  const tvSymbol = `BINANCE:${symbol.toUpperCase()}USDT`;
+  title.textContent = `${symbol}/USDT`;
+  modal.style.display = 'flex';
+
+  container.innerHTML = '';
+  const widgetDiv = document.createElement('div');
+  widgetDiv.id = 'tv-widget-' + Date.now();
+  widgetDiv.style.height = '100%';
+  container.appendChild(widgetDiv);
+
+  new TradingView.widget({
+    container_id: widgetDiv.id,
+    autosize: true,
+    symbol: tvSymbol,
+    interval: '60',
+    timezone: 'Asia/Seoul',
+    theme: document.body.classList.contains('white-theme') ? 'light' : 'dark',
+    style: '1',
+    locale: _currentLang === 'ko' ? 'kr' : 'en',
+    toolbar_bg: '#0a0e17',
+    hide_side_toolbar: false,
+    allow_symbol_change: true,
+    save_image: false,
+    studies: ['RSI@tv-basicstudies', 'MACD@tv-basicstudies']
+  });
+}
+
+/* ── PWA Service Worker Registration ── */
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW registration failed:', err));
+  }
+}
+
 /* ── Mini Heatmap ── */
 async function fetchHeatmap() {
   try {
@@ -2594,7 +2791,21 @@ const _translations = {
     scanner_bounce: "OVERSOLD BOUNCE",
     scanner_vol: "VOL SPIKE",
     scanner_calm: "No anomalies detected. Market is calm.",
-    scanner_scanning: "Scanning markets..."
+    scanner_scanning: "Scanning markets...",
+    // Regime Detector
+    regime_detector: "Regime Detector",
+    regime_btc: "BTC SEASON",
+    regime_alt: "ALT SEASON",
+    regime_risk_off: "RISK OFF",
+    regime_bull: "FULL BULL",
+    regime_rotation: "ROTATION",
+    // Correlation
+    correlation_matrix: "Correlation Matrix (30D)",
+    // Liquidation
+    liq_heatmap: "Liquidation Kill Zone",
+    // Whale Wallets
+    whale_wallets: "Whale Wallets (BTC)",
+    no_whale_wallets: "No large transactions detected"
   },
   ko: {
     market_vibe: "시장 분위기:",
@@ -2654,7 +2865,21 @@ const _translations = {
     scanner_bounce: "과매도 반등",
     scanner_vol: "거래량 폭발",
     scanner_calm: "이상 감지되지 않음. 시장이 안정적입니다.",
-    scanner_scanning: "시장 스캐닝 중..."
+    scanner_scanning: "시장 스캐닝 중...",
+    // Regime Detector
+    regime_detector: "레짐 감지기",
+    regime_btc: "BTC 시즌",
+    regime_alt: "알트 시즌",
+    regime_risk_off: "리스크 오프",
+    regime_bull: "풀 상승장",
+    regime_rotation: "순환매",
+    // Correlation
+    correlation_matrix: "상관관계 매트릭스 (30일)",
+    // Liquidation
+    liq_heatmap: "청산 킬존",
+    // Whale Wallets
+    whale_wallets: "고래 지갑 추적기 (BTC)",
+    no_whale_wallets: "대규모 거래가 감지되지 않았습니다"
   }
 };
 

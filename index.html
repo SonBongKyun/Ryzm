@@ -21,7 +21,12 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=3.0" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.1" />
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#06b6d4" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 </head>
 
 <body>
@@ -124,6 +129,7 @@
   <div id="vibe-bar" class="vibe-bar">
     <div class="vibe-label" data-i18n-text="market_vibe">MARKET VIBE:</div>
     <div id="vibe-status" class="vibe-status">LOADING...</div>
+    <div id="regime-badge" class="regime-badge">--</div>
     <div id="vibe-message" class="vibe-marquee">Ryzm System Initializing...</div>
   </div>
 
@@ -446,6 +452,26 @@
           <div style="text-align:center; padding:15px; color:var(--text-muted); font-size:0.75rem;">Loading heatmap...</div>
         </div>
       </div>
+
+      <!-- Liquidation Kill Zone -->
+      <div class="glass-panel liq-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="liq_heatmap"><i data-lucide="target"></i> Liquidation Kill Zone <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="liq-zones" style="min-height:80px;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Correlation Matrix -->
+      <div class="glass-panel corr-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="correlation_matrix"><i data-lucide="network"></i> Correlation Matrix (30D) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="corr-matrix" style="min-height:80px;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-block"></div></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="panel" id="panel-right" data-panel-id="right">
@@ -521,6 +547,16 @@
         </div>
       </div>
 
+      <!-- Whale Wallet Tracker -->
+      <div class="glass-panel whale-wallet-panel" style="min-height:120px;">
+        <div class="panel-title" data-i18n="whale_wallets"><i data-lucide="wallet"></i> Whale Wallets (BTC) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="whale-wallet-feed" style="overflow-y:auto; max-height:150px; font-size:0.72rem;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+          </div>
+        </div>
+      </div>
+
       <!-- On-Chain Radar -->
       <div class="glass-panel onchain-panel" style="min-height:180px;">
         <div class="panel-title" data-i18n="onchain_radar"><i data-lucide="link"></i> On-Chain Radar <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
@@ -592,6 +628,17 @@
     </div>
   </div>
 
+  <!-- TradingView Chart Modal -->
+  <div id="tv-modal" class="tv-modal" style="display:none;">
+    <div class="tv-modal-content">
+      <div class="tv-modal-header">
+        <span id="tv-modal-title">BTC/USDT</span>
+        <button id="tv-modal-close" class="chat-close-btn"><i data-lucide="x"></i></button>
+      </div>
+      <div id="tv-chart-container" style="height:400px;"></div>
+    </div>
+  </div>
+
   <!-- Status Bar -->
   <div class="status-bar">
     <div class="status-item">
@@ -609,7 +656,7 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v2.1</span>
+      <span>Ryzm Terminal v2.2</span>
     </div>
   </div>
 

@@ -89,6 +89,10 @@ cache = {
     "onchain": {"data": {}, "updated": 0},
     "auto_council": {"data": {}, "updated": 0},
     "scanner": {"data": [], "updated": 0},
+    "regime": {"data": {}, "updated": 0},
+    "correlation": {"data": {}, "updated": 0},
+    "whale_wallets": {"data": [], "updated": 0},
+    "liq_zones": {"data": {}, "updated": 0},
     "latest_briefing": {"title": "", "content": "", "time": ""},
 }
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
@@ -454,6 +458,15 @@ TARGET_COINS = [
     "DOTUSDT", "LTCUSDT", "SHIBUSDT", "UNIUSDT", "ATOMUSDT"
 ]
 
+# ── Correlation Matrix Assets ──
+CORR_ASSETS = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "GOLD": None,   # yfinance GC=F
+    "NASDAQ": None  # yfinance ^IXIC
+}
+
 
 # ── Technical Analysis Helpers ──
 def calculate_rsi(closes, period=14):
@@ -555,6 +568,199 @@ def fetch_alpha_scanner():
     # Sort by priority
     alerts.sort(key=lambda x: x.get("priority", 99))
     return alerts
+
+
+def fetch_regime_data():
+    """Regime Detector — BTC Dominance + USDT Dominance + Altcoin Season"""
+    try:
+        url = "https://api.coingecko.com/api/v3/global"
+        resp = requests.get(url, timeout=10, headers={"Accept": "application/json"})
+        resp.raise_for_status()
+        data = resp.json().get("data", {})
+        btc_dom = round(data.get("market_cap_percentage", {}).get("btc", 0), 1)
+        eth_dom = round(data.get("market_cap_percentage", {}).get("eth", 0), 1)
+        usdt_dom = round(data.get("market_cap_percentage", {}).get("usdt", 0), 1)
+        total_mcap = data.get("total_market_cap", {}).get("usd", 0)
+        mcap_change = round(data.get("market_cap_change_percentage_24h_usd", 0), 2)
+        alt_dom = round(100 - btc_dom - usdt_dom, 1)
+
+        # Regime classification
+        if btc_dom > 55 and mcap_change > 0:
+            regime = "BTC_SEASON"
+            label = "Bitcoin Dominance"
+            color = "#f59e0b"
+            advice = "Focus on BTC. Altcoins underperform."
+        elif btc_dom < 45 and alt_dom > 40:
+            regime = "ALT_SEASON"
+            label = "Altcoin Season"
+            color = "#10b981"
+            advice = "Rotate into altcoins. BTC consolidating."
+        elif usdt_dom > 8 and mcap_change < -2:
+            regime = "RISK_OFF"
+            label = "Risk-Off / Bear"
+            color = "#ef4444"
+            advice = "Capital fleeing to stables. Defensive mode."
+        elif mcap_change > 3:
+            regime = "FULL_BULL"
+            label = "Full Bull Market"
+            color = "#06b6d4"
+            advice = "Rising tide lifts all boats. Stay long."
+        else:
+            regime = "ROTATION"
+            label = "Sector Rotation"
+            color = "#8b5cf6"
+            advice = "Mixed signals. Selective positioning."
+
+        return {
+            "regime": regime, "label": label, "color": color, "advice": advice,
+            "btc_dom": btc_dom, "eth_dom": eth_dom, "usdt_dom": usdt_dom,
+            "alt_dom": alt_dom, "total_mcap": total_mcap, "mcap_change": mcap_change
+        }
+    except Exception as e:
+        logger.error(f"[Regime] Error: {e}")
+        return {"regime": "UNKNOWN", "label": "Unknown", "color": "#6b7280", "advice": "Data unavailable",
+                "btc_dom": 0, "eth_dom": 0, "usdt_dom": 0, "alt_dom": 0, "total_mcap": 0, "mcap_change": 0}
+
+
+def fetch_correlation_matrix():
+    """30-day correlation matrix: BTC, ETH, SOL, GOLD, NASDAQ"""
+    prices = {}
+    try:
+        # Crypto from CoinGecko
+        for name, cg_id in [("BTC", "bitcoin"), ("ETH", "ethereum"), ("SOL", "solana")]:
+            url = f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart?vs_currency=usd&days=30&interval=daily"
+            resp = requests.get(url, timeout=10, headers={"Accept": "application/json"})
+            data = resp.json()
+            prices[name] = [p[1] for p in data.get("prices", [])]
+
+        # TradFi from yfinance
+        for symbol, label in [("GC=F", "GOLD"), ("^IXIC", "NASDAQ")]:
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="1mo")
+                prices[label] = hist["Close"].tolist() if not hist.empty else []
+            except Exception:
+                prices[label] = []
+
+        # Calculate daily returns
+        assets = ["BTC", "ETH", "SOL", "GOLD", "NASDAQ"]
+        returns = {}
+        for asset in assets:
+            p = prices.get(asset, [])
+            if len(p) > 1:
+                returns[asset] = [(p[i] - p[i-1]) / p[i-1] for i in range(1, len(p))]
+            else:
+                returns[asset] = []
+
+        # Pearson correlation
+        matrix = {}
+        for a in assets:
+            matrix[a] = {}
+            for b in assets:
+                ra, rb = returns.get(a, []), returns.get(b, [])
+                min_len = min(len(ra), len(rb))
+                if min_len < 5:
+                    matrix[a][b] = None
+                    continue
+                ra_s, rb_s = ra[:min_len], rb[:min_len]
+                mean_a = sum(ra_s) / min_len
+                mean_b = sum(rb_s) / min_len
+                cov = sum((ra_s[i] - mean_a) * (rb_s[i] - mean_b) for i in range(min_len))
+                std_a = (sum((x - mean_a)**2 for x in ra_s))**0.5
+                std_b = (sum((x - mean_b)**2 for x in rb_s))**0.5
+                if std_a == 0 or std_b == 0:
+                    matrix[a][b] = 0
+                else:
+                    matrix[a][b] = round(cov / (std_a * std_b), 3)
+
+        return {"assets": assets, "matrix": matrix}
+    except Exception as e:
+        logger.error(f"[Correlation] Error: {e}")
+        return {"assets": [], "matrix": {}}
+
+
+def fetch_whale_wallets():
+    """Monitor large BTC transactions via blockchain.info"""
+    try:
+        # Recent unconfirmed large transactions
+        url = "https://blockchain.info/unconfirmed-transactions?format=json"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        txs = data.get("txs", [])
+
+        large_txs = []
+        for tx in txs:
+            total_out = sum(o.get("value", 0) for o in tx.get("out", [])) / 1e8  # satoshi to BTC
+            if total_out >= 10:  # >= 10 BTC
+                btc_price = cache.get("market", {}).get("data", {}).get("BTC", {}).get("price", 68000)
+                usd_val = total_out * btc_price
+                # Determine direction
+                is_exchange = any("exchange" in str(o.get("addr", "")).lower() or
+                                  o.get("spending_outpoints", []) for o in tx.get("out", []))
+                large_txs.append({
+                    "hash": tx.get("hash", "")[:12] + "...",
+                    "btc": round(total_out, 2),
+                    "usd": round(usd_val),
+                    "time": tx.get("time", 0),
+                    "type": "EXCHANGE" if is_exchange else "WALLET"
+                })
+            if len(large_txs) >= 8:
+                break
+
+        large_txs.sort(key=lambda x: x["btc"], reverse=True)
+        return large_txs
+    except Exception as e:
+        logger.error(f"[WhaleWallet] Error: {e}")
+        return []
+
+
+def fetch_liquidation_zones():
+    """Estimate liquidation density zones from OI + funding + leverage data"""
+    try:
+        # Get current BTC price and OI
+        price_url = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
+        oi_url = "https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT"
+        fr_url = "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1"
+
+        price_resp = requests.get(price_url, timeout=5)
+        oi_resp = requests.get(oi_url, timeout=5)
+        fr_resp = requests.get(fr_url, timeout=5)
+
+        current_price = float(price_resp.json()["price"])
+        oi_btc = float(oi_resp.json()["openInterest"])
+        funding = float(fr_resp.json()[0]["fundingRate"])
+
+        # Estimate liquidation density at leverage levels
+        zones = []
+        leverages = [5, 10, 25, 50, 100]
+        for lev in leverages:
+            # Long liquidation (price drops)
+            long_liq = round(current_price * (1 - 1/lev), 0)
+            # Short liquidation (price rises)
+            short_liq = round(current_price * (1 + 1/lev), 0)
+            # Estimate volume (more volume at lower leverage)
+            estimated_vol = round(oi_btc * current_price * (0.3 / lev), 0)  # rough estimate
+            zones.append({
+                "leverage": f"{lev}x",
+                "long_liq_price": long_liq,
+                "short_liq_price": short_liq,
+                "est_volume_usd": estimated_vol
+            })
+
+        # Bias: if funding positive → more longs → more long liq risk
+        bias = "LONG_HEAVY" if funding > 0.0001 else "SHORT_HEAVY" if funding < -0.0001 else "BALANCED"
+
+        return {
+            "current_price": current_price,
+            "total_oi_btc": round(oi_btc, 2),
+            "total_oi_usd": round(oi_btc * current_price),
+            "funding_rate": funding,
+            "bias": bias,
+            "zones": zones
+        }
+    except Exception as e:
+        logger.error(f"[LiqZones] Error: {e}")
+        return {}
 
 
 def fetch_multi_timeframe(symbol="BTCUSDT"):
@@ -1113,6 +1319,42 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[Scanner] Error: {e}")
 
+        # Regime Detector (every 5 mins)
+        try:
+            if now - cache["regime"]["updated"] > CACHE_TTL:
+                cache["regime"]["data"] = fetch_regime_data()
+                cache["regime"]["updated"] = now
+                logger.info(f"[Regime] {cache['regime']['data'].get('regime')}")
+        except Exception as e:
+            logger.error(f"[Regime] Error: {e}")
+
+        # Correlation Matrix (every 10 mins)
+        try:
+            if now - cache["correlation"]["updated"] > 600:
+                cache["correlation"]["data"] = fetch_correlation_matrix()
+                cache["correlation"]["updated"] = now
+                logger.info("[Correlation] Matrix refreshed")
+        except Exception as e:
+            logger.error(f"[Correlation] Error: {e}")
+
+        # Whale Wallet Tracker (every 2 mins)
+        try:
+            if now - cache["whale_wallets"]["updated"] > 120:
+                cache["whale_wallets"]["data"] = fetch_whale_wallets()
+                cache["whale_wallets"]["updated"] = now
+                logger.info(f"[WhaleWallet] {len(cache['whale_wallets']['data'])} large txs")
+        except Exception as e:
+            logger.error(f"[WhaleWallet] Error: {e}")
+
+        # Liquidation Zones (every 2 mins)
+        try:
+            if now - cache["liq_zones"]["updated"] > 120:
+                cache["liq_zones"]["data"] = fetch_liquidation_zones()
+                cache["liq_zones"]["updated"] = now
+                logger.info("[LiqZones] Zones refreshed")
+        except Exception as e:
+            logger.error(f"[LiqZones] Error: {e}")
+
         # Risk gauge critical alert to Discord
         try:
             risk = compute_risk_gauge()
@@ -1137,6 +1379,14 @@ bg_thread.start()
 @app.get("/")
 async def read_index():
     return FileResponse("index.html")
+
+@app.get("/manifest.json")
+async def get_manifest():
+    return FileResponse("manifest.json", media_type="application/manifest+json")
+
+@app.get("/service-worker.js")
+async def get_sw():
+    return FileResponse("static/service-worker.js", media_type="application/javascript")
 
 @app.get("/health")
 async def health_check():
@@ -1372,6 +1622,47 @@ async def get_scanner():
 
 
 # ─── Trade Validator ───
+
+@app.get("/api/regime")
+async def get_regime():
+    """Market Regime Detector"""
+    try:
+        data = cache["regime"]["data"]
+        return data if data else fetch_regime_data()
+    except Exception as e:
+        logger.error(f"[API] Regime error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to detect regime")
+
+@app.get("/api/correlation")
+async def get_correlation():
+    """30-Day Correlation Matrix"""
+    try:
+        data = cache["correlation"]["data"]
+        return data if data else fetch_correlation_matrix()
+    except Exception as e:
+        logger.error(f"[API] Correlation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to compute correlation")
+
+@app.get("/api/whale-wallets")
+async def get_whale_wallets():
+    """Large BTC Wallet Transactions"""
+    try:
+        data = cache["whale_wallets"]["data"]
+        return {"transactions": data, "count": len(data)}
+    except Exception as e:
+        logger.error(f"[API] WhaleWallet error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch whale wallets")
+
+@app.get("/api/liq-zones")
+async def get_liq_zones():
+    """Liquidation Heatmap Zones"""
+    try:
+        data = cache["liq_zones"]["data"]
+        return data if data else fetch_liquidation_zones()
+    except Exception as e:
+        logger.error(f"[API] LiqZones error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch liquidation zones")
+
 @app.post("/api/validate")
 async def validate_trade(request: TradeValidationRequest):
     """AI evaluates user's trading plan"""
