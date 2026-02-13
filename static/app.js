@@ -1,4 +1,4 @@
-/* static/app.js - Ryzm Neural Network v3.0 */
+/* static/app.js - Ryzm Neural Network v3.1 */
 
 // Global state
 let validatorCredits = 3;
@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initPanelDragDrop();    // Panel drag & drop customization
   initTradingViewModal();  // TradingView chart popup
   registerServiceWorker(); // PWA
+  initMarketStatus();      // Market open/close indicators
+  initKeyboardShortcutsModal(); // ? key help
   lucide.createIcons();
 });
 
@@ -609,9 +611,13 @@ function initTheme() {
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
   const next = current === 'dark' ? 'light' : 'dark';
+  // Smooth transition class
+  document.documentElement.classList.add('theme-transitioning');
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('ryzm-theme', next);
   updateThemeIcon(next);
+  // Remove transition class after animation
+  setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 500);
   // Reload chart with correct theme
   const activeTab = document.querySelector('.chart-tab.active');
   if (activeTab) loadTradingViewChart(activeTab.dataset.symbol);
@@ -1178,12 +1184,12 @@ async function fetchNews() {
         const sClass = n.sentiment === 'BULLISH' ? 'sentiment-bullish' : n.sentiment === 'BEARISH' ? 'sentiment-bearish' : 'sentiment-neutral';
         const sLabel = n.sentiment || 'NEUTRAL';
         return `
-                <div style="padding:10px; border-bottom:1px solid var(--border-dim); transition: background 0.2s; cursor:pointer;" onmouseenter="this.style.background='rgba(0,0,0,0.03)'" onmouseleave="this.style.background='transparent'">
-                    <div style="display:flex; justify-content:space-between; align-items:center; color:var(--text-muted); font-size:0.7rem; margin-bottom:4px;">
-                        <span style="display:flex; align-items:center; gap:6px;"><span style="color:var(--neon-cyan);">${n.source}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
+                <div class="news-item-v2">
+                    <div class="news-meta">
+                        <span class="news-meta-left"><span class="news-source-tag">${n.source}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
                         <span>${n.time}</span>
                     </div>
-                    <a href="${n.link}" target="_blank" style="color:var(--text-main); text-decoration:none; font-size:0.85rem; line-height:1.4; display:block;">${n.title}</a>
+                    <a href="${n.link}" target="_blank" class="news-link">${n.title}</a>
                 </div>`;
       }).join('');
     }
@@ -2237,18 +2243,7 @@ function updateConnectionStatus() {
     });
 }
 
-function updateLastRefreshTime() {
-  const lastUpdate = document.getElementById('last-update');
-  if (lastUpdate) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    lastUpdate.innerText = `Last Update: ${timeStr}`;
-  }
-}
+/* updateLastRefreshTime — see "Live Time Ago" section at bottom */
 
 /* ─── Add spin animation keyframe ─── */
 if (!document.getElementById('spin-animation-style')) {
@@ -2306,6 +2301,21 @@ document.addEventListener('keydown', (e) => {
     document.getElementById('chat-float-btn')?.click();
   }
 
+  // ? key: Show shortcuts modal
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    e.preventDefault();
+    toggleShortcutsModal();
+  }
+
+  // D key: Toggle dark mode (when not in input)
+  if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    toggleTheme();
+  }
+
   // F11: Fullscreen (browser default, but we show toast)
   if (e.key === 'F11') {
     setTimeout(() => {
@@ -2316,11 +2326,17 @@ document.addEventListener('keydown', (e) => {
     }, 100);
   }
 
-  // Escape: Close chat if open
+  // Escape: Close modals
   if (e.key === 'Escape') {
     const chatOverlay = document.getElementById('chat-overlay');
     if (chatOverlay && chatOverlay.classList.contains('active')) {
       chatOverlay.classList.remove('active');
+      return;
+    }
+    const shortcutsEl = document.querySelector('.shortcuts-overlay');
+    if (shortcutsEl) {
+      shortcutsEl.remove();
+      return;
     }
   }
 });
@@ -3030,3 +3046,133 @@ function applyTranslations(lang) {
   // 10) Refresh all Lucide icons after innerHTML changes
   try { lucide.createIcons(); } catch (e) {}
 }
+
+/* ═══════════════════════════════════════
+   Keyboard Shortcuts Modal
+   ═══════════════════════════════════════ */
+function initKeyboardShortcutsModal() {
+  // No-op, the keydown handler above handles ? key
+}
+
+function toggleShortcutsModal() {
+  const existing = document.querySelector('.shortcuts-overlay');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const mod = isMac ? '⌘' : 'Ctrl';
+
+  const shortcuts = [
+    { keys: [mod, 'R'], label: _currentLang === 'ko' ? '전체 새로고침' : 'Refresh all data' },
+    { keys: [mod, '/'], label: _currentLang === 'ko' ? '채팅 열기' : 'Open Ryzm Chat' },
+    { keys: ['D'], label: _currentLang === 'ko' ? '다크/라이트 모드 전환' : 'Toggle dark/light mode' },
+    { keys: ['F11'], label: _currentLang === 'ko' ? '전체화면' : 'Fullscreen' },
+    { keys: ['Esc'], label: _currentLang === 'ko' ? '모달/채팅 닫기' : 'Close modals' },
+    { keys: ['?'], label: _currentLang === 'ko' ? '이 도움말 표시' : 'Show this help' },
+  ];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'shortcuts-overlay';
+  overlay.innerHTML = `
+    <div class="shortcuts-modal">
+      <div class="shortcuts-title"><i data-lucide="keyboard" style="width:18px;height:18px;"></i> ${_currentLang === 'ko' ? '키보드 단축키' : 'Keyboard Shortcuts'}</div>
+      <div class="shortcuts-list">
+        ${shortcuts.map(s => `
+          <div class="shortcut-row">
+            <span class="shortcut-label">${s.label}</span>
+            <span class="shortcut-keys">${s.keys.map(k => `<span class="shortcut-key">${k}</span>`).join('<span style="color:var(--text-muted);font-size:0.65rem;">+</span>')}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="shortcuts-footer">${_currentLang === 'ko' ? '아무 키나 누르면 닫힙니다' : 'Press any key to close'}</div>
+    </div>
+  `;
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+  try { lucide.createIcons(); } catch (e) {}
+  playSound('click');
+}
+
+/* ═══════════════════════════════════════
+   Market Open/Close Status
+   ═══════════════════════════════════════ */
+function initMarketStatus() {
+  updateMarketStatus();
+  setInterval(updateMarketStatus, 60000); // Update every minute
+}
+
+function updateMarketStatus() {
+  const now = new Date();
+  
+  // Crypto: Always open
+  const cryptoEl = document.getElementById('mkt-crypto');
+  if (cryptoEl) {
+    cryptoEl.className = 'market-dot open';
+    cryptoEl.textContent = 'CRYPTO 24/7';
+  }
+
+  // NYSE: Mon-Fri, 9:30-16:00 ET (14:30-21:00 UTC)
+  const nyseEl = document.getElementById('mkt-nyse');
+  if (nyseEl) {
+    const utcH = now.getUTCHours();
+    const utcM = now.getUTCMinutes();
+    const utcMin = utcH * 60 + utcM;
+    const day = now.getUTCDay();
+    const isWeekday = day >= 1 && day <= 5;
+    // NYSE: 14:30-21:00 UTC (9:30-16:00 ET)
+    const nyseOpen = isWeekday && utcMin >= 14 * 60 + 30 && utcMin < 21 * 60;
+    nyseEl.className = `market-dot ${nyseOpen ? 'open' : 'closed'}`;
+    nyseEl.textContent = nyseOpen ? 'NYSE' : 'NYSE';
+  }
+
+  // Forex: Sun 22:00 UTC - Fri 22:00 UTC
+  const forexEl = document.getElementById('mkt-forex');
+  if (forexEl) {
+    const day = now.getUTCDay();
+    const utcH = now.getUTCHours();
+    const forexOpen = !((day === 6) || (day === 0 && utcH < 22) || (day === 5 && utcH >= 22));
+    forexEl.className = `market-dot ${forexOpen ? 'open' : 'closed'}`;
+    forexEl.textContent = forexOpen ? 'FOREX' : 'FOREX';
+  }
+}
+
+/* ═══════════════════════════════════════
+   Live "Time Ago" Status Bar Update
+   ═══════════════════════════════════════ */
+let _lastDataUpdate = Date.now();
+
+function updateLastRefreshTime() {
+  _lastDataUpdate = Date.now();
+  _updateTimeAgo();
+}
+
+function _updateTimeAgo() {
+  const el = document.getElementById('last-update');
+  if (!el) return;
+  const diff = Math.floor((Date.now() - _lastDataUpdate) / 1000);
+  let text, cls;
+  if (diff < 5) {
+    text = _currentLang === 'ko' ? '방금 전' : 'Just now';
+    cls = 'time-ago';
+  } else if (diff < 60) {
+    text = _currentLang === 'ko' ? `${diff}초 전` : `${diff}s ago`;
+    cls = 'time-ago';
+  } else if (diff < 300) {
+    const m = Math.floor(diff / 60);
+    text = _currentLang === 'ko' ? `${m}분 전` : `${m}m ago`;
+    cls = 'time-ago stale';
+  } else {
+    text = _currentLang === 'ko' ? '연결 확인 중...' : 'Checking...';
+    cls = 'time-ago offline';
+  }
+  el.innerHTML = `${t('last_update')}: <span class="${cls}">${text}</span>`;
+}
+
+// Update time-ago every 5 seconds
+setInterval(_updateTimeAgo, 5000);

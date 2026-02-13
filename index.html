@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=3.2" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.3" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#06b6d4" />
@@ -104,6 +104,13 @@
     </div>
 
     <!-- Dual Clock -->
+    <!-- Market Status -->
+    <div class="market-status" id="market-status">
+      <span class="market-dot" id="mkt-crypto">CRYPTO</span>
+      <span class="market-dot" id="mkt-nyse">NYSE</span>
+      <span class="market-dot" id="mkt-forex">FOREX</span>
+    </div>
+
     <div class="dual-clock">
       <div class="clock-item">
         <div class="clock-label">Seoul · KST</div>
@@ -363,11 +370,9 @@
     <div class="center-panel" id="panel-center" data-panel-id="center">
 
       <div class="council-container">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-          <span style="font-family:var(--font-head); font-size:0.8rem; color:var(--neon-cyan);">///
-            COUNCIL_LINK__ACTIVE</span>
-          <span id="consensus-score" style="font-family:var(--font-mono); font-weight:bold; color:#fff;">SCORE:
-            --</span>
+        <div class="council-header">
+          <span class="council-label">/// NEURAL_COUNCIL</span>
+          <span id="consensus-score" class="council-score">SCORE: --</span>
         </div>
         <div class="agents-grid" id="agents-grid">
           <div class="agent-card">
@@ -658,7 +663,7 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v3.0</span>
+      <span>Ryzm Terminal v3.1</span>
     </div>
   </div>
 
