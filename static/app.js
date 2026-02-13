@@ -1,8 +1,9 @@
-/* static/app.js - Ryzm Neural Network v2.0 */
+/* static/app.js - Ryzm Neural Network v2.2 */
 
 // Global state
 let validatorCredits = 3;
 const MAX_FREE_VALIDATIONS = 3;
+const _intervals = [];  // Track all setIntervals for cleanup
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
@@ -464,25 +465,25 @@ function initDataFeeds() {
   fetchCorrelation();
   fetchWhaleWallets();
   fetchLiqZones();
-  setInterval(fetchMacroTicker, 10000);
-  setInterval(fetchNews, 60000);
-  setInterval(fetchRealtimePrices, 10000);
-  setInterval(fetchLongShortRatio, 60000);
-  setInterval(fetchBriefing, 120000);
-  setInterval(fetchFundingRate, 60000);
-  setInterval(fetchWhaleFeed, 30000);
-  setInterval(fetchCalendar, 300000);
-  setInterval(fetchRiskGauge, 60000);
-  setInterval(fetchHeatmap, 60000);
-  setInterval(fetchHealthCheck, 30000);
-  setInterval(fetchFearGreedChart, 300000);
-  setInterval(fetchMultiTimeframe, 300000);
-  setInterval(fetchOnChainData, 300000);
-  setInterval(fetchScanner, 60000);
-  setInterval(fetchRegime, 300000);
-  setInterval(fetchCorrelation, 600000);
-  setInterval(fetchWhaleWallets, 120000);
-  setInterval(fetchLiqZones, 120000);
+  _intervals.push(setInterval(fetchMacroTicker, 10000));
+  _intervals.push(setInterval(fetchNews, 60000));
+  _intervals.push(setInterval(fetchRealtimePrices, 10000));
+  _intervals.push(setInterval(fetchLongShortRatio, 60000));
+  _intervals.push(setInterval(fetchBriefing, 120000));
+  _intervals.push(setInterval(fetchFundingRate, 60000));
+  _intervals.push(setInterval(fetchWhaleFeed, 30000));
+  _intervals.push(setInterval(fetchCalendar, 300000));
+  _intervals.push(setInterval(fetchRiskGauge, 60000));
+  _intervals.push(setInterval(fetchHeatmap, 60000));
+  _intervals.push(setInterval(fetchHealthCheck, 30000));
+  _intervals.push(setInterval(fetchFearGreedChart, 300000));
+  _intervals.push(setInterval(fetchMultiTimeframe, 300000));
+  _intervals.push(setInterval(fetchOnChainData, 300000));
+  _intervals.push(setInterval(fetchScanner, 60000));
+  _intervals.push(setInterval(fetchRegime, 300000));
+  _intervals.push(setInterval(fetchCorrelation, 600000));
+  _intervals.push(setInterval(fetchWhaleWallets, 120000));
+  _intervals.push(setInterval(fetchLiqZones, 120000));
 }
 
 async function fetchBriefing() {
@@ -550,15 +551,15 @@ async function fetchWhaleFeed() {
       container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">' + t('no_whale') + '</div>';
       return;
     }
-    container.innerHTML = data.trades.map(t => {
-      const isBuy = t.side === 'BUY';
+    container.innerHTML = data.trades.map(tr => {
+      const isBuy = tr.side === 'BUY';
       const icon = isBuy ? '▲' : '▼';
       const color = isBuy ? 'var(--neon-green)' : 'var(--neon-red)';
-      const usd = t.usd >= 1000000 ? `$${(t.usd/1000000).toFixed(1)}M` : `$${(t.usd/1000).toFixed(0)}K`;
-      const time = new Date(t.time).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      const usd = tr.usd >= 1000000 ? `$${(tr.usd/1000000).toFixed(1)}M` : `$${(tr.usd/1000).toFixed(0)}K`;
+      const time = new Date(tr.time).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
       return `<div class="whale-item">
-        <span style="color:${color};font-weight:700;">${icon} ${t.side}</span>
-        <span style="font-weight:600;">${t.symbol}</span>
+        <span style="color:${color};font-weight:700;">${icon} ${tr.side}</span>
+        <span style="font-weight:600;">${tr.symbol}</span>
         <span style="color:${color};font-family:var(--font-mono);">${usd}</span>
         <span style="color:var(--text-muted);">${time}</span>
       </div>`;
@@ -888,12 +889,13 @@ async function fetchMacroTicker() {
         const colorClass = item.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
         const sign = item.change >= 0 ? '+' : '';
         const decimals = item.price >= 100 ? 2 : item.price >= 1 ? 4 : 6;
+        const isEstimate = item.est ? ' ~' : '';
         const priceStr = key.startsWith('USD/') ? Number(item.price).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
           : '$' + Number(item.price).toLocaleString('en-US', {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
         html += `
                     <span style="margin-right:30px; font-family:'Share Tech Mono'; display:inline-flex; align-items:center;">
                         <span style="color:var(--text-muted); margin-right:8px;">${key}</span>
-                        <span style="color:#fff; margin-right:8px;">${priceStr}</span>
+                        <span style="color:#fff; margin-right:8px;">${priceStr}${isEstimate}</span>
                         <span style="color:${colorClass}; font-size:0.85rem;">${sign}${item.change}%</span>
                     </span>
                 `;
@@ -963,7 +965,7 @@ function initBinanceWebSocket() {
 
   _priceWs.onclose = () => {
     console.log('[WS] Binance disconnected, reconnecting...');
-    const delay = Math.min(5000, 1000 * Math.pow(2, _priceWsRetry++));
+    const delay = Math.min(30000, 1000 * Math.pow(2, _priceWsRetry++));
     setTimeout(initBinanceWebSocket, delay);
   };
   _priceWs.onerror = () => _priceWs.close();
@@ -1440,43 +1442,9 @@ if (!document.getElementById('bubble-animation-style')) {
   document.head.appendChild(style);
 }
 
-/* ─── Matrix Rain Effect ─── */
-const canvas = document.getElementById('matrix-bg');
-if (canvas) {
-  const ctx = canvas.getContext('2d');
-
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$₿Ξ";
-  const fontSize = 14;
-  const columns = canvas.width / fontSize;
-  const drops = Array(Math.floor(columns)).fill(1);
-
-  function drawMatrix() {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.05)"; // Afterimage effect
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = "#0f0";
-    ctx.font = fontSize + "px monospace";
-
-    for (let i = 0; i < drops.length; i++) {
-      const text = chars[Math.floor(Math.random() * chars.length)];
-      ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-
-      if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-        drops[i] = 0;
-      }
-      drops[i]++;
-    }
-  }
-  setInterval(drawMatrix, 50);
-
-  window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  });
-}
+/* ─── Matrix Rain Effect (disabled — canvas hidden, saves CPU/battery) ─── */
+// Matrix rain is visually hidden via CSS (#matrix-bg { display: none; })
+// No canvas rendering runs to save CPU and battery life.
 
 /* ─── Snapshot Export ─── */
 const btnSnapshot = document.getElementById('btn-snapshot');
@@ -1786,8 +1754,7 @@ async function updateKimchiDisplay() {
   }
 }
 
-// Update Kimchi Premium every 10 seconds
-setInterval(updateKimchiDisplay, 10000);
+// Update Kimchi Premium (removed duplicate — already called in fetchMacroTicker)
 updateKimchiDisplay();
 
 /* ═══════════════════════════════════════
@@ -1850,6 +1817,7 @@ function initQuickActions() {
 async function fetchScanner() {
   try {
     const res = await fetch('/api/scanner');
+    if (!res.ok) return;
     const data = await res.json();
     const feed = document.getElementById('scanner-feed');
     if (!feed) return;
@@ -1897,6 +1865,7 @@ async function fetchScanner() {
 async function fetchRegime() {
   try {
     const res = await fetch('/api/regime');
+    if (!res.ok) return;
     const data = await res.json();
     const badge = document.getElementById('regime-badge');
     if (!badge) return;
@@ -1921,6 +1890,7 @@ async function fetchRegime() {
 async function fetchCorrelation() {
   try {
     const res = await fetch('/api/correlation');
+    if (!res.ok) return;
     const data = await res.json();
     const el = document.getElementById('corr-matrix');
     if (!el || !data.matrix) return;
@@ -1956,6 +1926,7 @@ async function fetchCorrelation() {
 async function fetchWhaleWallets() {
   try {
     const res = await fetch('/api/whale-wallets');
+    if (!res.ok) return;
     const data = await res.json();
     const feed = document.getElementById('whale-wallet-feed');
     if (!feed) return;
@@ -1981,6 +1952,7 @@ async function fetchWhaleWallets() {
 async function fetchLiqZones() {
   try {
     const res = await fetch('/api/liq-zones');
+    if (!res.ok) return;
     const data = await res.json();
     const el = document.getElementById('liq-zones');
     if (!el) return;
@@ -2138,7 +2110,11 @@ async function fetchHealthCheck() {
   }
 }
 
+let _refreshDebounce = false;
 async function refreshAllData() {
+  if (_refreshDebounce) return;
+  _refreshDebounce = true;
+  setTimeout(() => { _refreshDebounce = false; }, 5000);
   const promises = [
     fetch('/api/market').then(r => r.json()),
     fetch('/api/news').then(r => r.json()),
@@ -2203,10 +2179,11 @@ function updateConnectionStatus() {
   const statusDot = document.getElementById('connection-status');
   if (!statusDot) return;
 
-  // Simple ping test
-  fetch('/api/market')
-    .then(() => {
-      statusDot.classList.remove('offline');
+  // Use lightweight /health endpoint instead of /api/market
+  fetch('/health')
+    .then(r => {
+      if (r.ok) statusDot.classList.remove('offline');
+      else statusDot.classList.add('offline');
     })
     .catch(() => {
       statusDot.classList.add('offline');
@@ -2457,6 +2434,7 @@ if (window.performance && window.performance.memory) {
 async function fetchFearGreedChart() {
   try {
     const res = await fetch('/api/fear-greed');
+    if (!res.ok) return;
     const data = await res.json();
 
     // Update score display

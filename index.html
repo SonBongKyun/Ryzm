@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -16,7 +16,7 @@
     rel="stylesheet" />
 
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
@@ -68,7 +68,7 @@
       </div>
       <!-- Volume -->
       <div class="bgm-vol-group">
-        <button id="bgm-mute" class="bgm-btn bgm-btn-sm" title="Mute">
+        <button id="bgm-mute" class="bgm-btn bgm-btn-sm" title="Mute" aria-label="Toggle mute">
           <i data-lucide="volume-2" style="width:12px;height:12px;"></i>
         </button>
         <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="60" />
@@ -82,12 +82,12 @@
     </div>
 
     <!-- Dark Mode Toggle -->
-    <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">
+    <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode" aria-label="Toggle dark mode">
       <i data-lucide="moon" style="width:16px;height:16px;"></i>
     </button>
 
     <!-- Language Toggle (i18n) -->
-    <button id="lang-toggle" class="lang-toggle" title="한국어/English">
+    <button id="lang-toggle" class="lang-toggle" title="한국어/English" aria-label="Switch language">
       <span id="lang-label">EN</span>
     </button>
 

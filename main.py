@@ -4,13 +4,15 @@ import time
 import threading
 import logging
 import sqlite3
+import re
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 import uvicorn
 import feedparser
@@ -36,6 +38,25 @@ if not GENAI_API_KEY:
 
 genai.configure(api_key=GENAI_API_KEY)
 
+
+def parse_gemini_json(text: str) -> dict:
+    """Robustly extract JSON from Gemini response (handles markdown, extra text)"""
+    # Strip markdown code fences
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+    # Try direct parse
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    # Try to find JSON object in the text
+    match = re.search(r'\{[\s\S]*\}', cleaned)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"Could not parse JSON from Gemini response: {cleaned[:200]}")
+
 # ── Admin Configuration ──
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
@@ -51,29 +72,48 @@ def require_admin(request: Request) -> None:
 
 app = FastAPI(title="Ryzm Terminal API")
 
-# Allow CORS
+# CORS — restrict to local + configured origins
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Admin-Token"],
 )
+
+# ── Rate Limiter (in-memory, per-IP) ──
+_rate_limits: Dict[str, list] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60   # seconds
+RATE_LIMIT_MAX_GENERAL = 120  # general endpoints per window
+RATE_LIMIT_MAX_AI = 5         # Gemini-calling endpoints per window
+
+def check_rate_limit(ip: str, category: str = "general") -> bool:
+    """Return True if request is allowed, False if rate limited."""
+    now = time.time()
+    key = f"{ip}:{category}"
+    # Prune old entries
+    _rate_limits[key] = [t for t in _rate_limits[key] if now - t < RATE_LIMIT_WINDOW]
+    max_req = RATE_LIMIT_MAX_AI if category == "ai" else RATE_LIMIT_MAX_GENERAL
+    if len(_rate_limits[key]) >= max_req:
+        return False
+    _rate_limits[key].append(now)
+    return True
 
 # ── Pydantic Models ──
 class InfographicRequest(BaseModel):
-    topic: str
+    topic: str = Field(..., max_length=200)
 
 class BriefingRequest(BaseModel):
-    title: str
-    content: str
+    title: str = Field(..., max_length=200)
+    content: str = Field(..., max_length=5000)
 
 class TradeValidationRequest(BaseModel):
-    symbol: str
-    entry_price: float
-    position: str  # "LONG" or "SHORT"
+    symbol: str = Field(..., max_length=20)
+    entry_price: float = Field(..., gt=0, le=1_000_000)
+    position: str = Field(..., pattern="^(LONG|SHORT)$")  # "LONG" or "SHORT"
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=500)
 
 # ── Cache Storage ──
 cache = {
@@ -143,14 +183,26 @@ def fetch_news():
 
 
 def classify_headline_sentiment(title):
-    """Simple headline sentiment analysis (keyword-based, fast)"""
+    """Improved headline sentiment analysis (phrase-aware)"""
     t = title.lower()
+    # Phrase-level checks first (context-aware)
+    bull_phrases = ['etf approved', 'rate cut', 'drops investigation', 'ends probe',
+                    'institutional buy', 'all-time high', 'mass adoption', 'clears regulation']
+    bear_phrases = ['files lawsuit', 'under investigation', 'exchange hack', 'rug pull',
+                    'ponzi scheme', 'market crash', 'bank run', 'rate hike']
+    for p in bull_phrases:
+        if p in t:
+            return "BULLISH"
+    for p in bear_phrases:
+        if p in t:
+            return "BEARISH"
+    # Keyword fallback
     bull_words = ['surge', 'soar', 'rally', 'bullish', 'breakout', 'highs', 'record',
                   'jump', 'gain', 'boom', 'moon', 'buy', 'upgrade', 'approval',
-                  'adopt', 'etf approved', 'institutional', 'accumul', 'pump']
+                  'adopt', 'institutional', 'accumul', 'pump']
     bear_words = ['crash', 'plunge', 'bearish', 'dump', 'sell', 'liquidat', 'hack',
-                  'ban', 'fraud', 'collapse', 'fear', 'warning', 'risk', 'drop',
-                  'decline', 'sue', 'sec ', 'regulation', 'investigation', 'ponzi']
+                  'ban', 'fraud', 'collapse', 'fear', 'warning', 'drop',
+                  'decline', 'sue', 'regulation', 'ponzi']
     bull_score = sum(1 for w in bull_words if w in t)
     bear_score = sum(1 for w in bear_words if w in t)
     if bull_score > bear_score:
@@ -284,12 +336,26 @@ def fetch_market_data():
                     "symbol": name
                 }
             else:
-                # Use fallback value (when no data available)
-                result[name] = {"price": fallback_price, "change": 0, "symbol": name}
+                # Use fallback value — mark as estimate
+                result[name] = {"price": fallback_price, "change": 0, "symbol": name, "est": True}
 
         except Exception:
-            # Use fallback value (on error)
-            result[name] = {"price": fallback_price, "change": 0, "symbol": name}
+            # Use fallback value — mark as estimate
+            result[name] = {"price": fallback_price, "change": 0, "symbol": name, "est": True}
+
+    # 4) Try yfinance for FX change rates
+    for fx_symbol, fx_name in [("JPY=X", "USD/JPY"), ("KRW=X", "USD/KRW")]:
+        if fx_name in result and result[fx_name].get("price", 0) > 0:
+            try:
+                ticker = yf.Ticker(fx_symbol)
+                hist = ticker.history(period="5d")
+                if hist is not None and not hist.empty and len(hist) >= 2:
+                    prev = float(hist["Close"].iloc[-2])
+                    curr = float(hist["Close"].iloc[-1])
+                    if prev > 0:
+                        result[fx_name]["change"] = round((curr - prev) / prev * 100, 2)
+            except Exception:
+                pass
 
     return result
 
@@ -367,7 +433,7 @@ def fetch_kimchi_premium():
         logger.error(f"[KP] Data parsing error: {e}")
     except Exception as e:
         logger.error(f"[KP] Unexpected error: {e}")
-
+    return {"premium": 0, "upbit_price": 0, "binance_price": 0, "usd_krw": 0, "error": True}
 
 
 def fetch_long_short_ratio():
@@ -859,26 +925,44 @@ def fetch_onchain_data():
     return result
 
 
-# ── Economic Calendar (Major Macro Events) ──
-ECONOMIC_CALENDAR = [
-    {"date": "2026-02-12", "event": "CPI (Jan YoY)", "impact": "HIGH", "region": "US"},
-    {"date": "2026-02-19", "event": "FOMC Minutes", "impact": "HIGH", "region": "US"},
-    {"date": "2026-03-06", "event": "Non-Farm Payrolls", "impact": "HIGH", "region": "US"},
-    {"date": "2026-03-12", "event": "CPI (Feb YoY)", "impact": "HIGH", "region": "US"},
-    {"date": "2026-03-18", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-    {"date": "2026-03-19", "event": "BOJ Rate Decision", "impact": "HIGH", "region": "JP"},
-    {"date": "2026-04-03", "event": "Non-Farm Payrolls", "impact": "HIGH", "region": "US"},
-    {"date": "2026-04-14", "event": "CPI (Mar YoY)", "impact": "HIGH", "region": "US"},
-    {"date": "2026-05-01", "event": "Non-Farm Payrolls", "impact": "HIGH", "region": "US"},
-    {"date": "2026-05-06", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-    {"date": "2026-06-05", "event": "Non-Farm Payrolls", "impact": "HIGH", "region": "US"},
-    {"date": "2026-06-10", "event": "CPI (May YoY)", "impact": "HIGH", "region": "US"},
-    {"date": "2026-06-17", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-    {"date": "2026-07-29", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-    {"date": "2026-09-16", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-    {"date": "2026-11-04", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-    {"date": "2026-12-16", "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"},
-]
+# ── Economic Calendar (Auto-generated recurring macro events) ──
+def generate_economic_calendar():
+    """Auto-generate upcoming macro events for the next 6 months"""
+    events = []
+    now = datetime.now()
+    
+    # FOMC schedule 2026 (fixed dates from Fed)
+    fomc_dates = [
+        "2026-01-28", "2026-03-18", "2026-05-06", "2026-06-17",
+        "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16"
+    ]
+    for d in fomc_dates:
+        events.append({"date": d, "event": "FOMC Rate Decision", "impact": "HIGH", "region": "US"})
+
+    # Recurring monthly events (approximate)
+    for month_offset in range(6):
+        dt = now + timedelta(days=30 * month_offset)
+        y, m = dt.year, dt.month
+        # NFP: first Friday of each month
+        first_day = datetime(y, m, 1)
+        first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
+        events.append({"date": first_friday.strftime("%Y-%m-%d"), "event": "Non-Farm Payrolls", "impact": "HIGH", "region": "US"})
+        # CPI: ~10th-14th of each month
+        events.append({"date": f"{y}-{m:02d}-12", "event": f"CPI ({datetime(y, m-1 if m > 1 else 12, 1).strftime('%b')} YoY)", "impact": "HIGH", "region": "US"})
+
+    # Sort by date and filter future only
+    today_str = now.strftime("%Y-%m-%d")
+    events = [e for e in events if e["date"] >= today_str]
+    events.sort(key=lambda x: x["date"])
+    # Deduplicate
+    seen = set()
+    unique = []
+    for e in events:
+        key = f"{e['date']}_{e['event']}"
+        if key not in seen:
+            seen.add(key)
+            unique.append(e)
+    return unique[:20]
 
 
 # ── Museum of Scars (Historical Crash Archive) ──
@@ -893,6 +977,9 @@ MUSEUM_OF_SCARS = [
     {"date": "2021.05.19", "event": "China Mining Ban", "drop": "-53%", "desc": "BTC $64k to $30k. Hash rate exodus. Elon FUD."},
     {"date": "2022.05.09", "event": "LUNA/UST Collapse", "drop": "-99%", "desc": "Algorithmic stablecoin death spiral. $40B evaporated in days."},
     {"date": "2022.11.08", "event": "FTX Implosion", "drop": "-25%", "desc": "Exchange fraud. SBF arrested. Contagion across crypto."},
+    {"date": "2023.03.10", "event": "SVB Bank Run", "drop": "-10%", "desc": "Silicon Valley Bank collapse. USDC depeg to $0.87. Contagion fear."},
+    {"date": "2024.08.05", "event": "Yen Carry Unwind", "drop": "-18%", "desc": "BOJ rate hike triggered global carry trade unwind. BTC $65k→$49k."},
+    {"date": "2025.01.27", "event": "DeepSeek AI Shock", "drop": "-7%", "desc": "Chinese AI model disrupted NVIDIA narrative. Tech sell-off spilled into crypto."},
 ]
 
 
@@ -980,7 +1067,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "council_hist
 
 def init_council_db():
     """Initialize SQLite DB for council history"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS council_history (
@@ -998,11 +1085,15 @@ def init_council_db():
     conn.close()
     logger.info("[DB] Council history database initialized")
 
+
+_db_lock = threading.Lock()
+
 def save_council_record(result: dict, btc_price: float = 0.0):
     """Save a council analysis to the DB"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
+        with _db_lock:
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            c = conn.cursor()
         c.execute(
             "INSERT INTO council_history (timestamp, consensus_score, vibe_status, btc_price, full_result) VALUES (?, ?, ?, ?, ?)",
             (
@@ -1022,9 +1113,10 @@ def save_council_record(result: dict, btc_price: float = 0.0):
 def get_council_history(limit: int = 50) -> List[dict]:
     """Retrieve recent council records"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
+        with _db_lock:
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
         c.execute(
             "SELECT id, timestamp, consensus_score, vibe_status, btc_price, btc_price_after, hit FROM council_history ORDER BY id DESC LIMIT ?",
             (limit,)
@@ -1039,9 +1131,10 @@ def get_council_history(limit: int = 50) -> List[dict]:
 def evaluate_council_accuracy():
     """Check past predictions: if score>50 meant bullish, did BTC go up?"""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
+        with _db_lock:
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
         # Get records older than 1 hour that haven't been evaluated yet
         c.execute("""
             SELECT id, consensus_score, btc_price FROM council_history
@@ -1146,11 +1239,10 @@ def generate_council_debate(market_data, news_data):
     try:
         model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(system_prompt)
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        result = json.loads(text)
+        result = parse_gemini_json(response.text)
         logger.info("[Council] Successfully generated AI analysis")
         return result
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"[Ryzm Brain] JSON parsing error: {e}")
     except Exception as e:
         logger.error(f"[Ryzm Brain] Error: {e}")
@@ -1434,10 +1526,9 @@ async def get_liquidations():
 
 @app.get("/api/calendar")
 async def get_calendar():
-    """Economic Calendar"""
+    """Economic Calendar (auto-generated)"""
     try:
-        today = datetime.now().strftime("%Y-%m-%d")
-        upcoming = [e for e in ECONOMIC_CALENDAR if e["date"] >= today][:8]
+        upcoming = generate_economic_calendar()[:8]
         return {"events": upcoming}
     except Exception as e:
         logger.error(f"[API] Calendar error: {e}")
@@ -1536,8 +1627,10 @@ async def get_kimchi():
         raise HTTPException(status_code=500, detail="Failed to fetch kimchi premium data")
 
 @app.get("/api/council")
-async def get_council():
+async def get_council(request: Request):
     """Convene AI Round Table"""
+    if not check_rate_limit(request.client.host, "ai"):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     try:
         # Use current cached data
         market = cache["market"]["data"]
@@ -1664,8 +1757,10 @@ async def get_liq_zones():
         raise HTTPException(status_code=500, detail="Failed to fetch liquidation zones")
 
 @app.post("/api/validate")
-async def validate_trade(request: TradeValidationRequest):
+async def validate_trade(request: TradeValidationRequest, http_request: Request):
     """AI evaluates user's trading plan"""
+    if not check_rate_limit(http_request.client.host, "ai"):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -1709,13 +1804,12 @@ async def validate_trade(request: TradeValidationRequest):
         model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(prompt)
 
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        result = json.loads(text)
+        result = parse_gemini_json(response.text)
         logger.info(f"[Validator] Trade validated: {request.symbol} @ ${request.entry_price}")
 
         return result
 
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"[Validator] JSON parsing error: {e}")
         raise HTTPException(status_code=500, detail="Failed to parse AI response")
     except Exception as e:
@@ -1724,8 +1818,10 @@ async def validate_trade(request: TradeValidationRequest):
 
 # ─── Ask Ryzm Chat ───
 @app.post("/api/chat")
-async def chat_with_ryzm(request: ChatRequest):
+async def chat_with_ryzm(request: ChatRequest, http_request: Request):
     """Real-time AI Chat"""
+    if not check_rate_limit(http_request.client.host, "ai"):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -1758,13 +1854,12 @@ async def chat_with_ryzm(request: ChatRequest):
         model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(prompt)
 
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        result = json.loads(text)
+        result = parse_gemini_json(response.text)
         logger.info(f"[Chat] User asked: {request.message[:50]}...")
 
         return result
 
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"[Chat] JSON parsing error: {e}")
         return {"response": "System glitch. Try rephrasing.", "confidence": "LOW"}
     except Exception as e:
