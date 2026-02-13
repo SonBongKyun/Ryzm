@@ -1,4 +1,4 @@
-/* static/app.js - Ryzm Neural Network v2.2 */
+/* static/app.js - Ryzm Neural Network v3.0 */
 
 // Global state
 let validatorCredits = 3;
@@ -886,19 +886,19 @@ async function fetchMacroTicker() {
       const backend = market[key];
       const item = (live && live.price) ? { price: live.price, change: live.change } : backend;
       if (item) {
-        const colorClass = item.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+        const chgClass = item.change >= 0 ? 'up' : 'down';
         const sign = item.change >= 0 ? '+' : '';
         const decimals = item.price >= 100 ? 2 : item.price >= 1 ? 4 : 6;
         const isEstimate = item.est ? ' ~' : '';
         const priceStr = key.startsWith('USD/') ? Number(item.price).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
           : '$' + Number(item.price).toLocaleString('en-US', {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
         html += `
-                    <span style="margin-right:30px; font-family:'Share Tech Mono'; display:inline-flex; align-items:center;">
-                        <span style="color:var(--text-muted); margin-right:8px;">${key}</span>
-                        <span style="color:#fff; margin-right:8px;">${priceStr}${isEstimate}</span>
-                        <span style="color:${colorClass}; font-size:0.85rem;">${sign}${item.change}%</span>
-                    </span>
-                `;
+          <span class="ticker-item">
+            <span class="ticker-sym">${key}</span>
+            <span class="ticker-price">${priceStr}${isEstimate}</span>
+            <span class="ticker-chg ${chgClass}">${sign}${item.change}%</span>
+          </span>
+          <span class="ticker-sep"></span>`;
       }
     });
     if (container) container.innerHTML = html + html;
@@ -923,6 +923,7 @@ async function fetchKimchi() {
 
 /* ── Real-time Price Panel (Binance WebSocket + Backend Macro) ── */
 const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol}, ... }
+const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 30 pts)
 let _priceWs = null;
 let _priceWsRetry = 0;
 
@@ -1022,6 +1023,45 @@ function renderPriceCard(key) {
   // Volume
   if (volEl && data.vol) volEl.textContent = 'Vol: ' + formatVol(data.vol);
   if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+  // Update mini sparkline
+  updateMiniChart(key, data.price, data.change);
+}
+
+function updateMiniChart(key, price, change) {
+  const cardKey = key.replace('/', '');
+  if (!_priceHistory[key]) _priceHistory[key] = [];
+  _priceHistory[key].push(price);
+  if (_priceHistory[key].length > 30) _priceHistory[key].shift();
+  const hist = _priceHistory[key];
+  if (hist.length < 2) return;
+
+  const chartEl = document.getElementById(`mini-chart-${cardKey}`);
+  if (!chartEl) return;
+  const svg = chartEl.querySelector('svg');
+  if (!svg) return;
+
+  const min = Math.min(...hist);
+  const max = Math.max(...hist);
+  const range = max - min || 1;
+  const w = 60, h = 24, pad = 2;
+  const points = hist.map((v, i) => {
+    const x = (i / (hist.length - 1)) * w;
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  const color = change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="mcg-${cardKey}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.15"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${points} ${w},${h} 0,${h}" fill="url(#mcg-${cardKey})"/>
+    <polyline fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${points}" opacity="0.7"/>
+  `;
 }
 
 // Build all price cards once, then let WebSocket + polling update them
@@ -1042,19 +1082,26 @@ function buildPriceCards() {
 
   const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
   let html = '';
-  order.forEach(key => {
+  order.forEach((key, idx) => {
     const icon = _tickerIcons[key] || '';
     html += `
-      <div class="price-card" id="price-card-${key.replace('/', '')}">
+      <div class="price-card" id="price-card-${key.replace('/', '')}" style="animation-delay:${idx * 0.05}s">
         <div class="price-card-header">
           <span class="price-symbol">${icon} ${key}</span>
           <span class="price-live-dot" title="Live">&bull;</span>
         </div>
-        <div class="price-value">—</div>
-        <div class="price-change">—</div>
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <div class="price-value">—</div>
+          <div class="price-change">—</div>
+        </div>
         <div class="price-details">
           <span class="price-vol">Vol: —</span>
           <span class="price-time">--:--:--</span>
+        </div>
+        <div class="price-mini-chart" id="mini-chart-${key.replace('/', '')}">
+          <svg width="100%" height="24" preserveAspectRatio="none" viewBox="0 0 60 24">
+            <polyline class="mini-chart-line" fill="none" stroke="var(--neon-cyan)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,12 60,12" opacity="0.3"/>
+          </svg>
         </div>
       </div>
     `;
