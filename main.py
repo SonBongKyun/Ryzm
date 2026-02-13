@@ -17,7 +17,6 @@ from dotenv import load_dotenv
 import uvicorn
 import feedparser
 import requests
-import yfinance as yf
 import google.generativeai as genai
 
 # Load environment variables
@@ -334,6 +333,27 @@ def classify_headline_sentiment(title):
     return "NEUTRAL"
 
 
+# ── Yahoo Finance Direct API (replaces yfinance library) ──
+_YAHOO_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+def fetch_yahoo_chart(symbol: str, range_str: str = "5d", interval: str = "1d") -> List[float]:
+    """Fetch closing prices from Yahoo Finance v8 chart API directly (no yfinance)."""
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range_str}&interval={interval}"
+        resp = resilient_get(url, timeout=10, headers=_YAHOO_HEADERS)
+        resp.raise_for_status()
+        data = resp.json()
+        result = data.get("chart", {}).get("result")
+        if not result:
+            return []
+        closes = result[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
+        # Filter out None values
+        return [c for c in closes if c is not None]
+    except Exception as e:
+        logger.warning(f"[Yahoo] Failed to fetch {symbol}: {e}")
+        return []
+
+
 def fetch_heatmap_data():
     """Top cryptocurrency 24h change heatmap (using coins/markets endpoint)"""
     try:
@@ -436,48 +456,35 @@ def fetch_market_data():
     else:
         result["USD/KRW"] = {"price": 0, "change": 0, "symbol": "USD/KRW"}
 
-    # 3) Try yfinance for VIX and DXY (fallback values on failure)
+    # 3) VIX and DXY via Yahoo Finance chart API (direct, no yfinance)
     macro_tickers = {
-        "^VIX": ("VIX", 18.5),      # VIX average value fallback
-        "DX-Y.NYB": ("DXY", 104.0)  # DXY average value fallback
+        "%5EVIX": ("VIX", 18.5),        # ^VIX URL-encoded
+        "DX-Y.NYB": ("DXY", 104.0)     # DXY futures
     }
 
     for symbol, (name, fallback_price) in macro_tickers.items():
-        try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="5d")
-
-            if hist is not None and not hist.empty and len(hist) >= 1:
-                price = float(hist["Close"].iloc[-1])
-                prev_close = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
-                change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
-
-                result[name] = {
-                    "price": round(price, 2),
-                    "change": round(change_pct, 2),
-                    "symbol": name
-                }
-            else:
-                # Use fallback value — mark as estimate
-                result[name] = {"price": fallback_price, "change": 0, "symbol": name, "est": True}
-
-        except Exception:
-            # Use fallback value — mark as estimate
+        closes = fetch_yahoo_chart(symbol, range_str="5d", interval="1d")
+        if len(closes) >= 1:
+            price = closes[-1]
+            prev_close = closes[-2] if len(closes) >= 2 else price
+            change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0
+            result[name] = {
+                "price": round(price, 2),
+                "change": round(change_pct, 2),
+                "symbol": name
+            }
+        else:
             result[name] = {"price": fallback_price, "change": 0, "symbol": name, "est": True}
 
-    # 4) Try yfinance for FX change rates
-    for fx_symbol, fx_name in [("JPY=X", "USD/JPY"), ("KRW=X", "USD/KRW")]:
+    # 4) FX change rates via Yahoo Finance chart API
+    for fx_symbol, fx_name in [("JPY%3DX", "USD/JPY"), ("KRW%3DX", "USD/KRW")]:
         if fx_name in result and result[fx_name].get("price", 0) > 0:
-            try:
-                ticker = yf.Ticker(fx_symbol)
-                hist = ticker.history(period="5d")
-                if hist is not None and not hist.empty and len(hist) >= 2:
-                    prev = float(hist["Close"].iloc[-2])
-                    curr = float(hist["Close"].iloc[-1])
-                    if prev > 0:
-                        result[fx_name]["change"] = round((curr - prev) / prev * 100, 2)
-            except Exception:
-                pass
+            closes = fetch_yahoo_chart(fx_symbol, range_str="5d", interval="1d")
+            if len(closes) >= 2:
+                prev = closes[-2]
+                curr = closes[-1]
+                if prev > 0:
+                    result[fx_name]["change"] = round((curr - prev) / prev * 100, 2)
 
     return result
 
@@ -821,14 +828,10 @@ def fetch_correlation_matrix():
             data = resp.json()
             prices[name] = [p[1] for p in data.get("prices", [])]
 
-        # TradFi from yfinance
-        for symbol, label in [("GC=F", "GOLD"), ("^IXIC", "NASDAQ")]:
-            try:
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period="1mo")
-                prices[label] = hist["Close"].tolist() if not hist.empty else []
-            except Exception:
-                prices[label] = []
+        # TradFi from Yahoo Finance chart API (direct, no yfinance)
+        for symbol, label in [("GC%3DF", "GOLD"), ("%5EIXIC", "NASDAQ")]:
+            closes = fetch_yahoo_chart(symbol, range_str="1mo", interval="1d")
+            prices[label] = closes if closes else []
 
         # Calculate daily returns
         assets = ["BTC", "ETH", "SOL", "GOLD", "NASDAQ"]
