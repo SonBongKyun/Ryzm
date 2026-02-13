@@ -3051,6 +3051,150 @@ html[data-theme="dark"] #gauge-needle line:first-child {
   opacity: 0.7;
 }
 
+/* ═══════════════════════════════════════
+   Risk History 30D Chart
+   ═══════════════════════════════════════ */
+.risk-history-chart {
+  margin-top: 8px;
+  padding: 8px 10px 6px;
+  border-top: 1px solid var(--border-dim);
+}
+.risk-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.risk-history-title {
+  font-family: var(--font-head);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  letter-spacing: 1.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.risk-history-range {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+}
+#risk-history-canvas {
+  border-radius: var(--radius-md);
+  background: var(--bg-deep);
+}
+
+/* ═══════════════════════════════════════
+   Edge Summary
+   ═══════════════════════════════════════ */
+.edge-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.06), rgba(219, 39, 119, 0.04));
+  border: 1px solid var(--border-dim);
+}
+.edge-badge {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+}
+.edge-badge.bull {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.1);
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  text-shadow: 0 0 8px rgba(5, 150, 105, 0.3);
+}
+.edge-badge.bear {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  text-shadow: 0 0 8px rgba(220, 38, 38, 0.3);
+}
+.edge-badge.neutral {
+  color: var(--text-secondary);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-dim);
+}
+.edge-agreement {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+/* ═══════════════════════════════════════
+   Council Score vs BTC Overlay
+   ═══════════════════════════════════════ */
+.ch-overlay-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-dim);
+}
+.ch-overlay-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.ch-overlay-title {
+  font-family: var(--font-head);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  letter-spacing: 1.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#ch-overlay-canvas {
+  border-radius: var(--radius-md);
+  background: var(--bg-deep);
+}
+.ch-overlay-stats {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ch-zone-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-dim);
+}
+.ch-zone-stat.bull {
+  border-color: rgba(5, 150, 105, 0.2);
+}
+.ch-zone-stat.bear {
+  border-color: rgba(220, 38, 38, 0.2);
+}
+.ch-zone-label {
+  font-family: var(--font-head);
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+.ch-zone-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.ch-zone-stat.bull .ch-zone-value {
+  color: #059669;
+}
+.ch-zone-stat.bear .ch-zone-value {
+  color: #dc2626;
+}
+
 /* Legacy support (remove if no longer used) */
 .risk-components {
   display: grid;

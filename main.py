@@ -1053,6 +1053,9 @@ def compute_risk_gauge():
     else:
         level, label = "LOW", "STABLE"
 
+    # Auto-save to history (rate-limited)
+    save_risk_record(score, level, components)
+
     return {
         "score": round(score, 1),
         "level": level,
@@ -1066,7 +1069,7 @@ def compute_risk_gauge():
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "council_history.db")
 
 def init_council_db():
-    """Initialize SQLite DB for council history"""
+    """Initialize SQLite DB for council history + risk history"""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     c = conn.cursor()
     c.execute("""
@@ -1081,12 +1084,79 @@ def init_council_db():
             full_result TEXT
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS risk_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            score REAL,
+            level TEXT,
+            fg REAL DEFAULT 0,
+            vix REAL DEFAULT 0,
+            ls REAL DEFAULT 0,
+            fr REAL DEFAULT 0,
+            kp REAL DEFAULT 0
+        )
+    """)
     conn.commit()
     conn.close()
-    logger.info("[DB] Council history database initialized")
+    logger.info("[DB] Council + Risk history database initialized")
 
 
 _db_lock = threading.Lock()
+
+# ── Risk History Auto-Save ──
+_last_risk_save = 0
+RISK_SAVE_INTERVAL = 600  # Save every 10 minutes
+
+def save_risk_record(score, level, components):
+    """Save risk gauge snapshot to history (rate-limited)"""
+    global _last_risk_save
+    now = time.time()
+    if now - _last_risk_save < RISK_SAVE_INTERVAL:
+        return
+    _last_risk_save = now
+    try:
+        with _db_lock:
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO risk_history (timestamp, score, level, fg, vix, ls, fr, kp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    round(score, 1),
+                    level,
+                    round(components.get("fear_greed", {}).get("contrib", 0), 1),
+                    round(components.get("vix", {}).get("contrib", 0), 1),
+                    round(components.get("long_short", {}).get("contrib", 0), 1),
+                    round(components.get("funding_rate", {}).get("contrib", 0), 1),
+                    round(components.get("kimchi", {}).get("contrib", 0), 1),
+                )
+            )
+            conn.commit()
+            conn.close()
+        logger.info(f"[DB] Risk history saved: score={round(score, 1)}, level={level}")
+    except Exception as e:
+        logger.error(f"[DB] Failed to save risk history: {e}")
+
+def get_risk_history(days: int = 30) -> List[dict]:
+    """Retrieve risk history for the last N days"""
+    try:
+        with _db_lock:
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("""
+                SELECT timestamp, score, level, fg, vix, ls, fr, kp
+                FROM risk_history
+                WHERE datetime(timestamp) > datetime('now', ?)
+                ORDER BY timestamp ASC
+            """, (f'-{days} days',))
+            rows = [dict(r) for r in c.fetchall()]
+            conn.close()
+        return rows
+    except Exception as e:
+        logger.error(f"[DB] Failed to read risk history: {e}")
+        return []
 
 def save_council_record(result: dict, btc_price: float = 0.0):
     """Save a council analysis to the DB"""
@@ -1543,6 +1613,16 @@ async def get_risk_gauge():
         logger.error(f"[API] Risk gauge error: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute risk gauge")
 
+@app.get("/api/risk-gauge/history")
+async def get_risk_gauge_history(days: int = 30):
+    """Risk Gauge history for the last N days"""
+    try:
+        rows = get_risk_history(days)
+        return {"history": rows, "count": len(rows)}
+    except Exception as e:
+        logger.error(f"[API] Risk history error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch risk history")
+
 @app.get("/api/scars")
 async def get_museum_of_scars():
     """Historical Crash Archive"""
@@ -1643,6 +1723,30 @@ async def get_council(request: Request):
         # Request analysis from Gemini
         result = generate_council_debate(market, news)
 
+        # Compute Edge Summary
+        agents = result.get("agents", [])
+        c_score = result.get("consensus_score", 50)
+        bulls = sum(1 for a in agents if a.get("status", "").upper() in ("BULL", "BULLISH"))
+        bears = sum(1 for a in agents if a.get("status", "").upper() in ("BEAR", "BEARISH"))
+        neutrals = len(agents) - bulls - bears
+        total_agents = max(len(agents), 1)
+        agreement = max(bulls, bears, neutrals) / total_agents
+        edge_raw = (c_score - 50) / 50  # -1.0 to +1.0
+        edge_val = round(edge_raw * agreement, 2)
+        if edge_val > 0.1:
+            bias_label = "Bull Bias"
+        elif edge_val < -0.1:
+            bias_label = "Bear Bias"
+        else:
+            bias_label = "Neutral"
+        result["edge"] = {
+            "value": edge_val,
+            "bias": bias_label,
+            "agreement": round(agreement * 100),
+            "bulls": bulls,
+            "bears": bears
+        }
+
         # Save to SQLite history
         btc_price = 0.0
         if isinstance(market, dict):
@@ -1666,13 +1770,32 @@ async def get_council(request: Request):
 
 @app.get("/api/council/history")
 async def get_council_history_api(limit: int = 50):
-    """Retrieve AI Council prediction history & accuracy stats"""
+    """Retrieve AI Council prediction history & accuracy stats + score vs BTC analysis"""
     records = get_council_history(limit)
     # Compute accuracy stats
     evaluated = [r for r in records if r["hit"] is not None]
     total_eval = len(evaluated)
     hits = sum(1 for r in evaluated if r["hit"] == 1)
     accuracy = round((hits / total_eval) * 100, 1) if total_eval > 0 else None
+
+    # Score vs BTC price analysis
+    bull_changes = []
+    bear_changes = []
+    for r in records:
+        if r.get("btc_price_after") and r.get("btc_price") and r["btc_price"] > 0:
+            try:
+                after = float(r["btc_price_after"])
+                change_pct = (after - r["btc_price"]) / r["btc_price"] * 100
+                if r["consensus_score"] is not None and r["consensus_score"] >= 70:
+                    bull_changes.append(change_pct)
+                elif r["consensus_score"] is not None and r["consensus_score"] <= 30:
+                    bear_changes.append(change_pct)
+            except (ValueError, TypeError):
+                pass
+
+    bull_avg = round(sum(bull_changes) / len(bull_changes), 3) if bull_changes else None
+    bear_avg = round(sum(bear_changes) / len(bear_changes), 3) if bear_changes else None
+
     return {
         "records": records,
         "stats": {
@@ -1680,6 +1803,12 @@ async def get_council_history_api(limit: int = 50):
             "evaluated": total_eval,
             "hits": hits,
             "accuracy_pct": accuracy
+        },
+        "score_vs_btc": {
+            "bull_zone_avg": bull_avg,
+            "bear_zone_avg": bear_avg,
+            "samples_bull": len(bull_changes),
+            "samples_bear": len(bear_changes)
         }
     }
 

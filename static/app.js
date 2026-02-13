@@ -1,4 +1,4 @@
-/* static/app.js - Ryzm Neural Network v3.1 */
+/* static/app.js - Ryzm Neural Network v3.2 */
 
 // Global state
 let validatorCredits = 3;
@@ -765,6 +765,144 @@ async function fetchRiskGauge() {
   }
 }
 
+/* ══ Risk Index 30-Day History Chart ══ */
+async function fetchRiskHistory() {
+  try {
+    const res = await fetch('/api/risk-gauge/history?days=30');
+    const data = await res.json();
+    if (data.history && data.history.length > 0) {
+      drawRiskHistoryChart(data.history);
+    }
+  } catch (e) {
+    console.error('[RiskHistory]', e);
+  }
+}
+
+function drawRiskHistoryChart(history) {
+  const canvas = document.getElementById('risk-history-canvas');
+  const rangeEl = document.getElementById('risk-history-range');
+  if (!canvas || !history.length) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  const pad = { top: 6, right: 8, bottom: 14, left: 28 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const scores = history.map(r => r.score);
+  const minScore = -100;
+  const maxScore = 100;
+
+  // Range display
+  const latest = scores[scores.length - 1];
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  if (rangeEl) rangeEl.textContent = `L:${min.toFixed(0)} / H:${max.toFixed(0)} / NOW:${latest.toFixed(0)}`;
+
+  const step = cw / Math.max(scores.length - 1, 1);
+  const yOf = (v) => pad.top + ch * (1 - (v - minScore) / (maxScore - minScore));
+
+  // Zone backgrounds
+  const zones = [
+    { min: -100, max: -60, color: 'rgba(220,38,38,0.06)' },
+    { min: -60, max: -30, color: 'rgba(249,115,22,0.04)' },
+    { min: -30, max: 0, color: 'rgba(234,179,8,0.03)' },
+    { min: 0, max: 30, color: 'rgba(6,182,212,0.03)' },
+    { min: 30, max: 100, color: 'rgba(5,150,105,0.05)' }
+  ];
+  zones.forEach(z => {
+    ctx.fillStyle = z.color;
+    ctx.fillRect(pad.left, yOf(z.max), cw, yOf(z.min) - yOf(z.max));
+  });
+
+  // Zero line
+  ctx.strokeStyle = 'rgba(100,116,139,0.25)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pad.left, yOf(0));
+  ctx.lineTo(pad.left + cw, yOf(0));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Y-axis labels
+  ctx.font = '7px monospace';
+  ctx.fillStyle = 'rgba(100,116,139,0.6)';
+  ctx.textAlign = 'right';
+  [-100, -50, 0, 50, 100].forEach(v => {
+    ctx.fillText(v.toString(), pad.left - 3, yOf(v) + 3);
+  });
+
+  // Gradient fill
+  const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+  gradient.addColorStop(0, 'rgba(5,150,105,0.25)');
+  gradient.addColorStop(0.5, 'rgba(100,116,139,0.05)');
+  gradient.addColorStop(1, 'rgba(220,38,38,0.25)');
+
+  // Fill area
+  ctx.beginPath();
+  ctx.moveTo(pad.left, yOf(0));
+  scores.forEach((s, i) => ctx.lineTo(pad.left + i * step, yOf(s)));
+  ctx.lineTo(pad.left + (scores.length - 1) * step, yOf(0));
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  scores.forEach((s, i) => {
+    const x = pad.left + i * step;
+    const y = yOf(s);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+
+  // Color the line based on latest value
+  const lineColor = latest > 30 ? '#059669' : latest > 0 ? '#06b6d4' : latest > -30 ? '#eab308' : latest > -60 ? '#f97316' : '#dc2626';
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Latest point pulse
+  const lastX = pad.left + (scores.length - 1) * step;
+  const lastY = yOf(latest);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 7, 0, Math.PI * 2);
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.3;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Level dots with color coding
+  const levelColors = { 'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308', 'MODERATE': '#06b6d4', 'LOW': '#059669' };
+  history.forEach((r, i) => {
+    const x = pad.left + i * step;
+    const y = yOf(r.score);
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fillStyle = levelColors[r.level] || '#94a3b8';
+    ctx.fill();
+  });
+}
+
+// Fetch risk history on page load (delayed)
+setTimeout(() => fetchRiskHistory(), 4000);
+// Refresh risk history every 10 minutes
+setInterval(() => fetchRiskHistory(), 600000);
+
 /* ── Museum of Scars ── */
 async function fetchMuseumOfScars() {
   try {
@@ -1300,6 +1438,19 @@ function renderCouncil(data) {
   if (sDisplay) {
     sDisplay.innerText = `SCORE: ${data.consensus_score}`;
     sDisplay.style.color = data.consensus_score > 50 ? 'var(--neon-green)' : 'var(--neon-red)';
+  }
+
+  // Edge Summary
+  const edgeContainer = document.getElementById('edge-summary');
+  const edgeBadge = document.getElementById('edge-badge');
+  const edgeAgreement = document.getElementById('edge-agreement');
+  if (edgeContainer && data.edge) {
+    const e = data.edge;
+    const sign = e.value > 0 ? '+' : '';
+    edgeBadge.textContent = `EDGE: ${sign}${e.value.toFixed(2)} (${e.bias})`;
+    edgeBadge.className = 'edge-badge ' + (e.bias === 'Bull Bias' ? 'bull' : e.bias === 'Bear Bias' ? 'bear' : 'neutral');
+    edgeAgreement.textContent = `AGREEMENT: ${e.agreement}% │ ↑${e.bulls} ↓${e.bears}`;
+    edgeContainer.style.display = 'flex';
   }
 
   // Long/Short Ratio
@@ -2353,7 +2504,7 @@ async function fetchCouncilHistory() {
 }
 
 function renderCouncilHistory(data) {
-  const { records, stats } = data;
+  const { records, stats, score_vs_btc } = data;
 
   // Stats boxes
   const elTotal = document.getElementById('ch-total');
@@ -2371,6 +2522,33 @@ function renderCouncilHistory(data) {
 
   // Score sparkline chart
   drawCouncilSparkline(records.slice().reverse());
+
+  // Score vs BTC Overlay Chart
+  drawScoreVsBtcOverlay(records.slice().reverse());
+
+  // Score vs BTC Stats
+  if (score_vs_btc) {
+    const bullAvg = document.getElementById('ch-bull-avg');
+    const bearAvg = document.getElementById('ch-bear-avg');
+    if (bullAvg) {
+      if (score_vs_btc.bull_zone_avg !== null) {
+        const sign = score_vs_btc.bull_zone_avg > 0 ? '+' : '';
+        bullAvg.textContent = `${sign}${score_vs_btc.bull_zone_avg.toFixed(2)}%`;
+        bullAvg.title = `${score_vs_btc.samples_bull} samples`;
+      } else {
+        bullAvg.textContent = 'N/A';
+      }
+    }
+    if (bearAvg) {
+      if (score_vs_btc.bear_zone_avg !== null) {
+        const sign = score_vs_btc.bear_zone_avg > 0 ? '+' : '';
+        bearAvg.textContent = `${sign}${score_vs_btc.bear_zone_avg.toFixed(2)}%`;
+        bearAvg.title = `${score_vs_btc.samples_bear} samples`;
+      } else {
+        bearAvg.textContent = 'N/A';
+      }
+    }
+  }
 
   // Records list
   const container = document.getElementById('ch-records');
@@ -2390,6 +2568,125 @@ function renderCouncilHistory(data) {
       <span class="ch-record-hit">${hitIcon}</span>
     </div>`;
   }).join('');
+}
+
+/* ═══ Council Score vs BTC Price Overlay Chart ═══ */
+function drawScoreVsBtcOverlay(records) {
+  const canvas = document.getElementById('ch-overlay-canvas');
+  if (!canvas || !records.length) return;
+
+  // Filter records with valid btc_price
+  const valid = records.filter(r => r.btc_price && r.btc_price > 0);
+  if (valid.length < 2) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  const pad = { top: 8, right: 36, bottom: 14, left: 24 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const scores = valid.map(r => r.consensus_score || 50);
+  const prices = valid.map(r => r.btc_price);
+
+  const minPrice = Math.min(...prices) * 0.998;
+  const maxPrice = Math.max(...prices) * 1.002;
+
+  const step = cw / Math.max(valid.length - 1, 1);
+  const yScore = (v) => pad.top + ch * (1 - v / 100);
+  const yPrice = (v) => pad.top + ch * (1 - (v - minPrice) / (maxPrice - minPrice));
+
+  // Bull/Bear zone backgrounds
+  ctx.fillStyle = 'rgba(5,150,105,0.04)';
+  ctx.fillRect(pad.left, yScore(100), cw, yScore(70) - yScore(100));
+  ctx.fillStyle = 'rgba(220,38,38,0.04)';
+  ctx.fillRect(pad.left, yScore(30), cw, yScore(0) - yScore(30));
+
+  // 70 and 30 threshold lines
+  ctx.strokeStyle = 'rgba(5,150,105,0.2)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pad.left, yScore(70));
+  ctx.lineTo(pad.left + cw, yScore(70));
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(220,38,38,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(pad.left, yScore(30));
+  ctx.lineTo(pad.left + cw, yScore(30));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // BTC Price line (right axis — orange)
+  ctx.beginPath();
+  prices.forEach((p, i) => {
+    const x = pad.left + i * step;
+    const y = yPrice(p);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.7;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Council Score line (left axis — cyan)
+  ctx.beginPath();
+  scores.forEach((s, i) => {
+    const x = pad.left + i * step;
+    const y = yScore(s);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#0284c7';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Score dots with bull/bear coloring
+  valid.forEach((r, i) => {
+    const x = pad.left + i * step;
+    const y = yScore(r.consensus_score || 50);
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = (r.consensus_score >= 70) ? '#059669' :
+                    (r.consensus_score <= 30) ? '#dc2626' : '#0284c7';
+    ctx.fill();
+  });
+
+  // Left Y-axis labels (Score)
+  ctx.font = '7px monospace';
+  ctx.fillStyle = '#0284c7';
+  ctx.textAlign = 'right';
+  [0, 30, 50, 70, 100].forEach(v => {
+    ctx.fillText(v.toString(), pad.left - 3, yScore(v) + 3);
+  });
+
+  // Right Y-axis labels (BTC Price)
+  ctx.fillStyle = '#f59e0b';
+  ctx.textAlign = 'left';
+  const priceSteps = 4;
+  for (let i = 0; i <= priceSteps; i++) {
+    const p = minPrice + (maxPrice - minPrice) * (i / priceSteps);
+    const label = p >= 1000 ? `${(p / 1000).toFixed(1)}k` : p.toFixed(0);
+    ctx.fillText(label, pad.left + cw + 3, yPrice(p) + 3);
+  }
+
+  // Legend
+  ctx.font = '6px sans-serif';
+  ctx.fillStyle = '#0284c7';
+  ctx.textAlign = 'left';
+  ctx.fillRect(pad.left + 2, pad.top, 8, 2);
+  ctx.fillText('Score', pad.left + 12, pad.top + 3);
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(pad.left + 42, pad.top, 8, 2);
+  ctx.fillText('BTC', pad.left + 52, pad.top + 3);
 }
 
 function drawCouncilSparkline(records) {

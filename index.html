@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=3.3" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.4" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#06b6d4" />
@@ -307,6 +307,14 @@
           <!-- Timestamp -->
           <div class="gauge-timestamp" id="gauge-timestamp"></div>
         </div>
+        <!-- Risk History 30D Chart -->
+        <div class="risk-history-chart" id="risk-history-section">
+          <div class="risk-history-header">
+            <span class="risk-history-title"><i data-lucide="trending-up" style="width:12px;height:12px;"></i> RISK INDEX (30D)</span>
+            <span class="risk-history-range" id="risk-history-range">—</span>
+          </div>
+          <canvas id="risk-history-canvas" width="320" height="80" style="width:100%;height:80px;"></canvas>
+        </div>
       </div>
 
       <!-- Museum of Scars -->
@@ -373,6 +381,11 @@
         <div class="council-header">
           <span class="council-label">/// NEURAL_COUNCIL</span>
           <span id="consensus-score" class="council-score">SCORE: --</span>
+        </div>
+        <!-- Edge Summary -->
+        <div class="edge-summary" id="edge-summary" style="display:none;">
+          <span class="edge-badge" id="edge-badge">EDGE: —</span>
+          <span class="edge-agreement" id="edge-agreement"></span>
         </div>
         <div class="agents-grid" id="agents-grid">
           <div class="agent-card">
@@ -445,6 +458,23 @@
           </div>
           <div class="ch-chart" id="ch-chart">
             <canvas id="ch-canvas" width="400" height="80"></canvas>
+          </div>
+          <!-- Council Score vs BTC Overlay -->
+          <div class="ch-overlay-section" id="ch-overlay-section">
+            <div class="ch-overlay-header">
+              <span class="ch-overlay-title"><i data-lucide="git-compare" style="width:12px;height:12px;"></i> SCORE vs BTC</span>
+            </div>
+            <canvas id="ch-overlay-canvas" width="400" height="100" style="width:100%;height:100px;"></canvas>
+            <div class="ch-overlay-stats" id="ch-overlay-stats">
+              <div class="ch-zone-stat bull">
+                <span class="ch-zone-label">BULL ZONE (≥70)</span>
+                <span class="ch-zone-value" id="ch-bull-avg">—</span>
+              </div>
+              <div class="ch-zone-stat bear">
+                <span class="ch-zone-label">BEAR ZONE (≤30)</span>
+                <span class="ch-zone-value" id="ch-bear-avg">—</span>
+              </div>
+            </div>
           </div>
           <div class="ch-records" id="ch-records" style="max-height:120px; overflow-y:auto; font-size:0.7rem;">
             <div style="text-align:center; color:var(--text-muted); padding:10px;">Run Council to start tracking...</div>
@@ -663,7 +693,7 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v3.1</span>
+      <span>Ryzm Terminal v3.2</span>
     </div>
   </div>
 
