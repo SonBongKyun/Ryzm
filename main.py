@@ -1190,9 +1190,20 @@ def compute_risk_gauge():
 # ── Council History Database (SQLite) ──
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "council_history.db")
 
-def init_council_db():
-    """Initialize SQLite DB for council history + risk history"""
+def db_connect():
+    """Create a SQLite connection with WAL mode for better concurrency."""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
+def utc_now_str() -> str:
+    """Return current UTC time as a formatted string."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+def init_council_db():
+    """Initialize SQLite DB for council history + risk history + price snapshots + eval"""
+    conn = db_connect()
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS council_history (
@@ -1219,9 +1230,29 @@ def init_council_db():
             kp REAL DEFAULT 0
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS price_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts_utc TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            price REAL NOT NULL,
+            source TEXT DEFAULT 'binance',
+            UNIQUE(ts_utc, symbol)
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS council_eval (
+            council_id INTEGER NOT NULL,
+            horizon_min INTEGER NOT NULL,
+            price_after REAL NOT NULL,
+            hit INTEGER NOT NULL,
+            evaluated_at_utc TEXT NOT NULL,
+            PRIMARY KEY (council_id, horizon_min)
+        )
+    """)
     conn.commit()
     conn.close()
-    logger.info("[DB] Council + Risk history database initialized")
+    logger.info("[DB] Council + Risk + PriceSnapshot + Eval database initialized")
 
 
 _db_lock = threading.Lock()
@@ -1239,12 +1270,12 @@ def save_risk_record(score, level, components):
     _last_risk_save = now
     try:
         with _db_lock:
-            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn = db_connect()
             c = conn.cursor()
             c.execute(
                 "INSERT INTO risk_history (timestamp, score, level, fg, vix, ls, fr, kp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                    utc_now_str(),
                     round(score, 1),
                     level,
                     round(components.get("fear_greed", {}).get("contrib", 0), 1),
@@ -1264,7 +1295,7 @@ def get_risk_history(days: int = 30) -> List[dict]:
     """Retrieve risk history for the last N days"""
     try:
         with _db_lock:
-            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn = db_connect()
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("""
@@ -1284,12 +1315,12 @@ def save_council_record(result: dict, btc_price: float = 0.0):
     """Save a council analysis to the DB"""
     try:
         with _db_lock:
-            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn = db_connect()
             c = conn.cursor()
             c.execute(
                 "INSERT INTO council_history (timestamp, consensus_score, vibe_status, btc_price, full_result) VALUES (?, ?, ?, ?, ?)",
                 (
-                    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                    utc_now_str(),
                     result.get("consensus_score", 50),
                     result.get("vibe", {}).get("status", "UNKNOWN"),
                     btc_price,
@@ -1303,14 +1334,24 @@ def save_council_record(result: dict, btc_price: float = 0.0):
         logger.error(f"[DB] Failed to save council record: {e}")
 
 def get_council_history(limit: int = 50) -> List[dict]:
-    """Retrieve recent council records"""
+    """Retrieve recent council records with eval data via JOIN"""
     try:
         with _db_lock:
-            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn = db_connect()
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute(
-                "SELECT id, timestamp, consensus_score, vibe_status, btc_price, btc_price_after, hit FROM council_history ORDER BY id DESC LIMIT ?",
+                """
+                SELECT
+                  h.id, h.timestamp, h.consensus_score, h.vibe_status, h.btc_price,
+                  e.price_after AS btc_price_after,
+                  e.hit AS hit
+                FROM council_history h
+                LEFT JOIN council_eval e
+                  ON e.council_id = h.id AND e.horizon_min = 60
+                ORDER BY h.id DESC
+                LIMIT ?
+                """,
                 (limit,)
             )
             rows = [dict(r) for r in c.fetchall()]
@@ -1320,56 +1361,126 @@ def get_council_history(limit: int = 50) -> List[dict]:
         logger.error(f"[DB] Failed to read council history: {e}")
         return []
 
-def evaluate_council_accuracy():
-    """Check past predictions: if score>50 meant bullish, did BTC go up?"""
+def fetch_btc_price_binance() -> Optional[float]:
+    """Fetch current BTC price from Binance for snapshots."""
+    try:
+        resp = resilient_get(
+            "https://fapi.binance.com/fapi/v1/ticker/price",
+            timeout=5, params={"symbol": "BTCUSDT"}
+        )
+        resp.raise_for_status()
+        return float(resp.json()["price"])
+    except Exception:
+        return None
+
+def store_price_snapshot(symbol: str = "BTC", source: str = "binance") -> None:
+    """Store a 1-minute BTC price snapshot for later accuracy evaluation."""
+    price = fetch_btc_price_binance()
+    if not price or price <= 0:
+        return
+    ts = utc_now_str()
     try:
         with _db_lock:
-            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
+            conn = db_connect()
             c = conn.cursor()
-            # Get records older than 1 hour that haven't been evaluated yet
-            # timestamp is stored in UTC; datetime('now') is also UTC
-            c.execute("""
-                SELECT id, consensus_score, btc_price FROM council_history
-                WHERE hit IS NULL AND btc_price > 0
-                AND datetime(timestamp) < datetime('now', '-1 hour')
-                ORDER BY id ASC LIMIT 20
-            """)
-            rows = c.fetchall()
-
-            if not rows:
-                conn.close()
-                return
-
-            # Get current BTC price from cache
-            market = cache.get("market", {}).get("data", {})
-            current_btc = 0.0
-            if isinstance(market, dict):
-                current_btc = market.get("BTC", {}).get("price", 0.0)
-            elif isinstance(market, list):
-                for coin in market:
-                    if coin.get("symbol", "").upper() == "BTC":
-                        current_btc = coin.get("price", 0.0)
-                        break
-
-            if current_btc <= 0:
-                conn.close()
-                return
-
-            for row in rows:
-                score = row["consensus_score"]
-                old_price = row["btc_price"]
-                predicted_bull = score > 50
-                actual_bull = current_btc > old_price
-                hit = 1 if predicted_bull == actual_bull else 0
-                c.execute(
-                    "UPDATE council_history SET btc_price_after = ?, hit = ? WHERE id = ?",
-                    (f"{current_btc:.2f}", hit, row["id"])
-                )
-
+            c.execute(
+                "INSERT OR IGNORE INTO price_snapshots (ts_utc, symbol, price, source) VALUES (?, ?, ?, ?)",
+                (ts, symbol, price, source),
+            )
             conn.commit()
             conn.close()
-        logger.info(f"[DB] Evaluated {len(rows)} council predictions")
+    except Exception as e:
+        logger.error(f"[DB] Failed to store price snapshot: {e}")
+
+def find_price_near(symbol: str, target_dt_utc: datetime, window_min: int = 10) -> Optional[float]:
+    """Find the closest price snapshot to target_dt_utc within ±window_min."""
+    start = (target_dt_utc - timedelta(minutes=window_min)).strftime("%Y-%m-%d %H:%M:%S")
+    end   = (target_dt_utc + timedelta(minutes=window_min)).strftime("%Y-%m-%d %H:%M:%S")
+    target = target_dt_utc.strftime("%Y-%m-%d %H:%M:%S")
+    with _db_lock:
+        conn = db_connect()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT price, ts_utc
+            FROM price_snapshots
+            WHERE symbol = ? AND ts_utc BETWEEN ? AND ?
+            ORDER BY ABS(strftime('%s', ts_utc) - strftime('%s', ?)) ASC
+            LIMIT 1
+            """,
+            (symbol, start, end, target)
+        )
+        row = c.fetchone()
+        conn.close()
+    if not row:
+        return None
+    return float(row["price"])
+
+def evaluate_council_accuracy(horizons_min: List[int] = [60]):
+    """
+    Evaluate past council predictions using price_snapshots.
+    score > 50 = bullish prediction. Compare base price vs price at +horizon.
+    Results stored in council_eval table (supports 60/240/1440 min horizons).
+    """
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            # Get records older than max horizon that haven't been evaluated for 60min
+            c.execute("""
+                SELECT h.id, h.timestamp, h.consensus_score, h.btc_price
+                FROM council_history h
+                LEFT JOIN council_eval e
+                  ON e.council_id = h.id AND e.horizon_min = 60
+                WHERE e.council_id IS NULL
+                  AND h.btc_price > 0
+                  AND datetime(h.timestamp) < datetime('now', '-1 hour')
+                ORDER BY h.id ASC
+                LIMIT 50
+            """)
+            rows = list(c.fetchall())
+            conn.close()
+
+        if not rows:
+            return
+
+        evaluated = 0
+        for row in rows:
+            base_price = float(row["btc_price"])
+            score = int(row["consensus_score"] or 50)
+            predicted_bull = score > 50
+
+            # Parse timestamp (stored as UTC string)
+            ts_dt = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+
+            for h in horizons_min:
+                target_dt = ts_dt + timedelta(minutes=h)
+                price_after = find_price_near("BTC", target_dt, window_min=10)
+                if price_after is None:
+                    continue  # No snapshot available yet
+
+                actual_bull = price_after > base_price
+                hit = 1 if (predicted_bull == actual_bull) else 0
+
+                with _db_lock:
+                    conn = db_connect()
+                    c = conn.cursor()
+                    c.execute(
+                        """
+                        INSERT OR REPLACE INTO council_eval
+                          (council_id, horizon_min, price_after, hit, evaluated_at_utc)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (int(row["id"]), int(h), float(price_after), int(hit), utc_now_str())
+                    )
+                    conn.commit()
+                    conn.close()
+                evaluated += 1
+
+        if evaluated > 0:
+            logger.info(f"[DB] Evaluated {evaluated} council predictions across {len(rows)} records")
     except Exception as e:
         logger.error(f"[DB] Accuracy evaluation error: {e}")
 
@@ -1659,6 +1770,18 @@ def refresh_cache():
                     logger.warning(f"[Alert] CRITICAL risk alert sent (score={risk['score']})")
         except Exception:
             pass
+
+        # BTC price snapshot (every 1 min — for +1h accuracy evaluation)
+        try:
+            store_price_snapshot("BTC", "binance")
+        except Exception as e:
+            logger.error(f"[Snapshot] Error: {e}")
+
+        # Evaluate council predictions that are 1h+ old
+        try:
+            evaluate_council_accuracy([60])
+        except Exception as e:
+            logger.error(f"[Eval] Error: {e}")
 
         time.sleep(60)  # Check every 1 minute
 
