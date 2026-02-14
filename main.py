@@ -39,7 +39,7 @@ genai.configure(api_key=GENAI_API_KEY)
 
 
 def parse_gemini_json(text: str) -> dict:
-    """Robustly extract JSON from Gemini response (handles markdown, extra text)"""
+    """Robustly extract JSON from Gemini response (handles markdown, extra text, common defects)"""
     # Strip markdown code fences
     cleaned = text.replace("```json", "").replace("```", "").strip()
     # Try direct parse
@@ -50,8 +50,18 @@ def parse_gemini_json(text: str) -> dict:
     # Try to find JSON object in the text
     match = re.search(r'\{[\s\S]*\}', cleaned)
     if match:
+        candidate = match.group()
         try:
-            return json.loads(match.group())
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        # JSON repair: fix trailing commas, single quotes, unescaped newlines
+        repaired = candidate
+        repaired = re.sub(r',\s*([}\]])', r'\1', repaired)  # trailing commas
+        repaired = repaired.replace("'", '"')  # single → double quotes (rough)
+        repaired = re.sub(r'(?<!\\)\n', ' ', repaired)  # unescaped newlines in strings
+        try:
+            return json.loads(repaired)
         except json.JSONDecodeError:
             pass
     raise ValueError(f"Could not parse JSON from Gemini response: {cleaned[:200]}")
@@ -152,6 +162,65 @@ def get_api_health() -> dict:
         }
     return health
 
+
+def http_get_json(url: str, timeout: int = 10, **kwargs) -> tuple:
+    """HTTP GET → JSON with standardized metadata envelope.
+    Returns (data: dict|list|None, meta: dict).
+    meta keys: source, fetched_at_utc, latency_ms, is_estimate, error
+    """
+    from urllib.parse import urlparse
+    source = urlparse(url).netloc
+    start = time.time()
+    meta = {
+        "source": source,
+        "fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "latency_ms": 0,
+        "is_estimate": False,
+        "error": None,
+    }
+    try:
+        resp = resilient_get(url, timeout=timeout, **kwargs)
+        resp.raise_for_status()
+        meta["latency_ms"] = round((time.time() - start) * 1000)
+        return resp.json(), meta
+    except Exception as e:
+        meta["latency_ms"] = round((time.time() - start) * 1000)
+        meta["error"] = str(e)[:200]
+        meta["is_estimate"] = True
+        return None, meta
+
+
+def build_api_meta(cache_key: str, sources: list = None, extra: dict = None) -> dict:
+    """Build standardized _meta dict from cache state for API responses.
+    Includes: sources, fetched_at_utc, age_seconds, is_stale, is_estimate.
+    """
+    entry = cache.get(cache_key, {})
+    updated = entry.get("updated", 0)
+    age_s = round(time.time() - updated) if updated > 0 else -1
+    data = entry.get("data")
+
+    # Detect estimate: explicit flag, error flag, or missing data
+    is_est = False
+    if isinstance(data, dict):
+        is_est = data.get("_is_estimate", False) or data.get("error", False)
+    if age_s < 0:
+        is_est = True
+
+    meta = {
+        "sources": sources or [cache_key],
+        "fetched_at_utc": (
+            datetime.fromtimestamp(updated, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if updated > 0 else None
+        ),
+        "age_seconds": age_s,
+        "is_stale": age_s > CACHE_TTL * 2 if age_s >= 0 else True,
+        "is_estimate": is_est,
+    }
+    if extra:
+        meta.update(extra)
+    return meta
+
+
 # ── Pydantic Models (Request) ──
 class InfographicRequest(BaseModel):
     topic: str = Field(..., max_length=200)
@@ -204,17 +273,33 @@ class ChatResponse(BaseModel):
     confidence: str = "LOW"
 
 def validate_ai_response(raw: dict, model_class):
-    """Validate AI JSON response against Pydantic schema. Returns validated dict or fallback."""
+    """Validate AI JSON response against Pydantic schema.
+    Returns validated dict. On failure, merges raw into model defaults for safe degradation.
+    """
     try:
         validated = model_class.model_validate(raw)
         return validated.model_dump()
     except Exception as e:
-        logger.warning(f"[AI] Response validation warning: {e}")
-        # Attempt partial recovery: use raw but clamp known fields
-        if model_class == CouncilResponse:
-            if "consensus_score" in raw:
-                raw["consensus_score"] = max(0, min(100, int(raw.get("consensus_score", 50))))
-        return raw
+        logger.warning(f"[AI] Response validation warning ({model_class.__name__}): {e}")
+        # Build safe fallback from model defaults, overlay any valid raw fields
+        try:
+            defaults = model_class().model_dump()
+            if isinstance(raw, dict):
+                for key in defaults:
+                    if key in raw and raw[key] is not None:
+                        defaults[key] = raw[key]
+                # Clamp known numeric fields
+                if "consensus_score" in defaults:
+                    defaults["consensus_score"] = max(0, min(100, int(defaults.get("consensus_score", 50))))
+                if "overall_score" in defaults:
+                    defaults["overall_score"] = max(0, min(100, int(defaults.get("overall_score", 50))))
+            defaults["_ai_fallback"] = True
+            return defaults
+        except Exception:
+            # Total failure — return bare model defaults
+            fallback = model_class().model_dump()
+            fallback["_ai_fallback"] = True
+            return fallback
 
 # ── Prompt Injection Defense ──
 def sanitize_external_text(text: str, max_len: int = 500) -> str:
@@ -516,7 +601,7 @@ def fetch_fear_greed():
     except Exception as e:
         logger.error(f"[FG] Error: {e}")
 
-    return {"score": 50, "label": "Neutral", "history": []}
+    return {"score": 50, "label": "Neutral", "history": [], "_is_estimate": True}
 
 
 def fetch_kimchi_premium():
@@ -562,7 +647,7 @@ def fetch_kimchi_premium():
         logger.error(f"[KP] Data parsing error: {e}")
     except Exception as e:
         logger.error(f"[KP] Unexpected error: {e}")
-    return {"premium": 0, "upbit_price": 0, "binance_price": 0, "usd_krw": 0, "error": True}
+    return {"premium": 0, "upbit_price": 0, "binance_price": 0, "usd_krw": 0, "error": True, "_is_estimate": True}
 
 
 def fetch_long_short_ratio():
@@ -1198,6 +1283,7 @@ def db_connect():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     return conn
 
 def utc_now_str() -> str:
@@ -1212,11 +1298,16 @@ def init_council_db():
         CREATE TABLE IF NOT EXISTS council_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT NOT NULL,
+            timestamp_ms INTEGER DEFAULT 0,
             consensus_score INTEGER,
             vibe_status TEXT,
             btc_price REAL,
             btc_price_after TEXT DEFAULT NULL,
             hit INTEGER DEFAULT NULL,
+            horizon_min INTEGER DEFAULT 60,
+            return_pct REAL DEFAULT NULL,
+            evaluated_at_utc TEXT DEFAULT NULL,
+            price_source TEXT DEFAULT NULL,
             full_result TEXT
         )
     """)
@@ -1253,6 +1344,18 @@ def init_council_db():
             PRIMARY KEY (council_id, horizon_min)
         )
     """)
+    # Migration: add new columns to existing council_history if missing
+    for col_def in [
+        ("timestamp_ms", "INTEGER DEFAULT 0"),
+        ("horizon_min", "INTEGER DEFAULT 60"),
+        ("return_pct", "REAL DEFAULT NULL"),
+        ("evaluated_at_utc", "TEXT DEFAULT NULL"),
+        ("price_source", "TEXT DEFAULT NULL"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE council_history ADD COLUMN {col_def[0]} {col_def[1]}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     conn.commit()
     conn.close()
     logger.info("[DB] Council + Risk + PriceSnapshot + Eval database initialized")
@@ -1320,10 +1423,13 @@ def save_council_record(result: dict, btc_price: float = 0.0):
         with _db_lock:
             conn = db_connect()
             c = conn.cursor()
+            ts_utc = utc_now_str()
+            ts_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
             c.execute(
-                "INSERT INTO council_history (timestamp, consensus_score, vibe_status, btc_price, full_result) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO council_history (timestamp, timestamp_ms, consensus_score, vibe_status, btc_price, full_result) VALUES (?, ?, ?, ?, ?, ?)",
                 (
-                    utc_now_str(),
+                    ts_utc,
+                    ts_ms,
                     result.get("consensus_score", 50),
                     result.get("vibe", {}).get("status", "UNKNOWN"),
                     btc_price,
@@ -1346,7 +1452,8 @@ def get_council_history(limit: int = 50) -> List[dict]:
             c.execute(
                 """
                 SELECT
-                  h.id, h.timestamp, h.consensus_score, h.vibe_status, h.btc_price,
+                  h.id, h.timestamp, h.timestamp_ms, h.consensus_score, h.vibe_status, h.btc_price,
+                  h.horizon_min, h.return_pct, h.evaluated_at_utc, h.price_source,
                   e.price_after AS btc_price_after,
                   e.hit AS hit
                 FROM council_history h
@@ -1466,6 +1573,8 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
 
                 actual_bull = price_after > base_price
                 hit = 1 if (predicted_bull == actual_bull) else 0
+                return_pct = round(((price_after - base_price) / base_price) * 100, 4) if base_price > 0 else 0.0
+                eval_ts = utc_now_str()
 
                 with _db_lock:
                     conn = db_connect()
@@ -1476,7 +1585,16 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                           (council_id, horizon_min, price_after, hit, evaluated_at_utc)
                         VALUES (?, ?, ?, ?, ?)
                         """,
-                        (int(row["id"]), int(h), float(price_after), int(hit), utc_now_str())
+                        (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
+                    )
+                    # Also update council_history for backward compatibility
+                    c.execute(
+                        """
+                        UPDATE council_history
+                        SET return_pct = ?, evaluated_at_utc = ?, price_source = ?
+                        WHERE id = ?
+                        """,
+                        (return_pct, eval_ts, "binance_snapshot", int(row["id"]))
                     )
                     conn.commit()
                     conn.close()
@@ -1707,7 +1825,7 @@ def refresh_cache():
                         "\n".join([f"• {a['name']}: {a['message']}" for a in result.get("agents", [])[:4]]),
                         color=0x06b6d4
                     )
-                    evaluate_council_accuracy()
+                    # evaluate_council_accuracy runs in the main loop every 60s
                     logger.info(f"[AutoCouncil] Completed — score={score}, vibe={vibe}")
         except Exception as e:
             logger.error(f"[Cache] Auto-council error: {e}")
@@ -1933,7 +2051,10 @@ async def health_check_sources():
             s["status"] = "offline"
             s["icon"] = "🔴"
             s["age"] = -1
-    return {"sources": sources, "active": active, "total": len(sources)}
+    return {
+        "sources": sources, "active": active, "total": len(sources),
+        "_meta": {"fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    }
 
 @app.get("/api/source-health")
 async def api_source_health():
@@ -1944,7 +2065,10 @@ async def api_source_health():
 async def get_news():
     """Real-time News Feed"""
     try:
-        return {"news": cache["news"]["data"]}
+        return {
+            "news": cache["news"]["data"],
+            "_meta": build_api_meta("news", sources=["coindesk.com", "cointelegraph.com"])
+        }
     except Exception as e:
         logger.error(f"[API] News endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch news data")
@@ -1953,7 +2077,18 @@ async def get_news():
 async def get_market():
     """Market Data (BTC, ETH, SOL)"""
     try:
-        return {"market": cache["market"]["data"]}
+        mdata = cache["market"]["data"]
+        # Detect if any item is an estimate (VIX/DXY fallback)
+        has_est = any(
+            isinstance(v, dict) and v.get("est")
+            for v in (mdata.values() if isinstance(mdata, dict) else [])
+        )
+        return {
+            "market": mdata,
+            "_meta": build_api_meta("market",
+                sources=["api.coingecko.com", "query1.finance.yahoo.com", "api.exchangerate-api.com"],
+                extra={"is_estimate": has_est} if has_est else None)
+        }
     except Exception as e:
         logger.error(f"[API] Market endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch market data")
@@ -1962,7 +2097,10 @@ async def get_market():
 async def get_fear_greed():
     """Fear/Greed Index"""
     try:
-        return cache["fear_greed"]["data"]
+        fg = cache["fear_greed"]["data"]
+        resp = dict(fg) if isinstance(fg, dict) else {"score": 50, "label": "Neutral", "history": []}
+        resp["_meta"] = build_api_meta("fear_greed", sources=["api.alternative.me"])
+        return resp
     except Exception as e:
         logger.error(f"[API] Fear/Greed endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch fear & greed data")
@@ -1971,7 +2109,11 @@ async def get_fear_greed():
 async def get_kimchi():
     """Kimchi Premium"""
     try:
-        return cache["kimchi"]["data"]
+        kp = cache["kimchi"]["data"]
+        resp = dict(kp) if isinstance(kp, dict) else {"premium": 0, "upbit_price": 0, "binance_price": 0, "usd_krw": 0}
+        resp["_meta"] = build_api_meta("kimchi",
+            sources=["api.upbit.com", "api.binance.com", "api.exchangerate-api.com"])
+        return resp
     except Exception as e:
         logger.error(f"[API] Kimchi premium endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch kimchi premium data")
@@ -2079,6 +2221,11 @@ async def get_council_history_api(limit: int = 50):
             "bear_zone_avg": bear_avg,
             "samples_bull": len(bull_changes),
             "samples_bear": len(bear_changes)
+        },
+        "_meta": {
+            "sources": ["council_history.db", "api.binance.com"],
+            "fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "evaluation_horizon_min": 60,
         }
     }
 
@@ -2213,10 +2360,16 @@ async def validate_trade(request: TradeValidationRequest, http_request: Request)
 
     except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"[Validator] JSON parsing error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to parse AI response")
+        fallback = ValidatorResponse().model_dump()
+        fallback["summary"] = "AI analysis temporarily unavailable. Please retry."
+        fallback["_ai_fallback"] = True
+        return fallback
     except Exception as e:
         logger.error(f"[Validator] Error: {e}")
-        raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
+        fallback = ValidatorResponse().model_dump()
+        fallback["summary"] = "AI analysis temporarily unavailable. Please retry."
+        fallback["_ai_fallback"] = True
+        return fallback
 
 # ─── Ask Ryzm Chat ───
 @app.post("/api/chat")
@@ -2265,10 +2418,10 @@ async def chat_with_ryzm(request: ChatRequest, http_request: Request):
 
     except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"[Chat] JSON parsing error: {e}")
-        return {"response": "System glitch. Try rephrasing.", "confidence": "LOW"}
+        return {"response": "System glitch. Try rephrasing.", "confidence": "LOW", "_ai_fallback": True}
     except Exception as e:
         logger.error(f"[Chat] Error: {e}")
-        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+        return {"response": "System temporarily offline. Try again in a moment.", "confidence": "LOW", "_ai_fallback": True}
 
 # ─── Admin: Infographic Generator (Gemini SVG) ───
 @app.post("/api/admin/generate-infographic")
