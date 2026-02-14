@@ -1,5 +1,12 @@
 /* static/app.js - Ryzm Neural Network v3.2 */
 
+// ── XSS Defense: HTML entity escaping for all external data ──
+function escapeHtml(str) {
+  if (typeof str !== 'string') return String(str ?? '');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // Global state
 let validatorCredits = 3;
 const MAX_FREE_VALIDATIONS = 3;
@@ -941,9 +948,9 @@ function renderStrategicNarrative(narrativeData) {
   layersEl.innerHTML = narrativeData.map((layer, i) => `
     <div class="sn-layer">
       <div class="sn-layer-title" style="color:${layerColors[i] || 'var(--text-muted)'}">
-        LAYER ${layer.layer}: ${layer.title}
+        LAYER ${escapeHtml(layer.layer)}: ${escapeHtml(layer.title)}
       </div>
-      <div class="sn-layer-content">${layer.content}</div>
+      <div class="sn-layer-content">${escapeHtml(layer.content)}</div>
     </div>
   `).join('');
 
@@ -1320,14 +1327,14 @@ async function fetchNews() {
     if (feed) {
       feed.innerHTML = data.news.map(n => {
         const sClass = n.sentiment === 'BULLISH' ? 'sentiment-bullish' : n.sentiment === 'BEARISH' ? 'sentiment-bearish' : 'sentiment-neutral';
-        const sLabel = n.sentiment || 'NEUTRAL';
+        const sLabel = escapeHtml(n.sentiment || 'NEUTRAL');
         return `
                 <div class="news-item-v2">
                     <div class="news-meta">
-                        <span class="news-meta-left"><span class="news-source-tag">${n.source}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
-                        <span>${n.time}</span>
+                        <span class="news-meta-left"><span class="news-source-tag">${escapeHtml(n.source)}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
+                        <span>${escapeHtml(n.time)}</span>
                     </div>
-                    <a href="${n.link}" target="_blank" class="news-link">${n.title}</a>
+                    <a href="${escapeHtml(n.link)}" target="_blank" rel="noopener noreferrer" class="news-link">${escapeHtml(n.title)}</a>
                 </div>`;
       }).join('');
     }
@@ -1489,10 +1496,10 @@ function renderCouncil(data) {
         const div = document.createElement('div');
         div.className = 'agent-card speaking';
         div.innerHTML = `
-                    <div class="agent-icon" style="border-color:${color}; color:${color};">${agent.name[0]}</div>
-                    <div class="agent-name">${agent.name}</div>
-                    <div class="agent-status" style="color:${color}; border-color:${color};">${agent.status}</div>
-                    <div class="agent-msg">"${agent.message}"</div>
+                    <div class="agent-icon" style="border-color:${color}; color:${color};">${escapeHtml(agent.name[0])}</div>
+                    <div class="agent-name">${escapeHtml(agent.name)}</div>
+                    <div class="agent-status" style="color:${color}; border-color:${color};">${escapeHtml(agent.status)}</div>
+                    <div class="agent-msg">"${escapeHtml(agent.message)}"</div>
                 `;
         grid.appendChild(div);
         playSound('hover');
@@ -1507,10 +1514,10 @@ function renderCouncil(data) {
     sList.innerHTML = data.strategies.map(s => `
             <div class="strategy-card" style="border-left-color:${s.name.includes('Bull') ? 'var(--neon-green)' : 'var(--neon-red)'}">
                 <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.7rem; margin-bottom:4px;">
-                    <span>${s.name}</span>
-                    <span style="color:var(--neon-cyan); font-family:'Share Tech Mono'">${s.prob}</span>
+                    <span>${escapeHtml(s.name)}</span>
+                    <span style="color:var(--neon-cyan); font-family:'Share Tech Mono'">${escapeHtml(s.prob)}</span>
                 </div>
-                <div style="font-size:0.8rem; line-height:1.3;">${s.action}</div>
+                <div style="font-size:0.8rem; line-height:1.3;">${escapeHtml(s.action)}</div>
             </div>
         `).join('');
   }
@@ -1774,24 +1781,24 @@ function displayValidationResult(data) {
     personasHTML += `
       <div class="val-persona">
         <div class="val-persona-header">
-          <span class="val-persona-name">${p.name}</span>
-          <span class="val-persona-stance stance-${p.stance}">${p.stance} ${p.score}</span>
+          <span class="val-persona-name">${escapeHtml(p.name)}</span>
+          <span class="val-persona-stance stance-${escapeHtml(p.stance)}">${escapeHtml(p.stance)} ${escapeHtml(p.score)}</span>
         </div>
-        <div class="val-persona-reason">${p.reason}</div>
+        <div class="val-persona-reason">${escapeHtml(p.reason)}</div>
       </div>
     `;
   });
 
   resultDiv.innerHTML = `
     <div class="val-header">
-      <span class="val-verdict">${data.verdict}</span>
-      <span class="val-score" style="color:${scoreColor};">${data.overall_score}/100</span>
+      <span class="val-verdict">${escapeHtml(data.verdict)}</span>
+      <span class="val-score" style="color:${scoreColor};">${escapeHtml(data.overall_score)}/100</span>
     </div>
     <div style="font-size:0.75rem; color:var(--neon-cyan); margin-bottom:8px;">
-      Win Rate: <strong>${data.win_rate}</strong>
+      Win Rate: <strong>${escapeHtml(data.win_rate)}</strong>
     </div>
     <div class="val-personas">${personasHTML}</div>
-    <div class="val-summary">📊 ${data.summary}</div>
+    <div class="val-summary">📊 ${escapeHtml(data.summary)}</div>
   `;
 
   resultDiv.style.display = 'block';
@@ -2504,7 +2511,7 @@ async function fetchCouncilHistory() {
 }
 
 function renderCouncilHistory(data) {
-  const { records, stats, score_vs_btc } = data;
+  const { records, stats, score_vs_btc, accuracy_by_horizon } = data;
 
   // Stats boxes
   const elTotal = document.getElementById('ch-total');
@@ -2519,6 +2526,26 @@ function renderCouncilHistory(data) {
     }
   }
   if (elHits) elHits.textContent = `${stats.hits}/${stats.evaluated}`;
+
+  // Multi-horizon accuracy pills
+  if (accuracy_by_horizon) {
+    for (const [key, hz] of Object.entries(accuracy_by_horizon)) {
+      const mins = key.replace('min', '');
+      const el = document.getElementById(`ch-hz-${mins}`);
+      if (el) {
+        if (hz.accuracy_pct !== null && hz.evaluated > 0) {
+          el.textContent = `${hz.accuracy_pct}%`;
+          el.style.color = hz.accuracy_pct >= 60 ? 'var(--neon-green)' :
+            hz.accuracy_pct >= 40 ? 'var(--neon-cyan)' : 'var(--neon-red)';
+          el.title = `${hz.hits}/${hz.evaluated} hits` +
+            (hz.avg_return_pct !== null ? ` | avg ${hz.avg_return_pct > 0 ? '+' : ''}${hz.avg_return_pct}%` : '');
+        } else {
+          el.textContent = '—';
+          el.title = 'Not enough data';
+        }
+      }
+    }
+  }
 
   // Score sparkline chart
   drawCouncilSparkline(records.slice().reverse());

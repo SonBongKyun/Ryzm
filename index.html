@@ -456,6 +456,13 @@
               <div class="ch-stat-label">HITS</div>
             </div>
           </div>
+          <!-- Multi-Horizon Accuracy Breakdown -->
+          <div class="ch-horizons" id="ch-horizons" style="display:flex;gap:4px;margin:6px 0;font-size:0.65rem;">
+            <div class="ch-hz-pill" data-hz="15min"><span class="ch-hz-label">15m</span><span class="ch-hz-val" id="ch-hz-15">—</span></div>
+            <div class="ch-hz-pill" data-hz="60min"><span class="ch-hz-label">1h</span><span class="ch-hz-val" id="ch-hz-60">—</span></div>
+            <div class="ch-hz-pill" data-hz="240min"><span class="ch-hz-label">4h</span><span class="ch-hz-val" id="ch-hz-240">—</span></div>
+            <div class="ch-hz-pill" data-hz="1440min"><span class="ch-hz-label">1d</span><span class="ch-hz-val" id="ch-hz-1440">—</span></div>
+          </div>
           <div class="ch-chart" id="ch-chart">
             <canvas id="ch-canvas" width="400" height="80"></canvas>
           </div>

@@ -113,7 +113,9 @@ _api_429_backoff: Dict[str, float] = {}  # domain -> earliest retry time
 _api_fail_count: Dict[str, int] = defaultdict(int)  # domain -> consecutive fail count
 
 def resilient_get(url: str, timeout: int = 15, **kwargs) -> requests.Response:
-    """HTTP GET with 429 backoff and exponential retry awareness."""
+    """HTTP GET with 429 backoff and exponential retry awareness.
+    Fail count is incremented exactly once per failure event.
+    """
     from urllib.parse import urlparse
     domain = urlparse(url).netloc
 
@@ -129,25 +131,39 @@ def resilient_get(url: str, timeout: int = 15, **kwargs) -> requests.Response:
         if resp.status_code == 429:
             fails = _api_fail_count[domain] + 1
             _api_fail_count[domain] = fails
-            # Retry-After header or exponential backoff: 30s, 60s, 120s, max 300s
-            retry_after = int(resp.headers.get("Retry-After", 0))
+            # Retry-After header is the single source of truth; fallback to exponential
+            retry_after = 0
+            ra_header = resp.headers.get("Retry-After")
+            if ra_header:
+                try:
+                    retry_after = int(ra_header)
+                except (ValueError, TypeError):
+                    pass
             backoff = max(retry_after, min(300, 30 * (2 ** (fails - 1))))
             _api_429_backoff[domain] = now + backoff
             logger.warning(f"[HTTP] 429 from {domain} — backing off {backoff}s (fail #{fails})")
-            resp.raise_for_status()
+            raise requests.exceptions.HTTPError(
+                f"429 Too Many Requests from {domain}", response=resp
+            )
         elif resp.status_code == 418:
-            # Binance IP ban
+            # Binance IP ban — count once, long cooldown
+            _api_fail_count[domain] = _api_fail_count.get(domain, 0) + 1
             _api_429_backoff[domain] = now + 600  # 10-minute cooldown
             logger.error(f"[HTTP] 418 IP BAN from {domain} — 10min cooldown!")
-            resp.raise_for_status()
+            raise requests.exceptions.HTTPError(
+                f"418 IP Ban from {domain}", response=resp
+            )
         else:
             # Success — reset fail counter
-            if _api_fail_count[domain] > 0:
+            if _api_fail_count.get(domain, 0) > 0:
                 _api_fail_count[domain] = 0
                 logger.info(f"[HTTP] {domain} recovered from rate limit")
         return resp
-    except requests.exceptions.RequestException:
-        _api_fail_count[domain] = _api_fail_count.get(domain, 0) + 1
+    except requests.exceptions.RequestException as exc:
+        # Only increment fail count for non-rate-limit errors (429/418 already counted above)
+        if not (hasattr(exc, 'response') and exc.response is not None
+                and exc.response.status_code in (429, 418)):
+            _api_fail_count[domain] = _api_fail_count.get(domain, 0) + 1
         raise
 
 def get_api_health() -> dict:
@@ -352,7 +368,7 @@ RSS_FEEDS = [
 ]
 
 def fetch_news():
-    """Collect RSS news with sentiment tags"""
+    """Collect RSS news with sentiment tags — ISO timestamps for reliable sorting"""
     articles = []
     for source in RSS_FEEDS:
         try:
@@ -362,19 +378,24 @@ def fetch_news():
                 continue
 
             for entry in feed.entries[:5]:  # Max 5 per source
-                # Time parsing
-                pub_time = ""
+                # Time parsing — derive ISO UTC + KST display string
+                dt_utc = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    dt = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-                    kst = dt + timedelta(hours=9)
-                    pub_time = kst.strftime("%H:%M")
+                    dt_utc = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                    dt = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
-                    kst = dt + timedelta(hours=9)
+                    dt_utc = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+
+                if dt_utc:
+                    published_at_utc = dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    kst = dt_utc + timedelta(hours=9)
                     pub_time = kst.strftime("%H:%M")
+                else:
+                    published_at_utc = ""
+                    pub_time = ""
 
                 articles.append({
                     "time": pub_time,
+                    "published_at_utc": published_at_utc,
                     "title": entry.get("title", "No title"),
                     "source": source["name"],
                     "link": entry.get("link", "#"),
@@ -383,8 +404,8 @@ def fetch_news():
         except Exception as e:
             logger.error(f"[News] Error fetching {source['name']}: {e}")
 
-    # Sort by time descending, max 15
-    articles.sort(key=lambda x: x["time"], reverse=True)
+    # Sort by ISO UTC descending (empty strings sink to bottom), max 15
+    articles.sort(key=lambda x: x.get("published_at_utc", ""), reverse=True)
     return articles[:15]
 
 
@@ -419,10 +440,15 @@ def classify_headline_sentiment(title):
 
 
 # ── Yahoo Finance Direct API (replaces yfinance library) ──
+# Set ENABLE_YAHOO=false to disable Yahoo Finance calls entirely (ToS risk mitigation)
+ENABLE_YAHOO = os.getenv("ENABLE_YAHOO", "true").lower() in ("true", "1", "yes")
 _YAHOO_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 def fetch_yahoo_chart(symbol: str, range_str: str = "5d", interval: str = "1d") -> List[float]:
-    """Fetch closing prices from Yahoo Finance v8 chart API directly (no yfinance)."""
+    """Fetch closing prices from Yahoo Finance v8 chart API directly (no yfinance).
+    Returns empty list if ENABLE_YAHOO is false."""
+    if not ENABLE_YAHOO:
+        return []
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range_str}&interval={interval}"
         resp = resilient_get(url, timeout=10, headers=_YAHOO_HEADERS)
@@ -1471,6 +1497,45 @@ def get_council_history(limit: int = 50) -> List[dict]:
         logger.error(f"[DB] Failed to read council history: {e}")
         return []
 
+def get_multi_horizon_accuracy() -> dict:
+    """Aggregate accuracy stats per evaluation horizon from council_eval table."""
+    HORIZONS = [15, 60, 240, 1440]
+    result = {}
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            for h in HORIZONS:
+                c.execute(
+                    """
+                    SELECT
+                      COUNT(*) AS total,
+                      SUM(hit) AS hits,
+                      AVG(CASE WHEN hit IS NOT NULL THEN (
+                        (price_after - (SELECT btc_price FROM council_history WHERE id = council_eval.council_id))
+                        / (SELECT btc_price FROM council_history WHERE id = council_eval.council_id) * 100
+                      ) END) AS avg_return_pct
+                    FROM council_eval
+                    WHERE horizon_min = ?
+                    """,
+                    (h,)
+                )
+                row = c.fetchone()
+                total = row["total"] or 0
+                hits = row["hits"] or 0
+                avg_ret = round(row["avg_return_pct"], 3) if row["avg_return_pct"] is not None else None
+                result[f"{h}min"] = {
+                    "evaluated": total,
+                    "hits": hits,
+                    "accuracy_pct": round((hits / total) * 100, 1) if total > 0 else None,
+                    "avg_return_pct": avg_ret,
+                }
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Multi-horizon accuracy query error: {e}")
+    return result
+
 def fetch_btc_price_binance() -> Optional[float]:
     """Fetch current BTC price from Binance for snapshots."""
     try:
@@ -1531,45 +1596,43 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
     """
     Evaluate past council predictions using price_snapshots.
     score > 50 = bullish prediction. Compare base price vs price at +horizon.
-    Results stored in council_eval table (supports 60/240/1440 min horizons).
+    Results stored in council_eval table. Each horizon is evaluated independently.
     """
     try:
-        with _db_lock:
-            conn = db_connect()
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            # Get records older than max horizon that haven't been evaluated for 60min
-            c.execute("""
-                SELECT h.id, h.timestamp, h.consensus_score, h.btc_price
-                FROM council_history h
-                LEFT JOIN council_eval e
-                  ON e.council_id = h.id AND e.horizon_min = 60
-                WHERE e.council_id IS NULL
-                  AND h.btc_price > 0
-                  AND datetime(h.timestamp) < datetime('now', '-1 hour')
-                ORDER BY h.id ASC
-                LIMIT 50
-            """)
-            rows = list(c.fetchall())
-            conn.close()
+        for h in horizons_min:
+            # Query records old enough for this horizon that have NOT been evaluated at this horizon
+            with _db_lock:
+                conn = db_connect()
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute(f"""
+                    SELECT h.id, h.timestamp, h.consensus_score, h.btc_price
+                    FROM council_history h
+                    LEFT JOIN council_eval e
+                      ON e.council_id = h.id AND e.horizon_min = ?
+                    WHERE e.council_id IS NULL
+                      AND h.btc_price > 0
+                      AND datetime(h.timestamp) < datetime('now', '-{h} minutes')
+                    ORDER BY h.id ASC
+                    LIMIT 50
+                """, (h,))
+                rows = list(c.fetchall())
+                conn.close()
 
-        if not rows:
-            return
+            if not rows:
+                continue
 
-        evaluated = 0
-        for row in rows:
-            base_price = float(row["btc_price"])
-            score = int(row["consensus_score"] or 50)
-            predicted_bull = score > 50
+            evaluated = 0
+            for row in rows:
+                base_price = float(row["btc_price"])
+                score = int(row["consensus_score"] or 50)
+                predicted_bull = score > 50
 
-            # Parse timestamp (stored as UTC string)
-            ts_dt = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-
-            for h in horizons_min:
+                ts_dt = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
                 target_dt = ts_dt + timedelta(minutes=h)
                 price_after = find_price_near("BTC", target_dt, window_min=10)
                 if price_after is None:
-                    continue  # No snapshot available yet
+                    continue
 
                 actual_bull = price_after > base_price
                 hit = 1 if (predicted_bull == actual_bull) else 0
@@ -1587,21 +1650,22 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                         """,
                         (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
                     )
-                    # Also update council_history for backward compatibility
-                    c.execute(
-                        """
-                        UPDATE council_history
-                        SET return_pct = ?, evaluated_at_utc = ?, price_source = ?
-                        WHERE id = ?
-                        """,
-                        (return_pct, eval_ts, "binance_snapshot", int(row["id"]))
-                    )
+                    # Update council_history for backward compat (use shortest horizon data)
+                    if h == min(horizons_min):
+                        c.execute(
+                            """
+                            UPDATE council_history
+                            SET return_pct = ?, evaluated_at_utc = ?, price_source = ?
+                            WHERE id = ?
+                            """,
+                            (return_pct, eval_ts, "binance_snapshot", int(row["id"]))
+                        )
                     conn.commit()
                     conn.close()
                 evaluated += 1
 
-        if evaluated > 0:
-            logger.info(f"[DB] Evaluated {evaluated} council predictions across {len(rows)} records")
+            if evaluated > 0:
+                logger.info(f"[DB] Evaluated {evaluated} council predictions at {h}min horizon")
     except Exception as e:
         logger.error(f"[DB] Accuracy evaluation error: {e}")
 
@@ -1898,9 +1962,9 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[Snapshot] Error: {e}")
 
-        # Evaluate council predictions that are 1h+ old
+        # Evaluate council predictions — multi-horizon (15m, 1h, 4h, 1d)
         try:
-            evaluate_council_accuracy([60])
+            evaluate_council_accuracy([15, 60, 240, 1440])
         except Exception as e:
             logger.error(f"[Eval] Error: {e}")
 
@@ -2216,6 +2280,7 @@ async def get_council_history_api(limit: int = 50):
             "hits": hits,
             "accuracy_pct": accuracy
         },
+        "accuracy_by_horizon": get_multi_horizon_accuracy(),
         "score_vs_btc": {
             "bull_zone_avg": bull_avg,
             "bear_zone_avg": bear_avg,
@@ -2225,7 +2290,7 @@ async def get_council_history_api(limit: int = 50):
         "_meta": {
             "sources": ["council_history.db", "api.binance.com"],
             "fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "evaluation_horizon_min": 60,
+            "evaluation_horizons_min": [15, 60, 240, 1440],
         }
     }
 
