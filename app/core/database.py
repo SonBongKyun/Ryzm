@@ -29,6 +29,35 @@ def db_connect():
     return conn
 
 
+class db_session:
+    """Context manager that holds _db_lock for the entire open→execute→commit→close span.
+
+    Usage:
+        with db_session() as (conn, c):
+            c.execute(...)
+            conn.commit()   # optional—auto-committed on exit if no error
+    """
+    def __init__(self, row_factory=None):
+        self._row_factory = row_factory
+
+    def __enter__(self):
+        _db_lock.acquire()
+        self._conn = db_connect()
+        if self._row_factory:
+            self._conn.row_factory = self._row_factory
+        self._cursor = self._conn.cursor()
+        return self._conn, self._cursor
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type is None:
+                self._conn.commit()
+            self._conn.close()
+        finally:
+            _db_lock.release()
+        return False  # propagate exceptions
+
+
 def utc_now_str() -> str:
     """Return current UTC time as a formatted string."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

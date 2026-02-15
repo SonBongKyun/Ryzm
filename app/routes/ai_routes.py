@@ -4,7 +4,7 @@ Council, trade validator, chat endpoints (Phase 2: token-optimised).
 """
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response
 import google.generativeai as genai
@@ -122,22 +122,38 @@ def get_council_history_api(limit: int = 50):
     hits = sum(1 for r in evaluated if r["hit"] == 1)
     accuracy = round((hits / total_eval) * 100, 1) if total_eval > 0 else None
 
+    # ── score_vs_btc: bull/bear zone performance ──
     bull_changes = []
     bear_changes = []
+    bull_high_conf = []
+    bear_high_conf = []
     for r in records:
         if r.get("btc_price_after") and r.get("btc_price") and r["btc_price"] > 0:
             try:
                 after = float(r["btc_price_after"])
                 change_pct = (after - r["btc_price"]) / r["btc_price"] * 100
+                conf = (r.get("confidence") or "LOW").upper()
                 if r["consensus_score"] is not None and r["consensus_score"] >= 70:
                     bull_changes.append(change_pct)
+                    if conf == "HIGH":
+                        bull_high_conf.append(change_pct)
                 elif r["consensus_score"] is not None and r["consensus_score"] <= 30:
                     bear_changes.append(change_pct)
+                    if conf == "HIGH":
+                        bear_high_conf.append(change_pct)
             except (ValueError, TypeError):
                 pass
 
-    bull_avg = round(sum(bull_changes) / len(bull_changes), 3) if bull_changes else None
-    bear_avg = round(sum(bear_changes) / len(bear_changes), 3) if bear_changes else None
+    def _avg(lst):
+        return round(sum(lst) / len(lst), 3) if lst else None
+
+    # ── Performance drift: last 7 vs all-time ──
+    recent_eval = [r for r in evaluated if r.get("timestamp", "") >= (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")]
+    recent_hits = sum(1 for r in recent_eval if r["hit"] == 1)
+    recent_accuracy = round((recent_hits / len(recent_eval)) * 100, 1) if recent_eval else None
+    drift = None
+    if accuracy is not None and recent_accuracy is not None:
+        drift = round(recent_accuracy - accuracy, 1)
 
     return {
         "records": records,
@@ -145,14 +161,24 @@ def get_council_history_api(limit: int = 50):
             "total_sessions": len(records),
             "evaluated": total_eval,
             "hits": hits,
-            "accuracy_pct": accuracy
+            "accuracy_pct": accuracy,
         },
         "accuracy_by_horizon": get_multi_horizon_accuracy(),
         "score_vs_btc": {
-            "bull_zone_avg": bull_avg,
-            "bear_zone_avg": bear_avg,
+            "bull_zone_avg": _avg(bull_changes),
+            "bear_zone_avg": _avg(bear_changes),
             "samples_bull": len(bull_changes),
-            "samples_bear": len(bear_changes)
+            "samples_bear": len(bear_changes),
+            "bull_high_conf_avg": _avg(bull_high_conf),
+            "bear_high_conf_avg": _avg(bear_high_conf),
+            "samples_bull_high": len(bull_high_conf),
+            "samples_bear_high": len(bear_high_conf),
+        },
+        "drift": {
+            "recent_7d_accuracy": recent_accuracy,
+            "alltime_accuracy": accuracy,
+            "delta_pct": drift,
+            "recent_7d_evaluated": len(recent_eval),
         },
         "_meta": {
             "sources": ["council_history.db", "api.binance.com"],

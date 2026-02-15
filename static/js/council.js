@@ -28,6 +28,7 @@ function setupEventListeners() {
           btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
           btnCouncil.disabled = false;
           lucide.createIcons();
+          refreshAllQuotas();
           return;
         }
         const data = await res.json();
@@ -549,6 +550,7 @@ function initChat() {
         const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
         if (thinkingEl) thinkingEl.remove();
         addChatMessage('ai', '⚡ ' + (err.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
+        refreshAllQuotas();
         return;
       }
 
@@ -598,5 +600,21 @@ function addChatMessage(type, text, id = null, confidence = null) {
 
   chatMessages.appendChild(msgDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+/* ── Quota Refresh (called after any 403) ── */
+function refreshAllQuotas() {
+  fetch('/api/me', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.usage) return;
+      // Update validator credits
+      if (data.usage.validate) {
+        validatorCredits = data.usage.validate.remaining;
+        MAX_FREE_VALIDATIONS_SERVER = data.usage.validate.limit;
+      }
+      updateCreditsDisplay();
+    })
+    .catch(() => {});
 }
 

@@ -52,7 +52,10 @@ async def health_check():
 @router.get("/api/long-short")
 async def get_long_short():
     try:
-        return cache["long_short_ratio"]["data"]
+        data = cache["long_short_ratio"]["data"]
+        resp = dict(data) if isinstance(data, dict) else {"ratio": data}
+        resp["_meta"] = build_api_meta("long_short_ratio", sources=["fapi.binance.com"])
+        return resp
     except Exception as e:
         logger.error(f"[API] L/S endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch L/S data")
@@ -104,7 +107,10 @@ def get_briefing_history(days: int = 7):
 @router.get("/api/funding-rate")
 async def get_funding_rate():
     try:
-        return {"rates": cache["funding_rate"]["data"]}
+        return {
+            "rates": cache["funding_rate"]["data"],
+            "_meta": build_api_meta("funding_rate", sources=["fapi.binance.com"])
+        }
     except Exception as e:
         logger.error(f"[API] Funding rate error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch funding rate")
@@ -113,7 +119,10 @@ async def get_funding_rate():
 @router.get("/api/liquidations")
 async def get_liquidations():
     try:
-        return {"trades": cache["liquidations"]["data"]}
+        return {
+            "trades": cache["liquidations"]["data"],
+            "_meta": build_api_meta("liquidations", sources=["fapi.binance.com"])
+        }
     except Exception as e:
         logger.error(f"[API] Liquidations error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch liquidation data")
@@ -142,7 +151,15 @@ def get_risk_gauge():
 def get_risk_gauge_history(days: int = 30):
     try:
         rows = get_risk_history(days)
-        return {"history": rows, "count": len(rows)}
+        return {
+            "history": rows,
+            "count": len(rows),
+            "_meta": {
+                "days_requested": days,
+                "fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "source": "council_history.db/risk_history",
+            }
+        }
     except Exception as e:
         logger.error(f"[API] Risk history error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch risk history")
@@ -156,7 +173,10 @@ async def get_museum_of_scars():
 @router.get("/api/heatmap")
 async def get_heatmap():
     try:
-        return {"coins": cache["heatmap"]["data"]}
+        return {
+            "coins": cache["heatmap"]["data"],
+            "_meta": build_api_meta("heatmap", sources=["api.coingecko.com"])
+        }
     except Exception as e:
         logger.error(f"[API] Heatmap error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch heatmap")
@@ -283,7 +303,12 @@ def get_scanner():
         data = cache["scanner"]["data"]
         if not data:
             data = fetch_alpha_scanner()
-        return {"alerts": data, "count": len(data), "ts": int(time.time())}
+        return {
+            "alerts": data,
+            "count": len(data),
+            "ts": int(time.time()),
+            "_meta": build_api_meta("scanner", sources=["fapi.binance.com"])
+        }
     except Exception as e:
         logger.error(f"[API] Scanner error: {e}")
         raise HTTPException(status_code=500, detail="Failed to scan markets")
@@ -313,7 +338,11 @@ def get_correlation():
 def get_whale_wallets():
     try:
         data = cache["whale_wallets"]["data"]
-        return {"transactions": data, "count": len(data)}
+        return {
+            "transactions": data,
+            "count": len(data),
+            "_meta": build_api_meta("whale_wallets", sources=["blockchain.info"])
+        }
     except Exception as e:
         logger.error(f"[API] WhaleWallet error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch whale wallets")
