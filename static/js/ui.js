@@ -1268,6 +1268,8 @@ const _translations = {
     rc_leverage: "LEVERAGE",
     rc_funding: "FUNDING",
     rc_kimchi: "KIMCHI P.",
+    rc_oi: "OI",
+    rc_stablecoin: "USDT DOM",
     // L/S
     ls_long: "LONG", ls_short: "SHORT",
     // Funding
@@ -1356,6 +1358,8 @@ const _translations = {
     rc_leverage: "레버리지",
     rc_funding: "펀딩비",
     rc_kimchi: "김프",
+    rc_oi: "미결제약정",
+    rc_stablecoin: "USDT 점유",
     ls_long: "롱", ls_short: "숏",
     fr_label: "펀딩비:",
     arb_low: "차익 기회: 낮음",

@@ -226,6 +226,15 @@ def init_council_db():
             c.execute(f"ALTER TABLE council_history ADD COLUMN {col_def[0]} {col_def[1]}")
         except sqlite3.OperationalError:
             pass
+    # Migration: add OI + Stablecoin columns to risk_history
+    for col_def in [
+        ("oi", "REAL DEFAULT 0"),
+        ("sc", "REAL DEFAULT 0"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE risk_history ADD COLUMN {col_def[0]} {col_def[1]}")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     logger.info("[DB] Council + Risk + PriceSnapshot + Eval + Briefings + Usage + Auth database initialized")
@@ -722,7 +731,7 @@ def save_risk_record(score, level, components):
             conn = db_connect()
             c = conn.cursor()
             c.execute(
-                "INSERT INTO risk_history (timestamp, score, level, fg, vix, ls, fr, kp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO risk_history (timestamp, score, level, fg, vix, ls, fr, kp, oi, sc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     utc_now_str(),
                     round(score, 1),
@@ -732,6 +741,8 @@ def save_risk_record(score, level, components):
                     round(components.get("long_short", {}).get("contrib", 0), 1),
                     round(components.get("funding_rate", {}).get("contrib", 0), 1),
                     round(components.get("kimchi", {}).get("contrib", 0), 1),
+                    round(components.get("open_interest", {}).get("contrib", 0), 1),
+                    round(components.get("stablecoin", {}).get("contrib", 0), 1),
                 )
             )
             conn.commit()
@@ -749,7 +760,7 @@ def get_risk_history(days: int = 30) -> List[dict]:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("""
-                SELECT timestamp, score, level, fg, vix, ls, fr, kp
+                SELECT timestamp, score, level, fg, vix, ls, fr, kp, oi, sc
                 FROM risk_history
                 WHERE datetime(timestamp) > datetime('now', ?)
                 ORDER BY timestamp ASC
@@ -760,6 +771,64 @@ def get_risk_history(days: int = 30) -> List[dict]:
     except Exception as e:
         logger.error(f"[DB] Failed to read risk history: {e}")
         return []
+
+
+def get_risk_component_changes() -> dict:
+    """Get component value changes at 1H, 4H, 24H ago for heatmap."""
+    changes = {"1h": {}, "4h": {}, "24h": {}}
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            # Get latest record
+            c.execute("SELECT fg, vix, ls, fr, kp, oi, sc FROM risk_history ORDER BY timestamp DESC LIMIT 1")
+            latest = c.fetchone()
+            if not latest:
+                conn.close()
+                return changes
+            latest = dict(latest)
+            for period_key, hours in [("1h", 1), ("4h", 4), ("24h", 24)]:
+                c.execute("""
+                    SELECT fg, vix, ls, fr, kp, oi, sc FROM risk_history
+                    WHERE datetime(timestamp) <= datetime('now', ?)
+                    ORDER BY timestamp DESC LIMIT 1
+                """, (f'-{hours} hours',))
+                row = c.fetchone()
+                if row:
+                    row = dict(row)
+                    for k in ["fg", "vix", "ls", "fr", "kp", "oi", "sc"]:
+                        changes[period_key][k] = round(latest.get(k, 0) - row.get(k, 0), 1)
+                else:
+                    for k in ["fg", "vix", "ls", "fr", "kp", "oi", "sc"]:
+                        changes[period_key][k] = 0
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Risk component changes error: {e}")
+    return changes
+
+
+def get_component_sparklines(days: int = 7) -> dict:
+    """Get component-level history for sparklines."""
+    result = {"fg": [], "vix": [], "ls": [], "fr": [], "kp": [], "oi": [], "sc": []}
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("""
+                SELECT timestamp, fg, vix, ls, fr, kp, oi, sc FROM risk_history
+                WHERE datetime(timestamp) > datetime('now', ?)
+                ORDER BY timestamp ASC
+            """, (f'-{days} days',))
+            for row in c.fetchall():
+                r = dict(row)
+                for k in result:
+                    result[k].append(r.get(k, 0))
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Component sparklines error: {e}")
+    return result
 
 
 # ───────────────────────────────────────

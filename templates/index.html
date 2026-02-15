@@ -23,7 +23,7 @@
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=3.6" />
+  <link rel="stylesheet" href="/static/styles.css?v=3.7" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#06b6d4" />
@@ -179,150 +179,169 @@
   <main class="main-grid" id="main-grid">
 
     <div class="panel" id="panel-left" data-panel-id="left">
-      <!-- Systemic Risk Gauge -->
+      <!-- Systemic Risk Gauge v2.0 -->
       <div class="glass-panel risk-gauge-panel" id="risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
         <div class="panel-title" data-i18n="risk_gauge">
           <i data-lucide="shield-alert"></i> Systemic Risk Gauge
+          <button class="rg-alert-btn" id="rg-alert-btn" title="Set Alert Threshold"><i data-lucide="bell" style="width:12px;height:12px;"></i></button>
+        </div>
+        <!-- Alert threshold config (hidden by default) -->
+        <div class="rg-alert-config hidden" id="rg-alert-config">
+          <label>Alert Threshold</label>
+          <input type="range" id="rg-threshold" min="-100" max="100" step="5" value="-50">
+          <span class="rg-threshold-val" id="rg-threshold-val">-50</span>
+          <button class="rg-alert-save" id="rg-alert-save">SET</button>
         </div>
         <div class="risk-gauge-body">
+          <!-- 270° Arc Gauge SVG -->
           <div class="gauge-container">
-            <svg viewBox="0 0 200 140" class="gauge-svg">
+            <svg viewBox="0 0 200 200" class="gauge-svg">
               <defs>
-                <!-- 3D arc gradient: green → yellow → orange → red -->
-                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#059669"/>
-                  <stop offset="35%" stop-color="#eab308"/>
-                  <stop offset="65%" stop-color="#f97316"/>
-                  <stop offset="100%" stop-color="#dc2626"/>
+                <linearGradient id="gaugeGrad270" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#dc2626"/>
+                  <stop offset="30%" stop-color="#f97316"/>
+                  <stop offset="50%" stop-color="#eab308"/>
+                  <stop offset="75%" stop-color="#06b6d4"/>
+                  <stop offset="100%" stop-color="#059669"/>
                 </linearGradient>
-                <!-- Inner shadow gradient for 3D depth -->
-                <linearGradient id="gaugeInner" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="white" stop-opacity="0.5"/>
-                  <stop offset="100%" stop-color="black" stop-opacity="0.15"/>
+                <linearGradient id="gaugeInner270" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="white" stop-opacity="0.4"/>
+                  <stop offset="100%" stop-color="black" stop-opacity="0.12"/>
                 </linearGradient>
-                <!-- Glow filter -->
-                <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <filter id="gaugeGlow270" x="-20%" y="-20%" width="140%" height="140%">
                   <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
-                  <feMerge>
-                    <feMergeNode in="blur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                 </filter>
-                <!-- Needle glow filter -->
-                <filter id="needleGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <filter id="needleGlow270" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
-                  <feMerge>
-                    <feMergeNode in="blur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                 </filter>
-                <!-- Radial shine on center hub -->
-                <radialGradient id="hubGrad" cx="50%" cy="40%" r="50%">
+                <radialGradient id="hubGrad270" cx="50%" cy="40%" r="50%">
                   <stop offset="0%" stop-color="#1e293b" stop-opacity="1"/>
-                  <stop offset="60%" stop-color="#1e293b" stop-opacity="0.8"/>
                   <stop offset="100%" stop-color="#1e293b" stop-opacity="0.4"/>
                 </radialGradient>
-                <radialGradient id="hubGradDark" cx="50%" cy="40%" r="50%">
-                  <stop offset="0%" stop-color="#e2e8f0" stop-opacity="1"/>
-                  <stop offset="60%" stop-color="#e2e8f0" stop-opacity="0.8"/>
-                  <stop offset="100%" stop-color="#e2e8f0" stop-opacity="0.4"/>
-                </radialGradient>
               </defs>
-
-              <!-- Outer rim (3D bezel) -->
-              <path d="M 16 100 A 84 84 0 0 1 184 100" fill="none" stroke="var(--border-dim)" stroke-width="18" stroke-linecap="round" opacity="0.4"/>
-
-              <!-- Background arc (recessed track) -->
-              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--border-dim)" stroke-width="14" stroke-linecap="round"/>
-
-              <!-- Inner highlight (top edge light reflection for 3D) -->
-              <path d="M 22 98 A 78 78 0 0 1 178 98" fill="none" stroke="url(#gaugeInner)" stroke-width="10" stroke-linecap="round" opacity="0.5"/>
-
-              <!-- Gradient-filled arc (full background rainbow) -->
-              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
-
-              <!-- Active arc (filled by JS), with glow -->
-              <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="125" filter="url(#gaugeGlow)" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);"/>
-
-              <!-- Tick marks for scale -->
-              <g stroke="var(--text-muted)" stroke-width="1" opacity="0.4">
-                <line x1="24" y1="100" x2="32" y2="100"/>
-                <line x1="36" y1="62" x2="43" y2="66"/>
-                <line x1="68" y1="34" x2="72" y2="41"/>
-                <line x1="100" y1="24" x2="100" y2="32"/>
-                <line x1="132" y1="34" x2="128" y2="41"/>
-                <line x1="164" y1="62" x2="157" y2="66"/>
-                <line x1="176" y1="100" x2="168" y2="100"/>
+              <!-- Outer rim -->
+              <path d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" fill="none" stroke="var(--border-dim)" stroke-width="18" stroke-linecap="round" opacity="0.3"/>
+              <!-- Background track -->
+              <path d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" fill="none" stroke="var(--border-dim)" stroke-width="14" stroke-linecap="round"/>
+              <!-- Inner highlight -->
+              <path d="M 45.5 154.5 A 77 77 0 1 1 154.5 154.5" fill="none" stroke="url(#gaugeInner270)" stroke-width="10" stroke-linecap="round" opacity="0.4"/>
+              <!-- Gradient background arc -->
+              <path d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" fill="none" stroke="url(#gaugeGrad270)" stroke-width="12" stroke-linecap="round" opacity="0.2"/>
+              <!-- Active arc (filled by JS) -->
+              <path id="gauge-arc" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" fill="none" stroke="url(#gaugeGrad270)" stroke-width="12" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="188" filter="url(#gaugeGlow270)" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);"/>
+              <!-- Tick marks (7 ticks for 270°) -->
+              <g stroke="var(--text-muted)" stroke-width="1" opacity="0.35">
+                <line x1="43" y1="157" x2="51" y2="151"/>
+                <line x1="24" y1="100" x2="34" y2="100"/>
+                <line x1="43" y1="43" x2="51" y2="49"/>
+                <line x1="100" y1="20" x2="100" y2="30"/>
+                <line x1="157" y1="43" x2="149" y2="49"/>
+                <line x1="176" y1="100" x2="166" y2="100"/>
+                <line x1="157" y1="157" x2="149" y2="151"/>
               </g>
-
-              <!-- Zone labels on arc -->
-              <text x="28" y="88" fill="#dc2626" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">CRIT</text>
-              <text x="50" y="55" fill="#f97316" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">HIGH</text>
-              <text x="80" y="35" fill="#eab308" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6" letter-spacing="0.5px">ELEV</text>
-              <text x="120" y="35" fill="#06b6d4" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6" letter-spacing="0.5px">MOD</text>
-              <text x="155" y="55" fill="#059669" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">LOW</text>
-
+              <!-- Zone labels -->
+              <text x="30" y="145" fill="#dc2626" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7">CRIT</text>
+              <text x="20" y="85" fill="#f97316" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7">HIGH</text>
+              <text x="55" y="35" fill="#eab308" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6">ELEV</text>
+              <text x="145" y="35" fill="#06b6d4" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6">MOD</text>
+              <text x="180" y="85" fill="#059669" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7">LOW</text>
               <!-- Scale labels -->
-              <text x="18" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">-100</text>
-              <text x="100" y="18" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">0</text>
-              <text x="182" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">+100</text>
-
-              <!-- Needle with smooth CSS transition -->
+              <text x="38" y="172" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">-100</text>
+              <text x="100" y="14" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">0</text>
+              <text x="162" y="172" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">+100</text>
+              <!-- Needle -->
               <g id="gauge-needle" transform="rotate(0, 100, 100)" style="transition: transform 1.2s cubic-bezier(0.4,0,0.2,1);">
-                <line x1="100" y1="100" x2="100" y2="30" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.2" transform="translate(1,1)"/>
-                <line id="needle-line" x1="100" y1="100" x2="100" y2="28" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round" filter="url(#needleGlow)"/>
+                <line x1="100" y1="100" x2="100" y2="28" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.2" transform="translate(1,1)"/>
+                <line id="needle-line" x1="100" y1="100" x2="100" y2="26" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round" filter="url(#needleGlow270)"/>
               </g>
-
-              <!-- Center hub (3D metallic) -->
-              <circle cx="100" cy="100" r="8" fill="#1e293b" class="gauge-hub"/>
-              <circle cx="98" cy="97" r="3" fill="white" opacity="0.35"/>
-
-              <!-- Score inside SVG for tighter layout -->
-              <text id="gauge-score-svg" x="100" y="125" text-anchor="middle" fill="#1e293b" font-size="16" font-family="var(--font-mono)" font-weight="900">0</text>
-              <text id="gauge-label-svg" x="100" y="136" text-anchor="middle" fill="#1e293b" font-size="6" font-family="var(--font-head)" letter-spacing="1.5px">[LOADING]</text>
+              <!-- Center hub -->
+              <circle cx="100" cy="100" r="9" fill="#1e293b" class="gauge-hub"/>
+              <circle cx="98" cy="97" r="3.5" fill="white" opacity="0.3"/>
+              <!-- Score & label inside SVG -->
+              <text id="gauge-score-svg" x="100" y="130" text-anchor="middle" fill="#1e293b" font-size="18" font-family="var(--font-mono)" font-weight="900">0</text>
+              <text id="gauge-label-svg" x="100" y="143" text-anchor="middle" fill="#1e293b" font-size="6.5" font-family="var(--font-head)" letter-spacing="1.5px">[LOADING]</text>
+              <!-- Alert threshold line (hidden by default) -->
+              <line id="gauge-threshold-line" x1="100" y1="100" x2="100" y2="30" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4 2" opacity="0" style="transition: opacity 0.3s;"/>
             </svg>
+            <!-- AI Commentary -->
+            <div class="rg-commentary" id="rg-commentary"></div>
             <!-- Delta indicator -->
             <div class="gauge-delta" id="risk-delta"></div>
           </div>
 
-          <!-- Component contribution bars -->
-          <div class="risk-components-v2" id="risk-components">
-            <div class="rc-row">
-              <span class="rc-label">SENTIMENT</span>
-              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fg-bar"></div></div>
-              <span class="rc-value" id="rc-fg">—</span>
-            </div>
-            <div class="rc-row">
-              <span class="rc-label">VOLATILITY</span>
-              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-vix-bar"></div></div>
-              <span class="rc-value" id="rc-vix">—</span>
-            </div>
-            <div class="rc-row">
-              <span class="rc-label">LEVERAGE</span>
-              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-ls-bar"></div></div>
-              <span class="rc-value" id="rc-ls">—</span>
-            </div>
-            <div class="rc-row">
-              <span class="rc-label">FUNDING</span>
-              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fr-bar"></div></div>
-              <span class="rc-value" id="rc-fr">—</span>
-            </div>
-            <div class="rc-row">
-              <span class="rc-label">KIMCHI P.</span>
-              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-kp-bar"></div></div>
-              <span class="rc-value" id="rc-kp">—</span>
+          <!-- Tabbed sections -->
+          <div class="rg-tabs" id="rg-tabs">
+            <button class="rg-tab active" data-rgtab="components"><i data-lucide="bar-chart-3" style="width:10px;height:10px;"></i> Comp</button>
+            <button class="rg-tab" data-rgtab="radar"><i data-lucide="radar" style="width:10px;height:10px;"></i> Radar</button>
+            <button class="rg-tab" data-rgtab="heatmap"><i data-lucide="grid-3x3" style="width:10px;height:10px;"></i> Δ Map</button>
+            <button class="rg-tab" data-rgtab="corr"><i data-lucide="link" style="width:10px;height:10px;"></i> Corr</button>
+            <button class="rg-tab" data-rgtab="sim"><i data-lucide="sliders-horizontal" style="width:10px;height:10px;"></i> Sim</button>
+          </div>
+
+          <!-- Tab: Components with sparklines -->
+          <div class="rg-tab-content active" id="rg-tab-components">
+            <div class="risk-components-v2" id="risk-components">
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_sentiment">SENTIMENT</span><canvas class="rc-spark" id="rc-spark-fg" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fg-bar"></div></div><span class="rc-value" id="rc-fg">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_volatility">VOLATILITY</span><canvas class="rc-spark" id="rc-spark-vix" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-vix-bar"></div></div><span class="rc-value" id="rc-vix">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_leverage">LEVERAGE</span><canvas class="rc-spark" id="rc-spark-ls" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-ls-bar"></div></div><span class="rc-value" id="rc-ls">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_funding">FUNDING</span><canvas class="rc-spark" id="rc-spark-fr" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fr-bar"></div></div><span class="rc-value" id="rc-fr">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_kimchi">KIMCHI P.</span><canvas class="rc-spark" id="rc-spark-kp" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-kp-bar"></div></div><span class="rc-value" id="rc-kp">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_oi">OI</span><canvas class="rc-spark" id="rc-spark-oi" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-oi-bar"></div></div><span class="rc-value" id="rc-oi">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_stablecoin">USDT DOM</span><canvas class="rc-spark" id="rc-spark-sc" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-sc-bar"></div></div><span class="rc-value" id="rc-sc">—</span></div>
             </div>
           </div>
-          <!-- Timestamp -->
+
+          <!-- Tab: Radar Chart -->
+          <div class="rg-tab-content" id="rg-tab-radar">
+            <svg id="rg-radar-svg" viewBox="0 0 200 200" class="rg-radar-canvas"></svg>
+          </div>
+
+          <!-- Tab: Change Rate Heatmap -->
+          <div class="rg-tab-content" id="rg-tab-heatmap">
+            <table class="rg-heatmap-table" id="rg-heatmap-table">
+              <thead><tr><th></th><th>1H</th><th>4H</th><th>24H</th></tr></thead>
+              <tbody id="rg-heatmap-body"></tbody>
+            </table>
+          </div>
+
+          <!-- Tab: Correlation Matrix -->
+          <div class="rg-tab-content" id="rg-tab-corr">
+            <div class="rg-corr-matrix" id="rg-corr-matrix">
+              <div class="rg-corr-loading">Loading correlation data...</div>
+            </div>
+          </div>
+
+          <!-- Tab: Scenario Simulator -->
+          <div class="rg-tab-content" id="rg-tab-sim">
+            <div class="rg-simulator" id="rg-simulator">
+              <div class="rg-sim-row"><label>Fear/Greed</label><input type="range" class="rg-sim-slider" id="sim-fg" min="0" max="100" value="50"><span id="sim-fg-val">50</span></div>
+              <div class="rg-sim-row"><label>VIX</label><input type="range" class="rg-sim-slider" id="sim-vix" min="10" max="80" value="20"><span id="sim-vix-val">20</span></div>
+              <div class="rg-sim-row"><label>Long %</label><input type="range" class="rg-sim-slider" id="sim-ls" min="30" max="70" value="50"><span id="sim-ls-val">50</span></div>
+              <div class="rg-sim-row"><label>Fund Rate</label><input type="range" class="rg-sim-slider" id="sim-fr" min="-0.1" max="0.1" step="0.005" value="0"><span id="sim-fr-val">0</span></div>
+              <div class="rg-sim-row"><label>Kimchi %</label><input type="range" class="rg-sim-slider" id="sim-kp" min="-5" max="10" step="0.5" value="0"><span id="sim-kp-val">0</span></div>
+              <div class="rg-sim-row"><label>OI (B$)</label><input type="range" class="rg-sim-slider" id="sim-oi" min="10" max="50" value="20"><span id="sim-oi-val">20</span></div>
+              <div class="rg-sim-row"><label>USDT Dom%</label><input type="range" class="rg-sim-slider" id="sim-sc" min="2" max="12" step="0.5" value="5"><span id="sim-sc-val">5</span></div>
+              <div class="rg-sim-result" id="rg-sim-result">
+                <span class="rg-sim-score" id="rg-sim-score">0</span>
+                <span class="rg-sim-label" id="rg-sim-label">MODERATE</span>
+              </div>
+            </div>
+          </div>
+
           <div class="gauge-timestamp" id="gauge-timestamp"></div>
         </div>
-        <!-- Risk History 30D Chart -->
+        <!-- Risk History Chart + Zone Timeline + Price Overlay -->
         <div class="risk-history-chart" id="risk-history-section">
           <div class="risk-history-header">
             <span class="risk-history-title"><i data-lucide="trending-up" style="width:12px;height:12px;"></i> RISK INDEX (30D)</span>
             <span class="risk-history-range" id="risk-history-range">—</span>
+            <button class="rg-overlay-btn" id="rg-price-overlay-btn" title="Toggle BTC Price Overlay"><i data-lucide="layers" style="width:11px;height:11px;"></i></button>
           </div>
-          <canvas id="risk-history-canvas" width="320" height="80" style="width:100%;height:80px;"></canvas>
+          <canvas id="risk-history-canvas" width="320" height="100" style="width:100%;height:100px;cursor:crosshair;"></canvas>
+          <div class="rg-chart-tooltip hidden" id="rg-chart-tooltip"></div>
+          <div class="rg-zone-timeline" id="rg-zone-timeline"></div>
         </div>
       </div>
 
@@ -813,9 +832,9 @@
   <!-- JS Modules (v1.7) -->
   <script src="/static/js/chart.js?v=2.0"></script>
   <script src="/static/js/core.js?v=2.0"></script>
-  <script src="/static/js/data.js?v=2.0"></script>
+  <script src="/static/js/data.js?v=3.0"></script>
   <script src="/static/js/council.js?v=2.0"></script>
-  <script src="/static/js/ui.js?v=2.0"></script>
+  <script src="/static/js/ui.js?v=3.0"></script>
 
   <!-- ═══ Auth Modal ═══ -->
   <div id="auth-modal" class="auth-modal" style="display:none;">

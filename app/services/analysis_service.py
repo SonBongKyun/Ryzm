@@ -8,7 +8,7 @@ from app.core.logger import logger
 from app.core.config import CORR_ASSETS, MUSEUM_OF_SCARS
 from app.core.http_client import resilient_get
 from app.core.cache import cache
-from app.core.database import save_risk_record
+from app.core.database import save_risk_record, get_risk_component_changes, get_component_sparklines
 from app.services.market_service import fetch_yahoo_chart
 
 
@@ -135,12 +135,14 @@ def compute_risk_gauge():
     score = 0.0
     components = {}
 
+    # 1) Fear & Greed (weight: -50 ~ +50)
     fg = cache["fear_greed"].get("data", {})
     fg_score = fg.get("score", 50)
     fg_contrib = (fg_score - 50)
     components["fear_greed"] = {"value": fg_score, "contrib": round(fg_contrib, 1), "label": fg.get("label", "Neutral")}
     score += fg_contrib
 
+    # 2) Funding Rate (weight: -20 ~ +20)
     fr_data = cache["funding_rate"].get("data", [])
     if fr_data:
         avg_fr = sum(r["rate"] for r in fr_data) / len(fr_data)
@@ -148,6 +150,7 @@ def compute_risk_gauge():
         components["funding_rate"] = {"value": round(avg_fr, 4), "contrib": round(fr_contrib, 1)}
         score += fr_contrib
 
+    # 3) Long/Short Ratio (weight: deviation * -0.6)
     ls = cache["long_short_ratio"].get("data", {})
     if ls and ls.get("longAccount"):
         long_pct = ls["longAccount"] * 100
@@ -156,6 +159,7 @@ def compute_risk_gauge():
         components["long_short"] = {"value": round(long_pct, 1), "contrib": round(ls_contrib, 1)}
         score += ls_contrib
 
+    # 4) VIX (weight: -25 / -10 / +5)
     market = cache["market"].get("data", {})
     vix = market.get("VIX", {})
     if vix and vix.get("price"):
@@ -169,12 +173,55 @@ def compute_risk_gauge():
         components["vix"] = {"value": vix_val, "contrib": vix_contrib}
         score += vix_contrib
 
+    # 5) Kimchi Premium (weight: 0 ~ -15)
     kp = cache["kimchi"].get("data", {})
     if kp and kp.get("premium") is not None:
         kp_val = abs(kp["premium"])
         kp_contrib = -min(15, kp_val * 3) if kp_val > 2 else 0
         components["kimchi"] = {"value": kp.get("premium", 0), "contrib": round(kp_contrib, 1)}
         score += kp_contrib
+
+    # 6) Open Interest (weight: -15 ~ +5) — NEW
+    onchain = cache.get("onchain", {}).get("data", {})
+    oi_list = onchain.get("open_interest", [])
+    btc_oi = next((o for o in oi_list if o.get("symbol") == "BTC"), None)
+    if btc_oi:
+        oi_usd = btc_oi.get("oi_usd", 0)
+        # OI > 30B USD = overheated leverage
+        if oi_usd > 30_000_000_000:
+            oi_contrib = -15
+        elif oi_usd > 25_000_000_000:
+            oi_contrib = -8
+        elif oi_usd > 20_000_000_000:
+            oi_contrib = -3
+        else:
+            oi_contrib = 5
+        components["open_interest"] = {
+            "value": round(oi_usd / 1_000_000_000, 1),
+            "contrib": oi_contrib,
+            "unit": "B"
+        }
+        score += oi_contrib
+    else:
+        components["open_interest"] = {"value": 0, "contrib": 0, "unit": "B"}
+
+    # 7) Stablecoin / USDT Dominance (weight: -10 ~ +5) — NEW
+    regime = cache.get("regime", {}).get("data", {})
+    usdt_dom = regime.get("usdt_dom", 0)
+    if usdt_dom > 0:
+        # High USDT dom = capital fleeing to stables = risk-off
+        if usdt_dom > 8:
+            sc_contrib = -10
+        elif usdt_dom > 6:
+            sc_contrib = -4
+        elif usdt_dom < 4:
+            sc_contrib = 5
+        else:
+            sc_contrib = 0
+        components["stablecoin"] = {"value": round(usdt_dom, 1), "contrib": sc_contrib, "unit": "%"}
+        score += sc_contrib
+    else:
+        components["stablecoin"] = {"value": 0, "contrib": 0, "unit": "%"}
 
     score = max(-100, min(100, score))
 
@@ -191,10 +238,125 @@ def compute_risk_gauge():
 
     save_risk_record(score, level, components)
 
+    # AI Risk Commentary — identify biggest movers
+    commentary = _generate_risk_commentary(components, score, level)
+
+    # Component changes (1H/4H/24H) for heatmap
+    changes = get_risk_component_changes()
+
+    # Sparklines (7-day) for component trends
+    sparklines = get_component_sparklines(7)
+
     return {
         "score": round(score, 1),
         "level": level,
         "label": label,
         "components": components,
+        "commentary": commentary,
+        "changes": changes,
+        "sparklines": sparklines,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     }
+
+
+def _generate_risk_commentary(components: dict, score: float, level: str) -> str:
+    """Generate AI-style one-liner explaining the risk score."""
+    # Find top 2 contributors by absolute value
+    ranked = sorted(
+        [(k, v.get("contrib", 0)) for k, v in components.items()],
+        key=lambda x: abs(x[1]),
+        reverse=True
+    )
+    labels = {
+        "fear_greed": "Fear/Greed",
+        "vix": "VIX",
+        "long_short": "L/S Ratio",
+        "funding_rate": "Funding Rate",
+        "kimchi": "Kimchi Premium",
+        "open_interest": "Open Interest",
+        "stablecoin": "USDT Dominance"
+    }
+    parts = []
+    for k, contrib in ranked[:2]:
+        name = labels.get(k, k)
+        val = components[k].get("value", 0)
+        unit = components[k].get("unit", "")
+        direction = "▲" if contrib > 0 else "▼"
+        parts.append(f"{name} {val}{unit}({direction}{abs(contrib):.0f}p)")
+
+    if score <= -30:
+        prefix = "⚠ Risk drivers:"
+    elif score <= 0:
+        prefix = "Caution:"
+    elif score <= 30:
+        prefix = "Stable:"
+    else:
+        prefix = "Favorable:"
+
+    return f"{prefix} {' / '.join(parts)}"
+
+
+def simulate_risk_gauge(params: dict) -> dict:
+    """Simulate risk score from user-provided component values."""
+    score = 0.0
+    fg_score = params.get("fg", 50)
+    fg_contrib = fg_score - 50
+    score += fg_contrib
+
+    vix_val = params.get("vix", 15)
+    if vix_val > 30:
+        vix_contrib = -25
+    elif vix_val > 20:
+        vix_contrib = -10
+    else:
+        vix_contrib = 5
+    score += vix_contrib
+
+    long_pct = params.get("ls", 50)
+    ls_contrib = -abs(long_pct - 50) * 0.6
+    score += ls_contrib
+
+    avg_fr = params.get("fr", 0)
+    fr_contrib = max(-20, min(20, -avg_fr * 200))
+    score += fr_contrib
+
+    kp_val = abs(params.get("kp", 0))
+    kp_contrib = -min(15, kp_val * 3) if kp_val > 2 else 0
+    score += kp_contrib
+
+    oi_usd = params.get("oi", 20)  # in billions
+    if oi_usd > 30:
+        oi_contrib = -15
+    elif oi_usd > 25:
+        oi_contrib = -8
+    elif oi_usd > 20:
+        oi_contrib = -3
+    else:
+        oi_contrib = 5
+    score += oi_contrib
+
+    usdt_dom = params.get("sc", 5)
+    if usdt_dom > 8:
+        sc_contrib = -10
+    elif usdt_dom > 6:
+        sc_contrib = -4
+    elif usdt_dom < 4:
+        sc_contrib = 5
+    else:
+        sc_contrib = 0
+    score += sc_contrib
+
+    score = max(-100, min(100, score))
+
+    if score <= -60:
+        level, label = "CRITICAL", "CRITICAL FAILURE"
+    elif score <= -30:
+        level, label = "HIGH", "HIGH RISK"
+    elif score <= 0:
+        level, label = "ELEVATED", "ELEVATED"
+    elif score <= 30:
+        level, label = "MODERATE", "MODERATE"
+    else:
+        level, label = "LOW", "STABLE"
+
+    return {"score": round(score, 1), "level": level, "label": label}

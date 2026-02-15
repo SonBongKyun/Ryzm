@@ -2960,7 +2960,7 @@ html[data-theme="dark"] .cal-item:hover {
   color: #fff;
 }
 
-/* ═══ Systemic Risk Gauge (v2 – animated glow, contribution bars, pulse) ═══ */
+/* ═══ Systemic Risk Gauge v2.0 — 270° arc, radar, heatmap, simulator ═══ */
 .risk-gauge-panel {
   border-left: 3px solid var(--neon-red);
   background: linear-gradient(135deg, var(--bg-panel), rgba(220,38,38,0.02));
@@ -2977,24 +2977,66 @@ html[data-theme="dark"] .cal-item:hover {
   50%      { box-shadow: 0 0 22px rgba(var(--pulse-color), 0.45), inset 0 0 12px rgba(var(--pulse-color), 0.06); }
 }
 
+/* Alert threshold button & config */
+.rg-alert-btn {
+  background: none; border: none; cursor: pointer; color: var(--text-muted);
+  padding: 2px; margin-left: auto; opacity: 0.6; transition: opacity 0.2s;
+}
+.rg-alert-btn:hover { opacity: 1; color: var(--neon-magenta); }
+.rg-alert-btn.active { color: var(--neon-magenta); opacity: 1; }
+.rg-alert-config {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  background: var(--bg-deep); border-bottom: 1px solid var(--border-dim);
+  font-size: 0.6rem; font-family: var(--font-head);
+}
+.rg-alert-config.hidden { display: none; }
+.rg-alert-config label { color: var(--text-muted); letter-spacing: 1px; }
+.rg-alert-config input[type="range"] { flex: 1; height: 4px; accent-color: var(--neon-magenta); }
+.rg-threshold-val { font-family: var(--font-mono); font-weight: 700; color: var(--neon-magenta); min-width: 28px; text-align: center; }
+.rg-alert-save {
+  background: var(--neon-magenta); color: #fff; border: none; border-radius: 3px;
+  padding: 2px 8px; font-size: 0.55rem; cursor: pointer; font-family: var(--font-head); letter-spacing: 1px;
+}
+/* Alert flash overlay */
+.rg-alert-flash {
+  animation: alertFlash 1s ease-in-out 3;
+}
+@keyframes alertFlash {
+  0%, 100% { border-color: var(--neon-red); }
+  50% { border-color: var(--neon-magenta); box-shadow: 0 0 30px rgba(239,68,68,0.5); }
+}
+
 .risk-gauge-body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding-top: 4px;
+  gap: 4px;
+  padding-top: 2px;
 }
 .gauge-container {
   text-align: center;
   width: 100%;
-  max-width: 240px;
+  max-width: 220px;
   position: relative;
 }
 .gauge-svg {
   width: 100%;
-  max-width: 230px;
+  max-width: 210px;
   height: auto;
   filter: drop-shadow(0 2px 10px rgba(0,0,0,0.10));
+}
+
+/* AI Commentary */
+.rg-commentary {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 2px 8px;
+  line-height: 1.3;
+  max-width: 260px;
+  margin: 0 auto;
+  min-height: 14px;
 }
 
 /* Delta chip */
@@ -3003,12 +3045,10 @@ html[data-theme="dark"] .cal-item:hover {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 700;
-  min-height: 18px;
+  min-height: 16px;
   margin-top: -2px;
 }
-.delta-flash {
-  animation: deltaFlash 0.5s ease;
-}
+.delta-flash { animation: deltaFlash 0.5s ease; }
 @keyframes deltaFlash {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.35); }
@@ -3016,107 +3056,174 @@ html[data-theme="dark"] .cal-item:hover {
 }
 
 /* Dark mode: swap hub + needle colors */
-html[data-theme="dark"] .gauge-hub {
-  fill: #e2e8f0;
-}
-html[data-theme="dark"] #gauge-needle line {
-  stroke: #e2e8f0;
-}
-html[data-theme="dark"] #gauge-needle line:first-child {
-  stroke: #94a3b8;
-}
+html[data-theme="dark"] .gauge-hub { fill: #e2e8f0; }
+html[data-theme="dark"] #gauge-needle line { stroke: #e2e8f0; }
+html[data-theme="dark"] #gauge-needle line:first-child { stroke: #94a3b8; }
+html[data-theme="dark"] #gauge-score-svg { fill: #e2e8f0; }
+html[data-theme="dark"] #gauge-label-svg { fill: #e2e8f0; }
 
-/* ── Component Contribution Bars v2 ── */
+/* ── Tabs ── */
+.rg-tabs {
+  display: flex; gap: 2px; width: 100%; padding: 4px 0 2px;
+  border-top: 1px solid var(--border-dim); border-bottom: 1px solid var(--border-dim);
+}
+.rg-tab {
+  flex: 1; background: none; border: none; cursor: pointer;
+  font-family: var(--font-head); font-size: 0.5rem; letter-spacing: 0.8px;
+  color: var(--text-muted); padding: 4px 2px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+  transition: all 0.2s;
+}
+.rg-tab:hover { color: var(--text-main); background: var(--bg-deep); }
+.rg-tab.active { color: var(--neon-cyan); background: rgba(6,182,212,0.08); font-weight: 700; }
+
+.rg-tab-content { display: none; width: 100%; padding: 4px 0; min-height: 80px; }
+.rg-tab-content.active { display: block; }
+
+/* ── Component Bars v2 with sparklines ── */
 .risk-components-v2 {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  width: 100%;
-  padding: 8px 0 4px;
-  border-top: 1px solid var(--border-dim);
+  display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 4px 0;
 }
 .rc-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.6rem;
+  display: flex; align-items: center; gap: 4px; font-size: 0.6rem;
 }
 .rc-label {
-  font-family: var(--font-head);
-  letter-spacing: 1px;
-  color: var(--text-muted);
-  font-size: 0.52rem;
-  width: 64px;
-  flex-shrink: 0;
-  text-align: right;
+  font-family: var(--font-head); letter-spacing: 0.8px; color: var(--text-muted);
+  font-size: 0.48rem; width: 52px; flex-shrink: 0; text-align: right;
+}
+.rc-spark {
+  width: 36px; height: 14px; flex-shrink: 0; border-radius: 2px;
+  background: var(--bg-deep); opacity: 0.8;
 }
 .rc-bar-track {
-  flex: 1;
-  height: 7px;
-  background: var(--border-dim);
-  border-radius: 4px;
-  overflow: hidden;
-  position: relative;
+  flex: 1; height: 7px; background: var(--border-dim);
+  border-radius: 4px; overflow: hidden; position: relative;
 }
 .rc-bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  width: 0%;
+  height: 100%; border-radius: 4px; width: 0%;
   transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease;
   background: var(--neon-green);
 }
 .rc-value {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--text-main);
-  font-size: 0.58rem;
-  width: 48px;
-  flex-shrink: 0;
-  text-align: left;
+  font-family: var(--font-mono); font-weight: 700; color: var(--text-main);
+  font-size: 0.55rem; width: 44px; flex-shrink: 0; text-align: left;
+}
+
+/* ── Radar Chart ── */
+.rg-radar-canvas {
+  width: 100%; max-width: 200px; height: auto; margin: 0 auto; display: block;
+}
+
+/* ── Change Rate Heatmap ── */
+.rg-heatmap-table {
+  width: 100%; border-collapse: collapse; font-size: 0.52rem; font-family: var(--font-mono);
+}
+.rg-heatmap-table th {
+  font-family: var(--font-head); letter-spacing: 1px; color: var(--text-muted);
+  padding: 3px 4px; text-align: center; font-weight: 400; font-size: 0.5rem;
+}
+.rg-heatmap-table td {
+  text-align: center; padding: 3px 4px; border-radius: 3px; font-weight: 700;
+  transition: background 0.3s;
+}
+.rg-hm-pos { background: rgba(5,150,105,0.15); color: #059669; }
+.rg-hm-neg { background: rgba(220,38,38,0.15); color: #dc2626; }
+.rg-hm-neutral { background: var(--bg-deep); color: var(--text-muted); }
+.rg-heatmap-table td:first-child {
+  text-align: right; font-family: var(--font-head); letter-spacing: 0.5px;
+  color: var(--text-muted); font-weight: 400;
+}
+
+/* ── Correlation Matrix ── */
+.rg-corr-matrix {
+  display: grid; gap: 2px; font-size: 0.5rem; font-family: var(--font-mono);
+}
+.rg-corr-cell {
+  display: flex; align-items: center; justify-content: center;
+  padding: 3px 2px; border-radius: 3px; font-weight: 700;
+  min-width: 28px; min-height: 22px; transition: background 0.3s;
+}
+.rg-corr-header {
+  font-family: var(--font-head); letter-spacing: 0.5px;
+  color: var(--text-muted); font-weight: 400; font-size: 0.48rem;
+}
+.rg-corr-loading { text-align: center; color: var(--text-muted); font-size: 0.55rem; padding: 20px; }
+
+/* ── Scenario Simulator ── */
+.rg-simulator { display: flex; flex-direction: column; gap: 5px; padding: 2px 0; }
+.rg-sim-row {
+  display: flex; align-items: center; gap: 4px; font-size: 0.52rem;
+}
+.rg-sim-row label {
+  font-family: var(--font-head); letter-spacing: 0.5px; color: var(--text-muted);
+  width: 56px; text-align: right; flex-shrink: 0; font-size: 0.48rem;
+}
+.rg-sim-slider {
+  flex: 1; height: 3px; accent-color: var(--neon-cyan); cursor: pointer;
+}
+.rg-sim-row span {
+  font-family: var(--font-mono); font-weight: 700; color: var(--text-main);
+  width: 32px; text-align: center; font-size: 0.52rem;
+}
+.rg-sim-result {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 6px; background: var(--bg-deep); border-radius: var(--radius-md);
+  margin-top: 2px;
+}
+.rg-sim-score {
+  font-family: var(--font-mono); font-size: 1.1rem; font-weight: 900;
+}
+.rg-sim-label {
+  font-family: var(--font-head); font-size: 0.6rem; letter-spacing: 1.5px;
 }
 
 /* Timestamp */
 .gauge-timestamp {
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 0.5rem;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-  margin-top: 2px;
-  opacity: 0.7;
+  text-align: center; font-family: var(--font-mono); font-size: 0.5rem;
+  color: var(--text-muted); letter-spacing: 0.5px; margin-top: 2px; opacity: 0.7;
 }
 
-/* ═══════════════════════════════════════
-   Risk History 30D Chart
-   ═══════════════════════════════════════ */
+/* ═══ Risk History Chart v2 ═══ */
 .risk-history-chart {
-  margin-top: 8px;
-  padding: 8px 10px 6px;
-  border-top: 1px solid var(--border-dim);
+  margin-top: 6px; padding: 6px 10px 4px;
+  border-top: 1px solid var(--border-dim); position: relative;
 }
 .risk-history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;
 }
 .risk-history-title {
-  font-family: var(--font-head);
-  font-size: 0.6rem;
-  color: var(--text-muted);
-  letter-spacing: 1.5px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  font-family: var(--font-head); font-size: 0.6rem; color: var(--text-muted);
+  letter-spacing: 1.5px; display: flex; align-items: center; gap: 4px;
 }
 .risk-history-range {
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  color: var(--text-secondary);
+  font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-secondary);
 }
+.rg-overlay-btn {
+  background: none; border: 1px solid var(--border-dim); border-radius: 3px;
+  padding: 2px 4px; cursor: pointer; color: var(--text-muted);
+  font-size: 0.5rem; transition: all 0.2s;
+}
+.rg-overlay-btn:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); }
+.rg-overlay-btn.active { background: rgba(6,182,212,0.1); border-color: var(--neon-cyan); color: var(--neon-cyan); }
 #risk-history-canvas {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-md); background: var(--bg-deep);
+}
+/* Tooltip */
+.rg-chart-tooltip {
+  position: absolute; background: var(--bg-panel); border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md); padding: 4px 8px; font-family: var(--font-mono);
+  font-size: 0.55rem; color: var(--text-main); pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10; white-space: nowrap;
+}
+.rg-chart-tooltip.hidden { display: none; }
+
+/* Zone timeline */
+.rg-zone-timeline {
+  display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 3px;
   background: var(--bg-deep);
+}
+.rg-zone-segment {
+  height: 100%; transition: width 0.3s;
 }
 
 /* ═══════════════════════════════════════

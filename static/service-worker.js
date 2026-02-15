@@ -45,7 +45,7 @@ const API_CACHE_RULES = {
 const API_NEVER_CACHE = [
   '/api/me', '/api/layout', '/api/alerts', '/api/council',
   '/api/validate', '/api/chat', '/api/auth/', '/api/payments/',
-  '/api/export/', '/api/journal'
+  '/api/export/', '/api/journal', '/api/risk-gauge/simulate'
 ];
 
 // ── Install: precache static assets ──

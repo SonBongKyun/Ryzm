@@ -143,8 +143,89 @@ function updateThemeIcon(theme) {
   lucide.createIcons();
 }
 
-/* ── Systemic Risk Gauge (v2 — animated, contribution bars, pulse glow) ── */
+/* ══════════════════════════════════════════════════════
+   Systemic Risk Gauge v2.0
+   270° arc, radar, heatmap, sparklines, simulator,
+   correlation, zone timeline, BTC overlay, alerts
+   ══════════════════════════════════════════════════════ */
 let _prevRiskScore = null;
+let _riskAlertThreshold = parseFloat(localStorage.getItem('rg_threshold') || '-999');
+let _btcPriceOverlay = false;
+let _cachedRiskHistory = null;
+
+// ── Tab switching ──
+document.addEventListener('DOMContentLoaded', () => {
+  const tabContainer = document.getElementById('rg-tabs');
+  if (tabContainer) {
+    tabContainer.addEventListener('click', e => {
+      const btn = e.target.closest('.rg-tab');
+      if (!btn) return;
+      const tabId = btn.dataset.rgtab;
+      tabContainer.querySelectorAll('.rg-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.rg-tab-content').forEach(c => c.classList.remove('active'));
+      const target = document.getElementById('rg-tab-' + tabId);
+      if (target) target.classList.add('active');
+    });
+  }
+  // Alert threshold UI
+  const alertBtn = document.getElementById('rg-alert-btn');
+  const alertConfig = document.getElementById('rg-alert-config');
+  const thresholdSlider = document.getElementById('rg-threshold');
+  const thresholdVal = document.getElementById('rg-threshold-val');
+  const alertSave = document.getElementById('rg-alert-save');
+  if (alertBtn && alertConfig) {
+    alertBtn.addEventListener('click', () => {
+      alertConfig.classList.toggle('hidden');
+      alertBtn.classList.toggle('active');
+    });
+  }
+  if (thresholdSlider && thresholdVal) {
+    thresholdSlider.value = _riskAlertThreshold > -999 ? _riskAlertThreshold : -50;
+    thresholdVal.textContent = thresholdSlider.value;
+    thresholdSlider.addEventListener('input', () => { thresholdVal.textContent = thresholdSlider.value; });
+  }
+  if (alertSave) {
+    alertSave.addEventListener('click', () => {
+      _riskAlertThreshold = parseFloat(thresholdSlider.value);
+      localStorage.setItem('rg_threshold', _riskAlertThreshold);
+      alertConfig.classList.add('hidden');
+      alertBtn.classList.add('active');
+      _updateThresholdLine(_riskAlertThreshold);
+    });
+  }
+  // BTC overlay toggle
+  const overlayBtn = document.getElementById('rg-price-overlay-btn');
+  if (overlayBtn) {
+    overlayBtn.addEventListener('click', () => {
+      _btcPriceOverlay = !_btcPriceOverlay;
+      overlayBtn.classList.toggle('active', _btcPriceOverlay);
+      if (_cachedRiskHistory) drawRiskHistoryChart(_cachedRiskHistory);
+    });
+  }
+  // Simulator sliders
+  document.querySelectorAll('.rg-sim-slider').forEach(slider => {
+    const valSpan = document.getElementById(slider.id + '-val');
+    if (valSpan) {
+      slider.addEventListener('input', () => {
+        valSpan.textContent = slider.value;
+        _runSimulation();
+      });
+    }
+  });
+});
+
+function _updateThresholdLine(score) {
+  const line = document.getElementById('gauge-threshold-line');
+  if (!line) return;
+  if (score <= -999) { line.setAttribute('opacity', '0'); return; }
+  const angle = (score / 100) * 135;
+  const rad = (angle - 90) * Math.PI / 180;
+  const cx = 100, cy = 100, r = 75;
+  const x2 = cx + r * Math.cos(rad), y2 = cy + r * Math.sin(rad);
+  line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+  line.setAttribute('opacity', '0.6');
+}
 
 async function fetchRiskGauge() {
   try {
@@ -159,6 +240,7 @@ async function fetchRiskGauge() {
     const panel = document.getElementById('risk-gauge-panel');
     const tsEl = document.getElementById('gauge-timestamp');
     const needleLine = document.getElementById('needle-line');
+    const commentaryEl = document.getElementById('rg-commentary');
 
     if (!scoreSvg) return;
 
@@ -167,35 +249,35 @@ async function fetchRiskGauge() {
 
     // Color mapping
     const levelColors = {
-      'CRITICAL': '#dc2626',
-      'HIGH': '#f97316',
-      'ELEVATED': '#eab308',
-      'MODERATE': '#06b6d4',
-      'LOW': '#059669'
+      'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308',
+      'MODERATE': '#06b6d4', 'LOW': '#059669'
     };
     const color = levelColors[data.level] || '#64748b';
 
-    // Update SVG score/label with countup animation
+    // Score + label with countup
     animateCountup(scoreSvg, score, { duration: 800, decimals: 1, useComma: false });
     scoreSvg.setAttribute('fill', color);
     labelSvg.textContent = `[${data.label}]`;
     labelSvg.setAttribute('fill', color);
 
-    // Needle color matches risk
+    // Needle color
     if (needleLine) needleLine.setAttribute('stroke', color);
 
-    // Needle rotation (CSS transition handles animation)
-    const needleAngle = (clampedScore / 100) * 90;
-    if (needleEl) {
-      needleEl.setAttribute('transform', `rotate(${needleAngle}, 100, 100)`);
-    }
+    // 270° needle rotation: -100→-135°, 0→0°, +100→+135°
+    const needleAngle = (clampedScore / 100) * 135;
+    if (needleEl) needleEl.setAttribute('transform', `rotate(${needleAngle}, 100, 100)`);
 
-    // Arc fill (CSS transition handles animation)
+    // 270° arc fill: total arc length ≈ 377
     const pct = (clampedScore + 100) / 200;
-    const arcLen = 251;
+    const arcLen = 377;
     if (arcEl) arcEl.setAttribute('stroke-dashoffset', arcLen - (pct * arcLen));
 
-    // Delta indicator (▲/▼)
+    // AI Commentary
+    if (commentaryEl && data.commentary) {
+      commentaryEl.textContent = data.commentary;
+    }
+
+    // Delta indicator
     if (deltaEl && _prevRiskScore !== null) {
       const diff = score - _prevRiskScore;
       if (Math.abs(diff) > 0.5) {
@@ -210,15 +292,20 @@ async function fetchRiskGauge() {
     }
     _prevRiskScore = score;
 
-    // Panel pulse glow based on risk level
+    // Alert check
+    if (_riskAlertThreshold > -999 && score <= _riskAlertThreshold) {
+      if (panel && !panel.classList.contains('rg-alert-flash')) {
+        panel.classList.add('rg-alert-flash');
+        setTimeout(() => panel.classList.remove('rg-alert-flash'), 3500);
+      }
+    }
+
+    // Panel pulse glow
     if (panel) {
       panel.classList.remove('risk-pulse-critical', 'risk-pulse-high', 'risk-pulse-elevated', 'risk-pulse-moderate', 'risk-pulse-low');
       const pulseClass = {
-        'CRITICAL': 'risk-pulse-critical',
-        'HIGH': 'risk-pulse-high',
-        'ELEVATED': 'risk-pulse-elevated',
-        'MODERATE': 'risk-pulse-moderate',
-        'LOW': 'risk-pulse-low'
+        'CRITICAL': 'risk-pulse-critical', 'HIGH': 'risk-pulse-high',
+        'ELEVATED': 'risk-pulse-elevated', 'MODERATE': 'risk-pulse-moderate', 'LOW': 'risk-pulse-low'
       }[data.level];
       if (pulseClass) panel.classList.add(pulseClass);
     }
@@ -226,11 +313,14 @@ async function fetchRiskGauge() {
     // Timestamp
     if (tsEl) tsEl.textContent = `Updated ${data.timestamp || new Date().toLocaleTimeString('en-US', {hour12:false})}`;
 
-    // Component contribution bars
-    const c = data.components || {};
+    // Update threshold line on gauge
+    _updateThresholdLine(_riskAlertThreshold);
 
-    // Helper: render a component bar
-    function updateBar(barId, valId, contrib, maxContrib, displayText, val) {
+    // ── Component bars + sparklines ──
+    const c = data.components || {};
+    const sparklines = data.sparklines || {};
+
+    function updateBar(barId, valId, sparkId, sparkKey, contrib, maxContrib, displayText) {
       const bar = document.getElementById(barId);
       const valEl = document.getElementById(valId);
       if (bar) {
@@ -241,42 +331,291 @@ async function fetchRiskGauge() {
         bar.style.boxShadow = `0 0 6px ${barColor}40`;
       }
       if (valEl) valEl.innerHTML = displayText;
+      // Draw sparkline
+      const sparkData = sparklines[sparkKey];
+      if (sparkData && sparkData.length > 1) {
+        _drawSparkline(sparkId, sparkData);
+      }
     }
 
     if (c.fear_greed) {
       const fgVal = c.fear_greed.value;
       const fgColor = fgVal < 30 ? '#dc2626' : fgVal > 70 ? '#059669' : '#eab308';
-      updateBar('rc-fg-bar', 'rc-fg', c.fear_greed.contrib, 50,
-        `<span style="color:${fgColor}">${fgVal}/100</span>`, fgVal);
+      updateBar('rc-fg-bar', 'rc-fg', 'rc-spark-fg', 'fg', c.fear_greed.contrib, 50,
+        `<span style="color:${fgColor}">${fgVal}/100</span>`);
     }
     if (c.vix) {
       const vColor = c.vix.value > 25 ? '#dc2626' : '#059669';
-      updateBar('rc-vix-bar', 'rc-vix', c.vix.contrib, 25,
-        `<span style="color:${vColor}">${c.vix.value}</span>`, c.vix.value);
+      updateBar('rc-vix-bar', 'rc-vix', 'rc-spark-vix', 'vix', c.vix.contrib, 25,
+        `<span style="color:${vColor}">${c.vix.value}</span>`);
     }
     if (c.long_short) {
-      updateBar('rc-ls-bar', 'rc-ls', c.long_short.contrib, 30,
-        `${c.long_short.value}% L`, c.long_short.value);
+      updateBar('rc-ls-bar', 'rc-ls', 'rc-spark-ls', 'ls', c.long_short.contrib, 30,
+        `${c.long_short.value}% L`);
     }
     if (c.funding_rate) {
       const frVal = c.funding_rate.value;
       const frColor = Math.abs(frVal) > 0.05 ? '#dc2626' : '#059669';
-      updateBar('rc-fr-bar', 'rc-fr', c.funding_rate.contrib, 20,
-        `<span style="color:${frColor}">${frVal > 0 ? '+' : ''}${frVal}%</span>`, frVal);
+      updateBar('rc-fr-bar', 'rc-fr', 'rc-spark-fr', 'fr', c.funding_rate.contrib, 20,
+        `<span style="color:${frColor}">${frVal > 0 ? '+' : ''}${frVal}%</span>`);
     }
     if (c.kimchi) {
       const kpVal = c.kimchi.value;
       const kpColor = Math.abs(kpVal) > 3 ? '#f97316' : '#059669';
-      updateBar('rc-kp-bar', 'rc-kp', c.kimchi.contrib, 15,
-        `<span style="color:${kpColor}">${kpVal > 0 ? '+' : ''}${kpVal}%</span>`, kpVal);
+      updateBar('rc-kp-bar', 'rc-kp', 'rc-spark-kp', 'kp', c.kimchi.contrib, 15,
+        `<span style="color:${kpColor}">${kpVal > 0 ? '+' : ''}${kpVal}%</span>`);
+    }
+    if (c.open_interest) {
+      const oiVal = c.open_interest.value;
+      const oiColor = oiVal > 25 ? '#dc2626' : '#059669';
+      updateBar('rc-oi-bar', 'rc-oi', 'rc-spark-oi', 'oi', c.open_interest.contrib, 15,
+        `<span style="color:${oiColor}">${oiVal}B</span>`);
+    }
+    if (c.stablecoin) {
+      const scVal = c.stablecoin.value;
+      const scColor = scVal > 7 ? '#dc2626' : '#059669';
+      updateBar('rc-sc-bar', 'rc-sc', 'rc-spark-sc', 'sc', c.stablecoin.contrib, 10,
+        `<span style="color:${scColor}">${scVal}%</span>`);
     }
 
-    // Auto-update Market Vibe from risk gauge (only if council hasn't set it)
+    // ── Radar Chart ──
+    _drawRadarChart(c);
+
+    // ── Change Heatmap ──
+    if (data.changes) _drawChangeHeatmap(data.changes);
+
+    // Auto-update Market Vibe
     updateMarketVibe(data);
+
+    // Populate simulator with current values
+    _populateSimulator(c);
 
   } catch (e) {
     console.error('Risk Gauge Error:', e);
   }
+}
+
+// ── Sparkline drawer ──
+function _drawSparkline(canvasId, data) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || data.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  // Limit to last 30 points
+  const pts = data.slice(-30);
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const range = max - min || 1;
+  const step = w / (pts.length - 1);
+
+  const latest = pts[pts.length - 1];
+  const lineColor = latest >= 0 ? '#059669' : '#dc2626';
+
+  ctx.beginPath();
+  pts.forEach((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / range) * (h - 2) - 1;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Endpoint dot
+  const lastX = (pts.length - 1) * step;
+  const lastY = h - ((latest - min) / range) * (h - 2) - 1;
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+}
+
+// ── Radar Chart ──
+function _drawRadarChart(components) {
+  const svg = document.getElementById('rg-radar-svg');
+  if (!svg) return;
+
+  const keys = ['fear_greed', 'vix', 'long_short', 'funding_rate', 'kimchi', 'open_interest', 'stablecoin'];
+  const labels = ['SEN', 'VIX', 'L/S', 'FR', 'KP', 'OI', 'SC'];
+  const maxVals = [50, 25, 30, 20, 15, 15, 10];
+  const n = keys.length;
+  const cx = 100, cy = 100, r = 70;
+
+  let html = '';
+  // Grid rings (3 levels)
+  for (let ring = 1; ring <= 3; ring++) {
+    const rr = (r * ring) / 3;
+    let points = [];
+    for (let i = 0; i < n; i++) {
+      const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+      points.push(`${cx + rr * Math.cos(angle)},${cy + rr * Math.sin(angle)}`);
+    }
+    html += `<polygon points="${points.join(' ')}" fill="none" stroke="var(--border-dim)" stroke-width="0.5" opacity="0.5"/>`;
+  }
+  // Axis lines
+  for (let i = 0; i < n; i++) {
+    const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+    const x2 = cx + r * Math.cos(angle), y2 = cy + r * Math.sin(angle);
+    html += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="var(--border-dim)" stroke-width="0.5" opacity="0.4"/>`;
+  }
+  // Data polygon
+  let dataPoints = [];
+  for (let i = 0; i < n; i++) {
+    const comp = components[keys[i]];
+    const val = comp ? Math.abs(comp.contrib) : 0;
+    const pct = Math.min(1, val / maxVals[i]);
+    const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+    dataPoints.push(`${cx + r * pct * Math.cos(angle)},${cy + r * pct * Math.sin(angle)}`);
+  }
+  const fillColor = _prevRiskScore > 0 ? 'rgba(5,150,105,0.25)' : 'rgba(220,38,38,0.25)';
+  const strokeColor = _prevRiskScore > 0 ? '#059669' : '#dc2626';
+  html += `<polygon points="${dataPoints.join(' ')}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5"/>`;
+  // Data dots + labels
+  for (let i = 0; i < n; i++) {
+    const comp = components[keys[i]];
+    const val = comp ? Math.abs(comp.contrib) : 0;
+    const pct = Math.min(1, val / maxVals[i]);
+    const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+    const dx = cx + r * pct * Math.cos(angle), dy = cy + r * pct * Math.sin(angle);
+    const dotColor = (comp && comp.contrib >= 0) ? '#059669' : '#dc2626';
+    html += `<circle cx="${dx}" cy="${dy}" r="2.5" fill="${dotColor}"/>`;
+    // Label
+    const lx = cx + (r + 14) * Math.cos(angle), ly = cy + (r + 14) * Math.sin(angle);
+    html += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted)" font-size="6" font-family="var(--font-head)" letter-spacing="0.5px">${labels[i]}</text>`;
+  }
+  svg.innerHTML = html;
+}
+
+// ── Change Rate Heatmap ──
+function _drawChangeHeatmap(changes) {
+  const body = document.getElementById('rg-heatmap-body');
+  if (!body) return;
+  const labels = { fg: 'SENT', vix: 'VIX', ls: 'L/S', fr: 'FUND', kp: 'KP', oi: 'OI', sc: 'USDT' };
+  const periods = ['1h', '4h', '24h'];
+  let html = '';
+  for (const [key, label] of Object.entries(labels)) {
+    html += `<tr><td>${label}</td>`;
+    for (const p of periods) {
+      const val = (changes[p] && changes[p][key]) || 0;
+      const cls = val > 0.5 ? 'rg-hm-pos' : val < -0.5 ? 'rg-hm-neg' : 'rg-hm-neutral';
+      const sign = val > 0 ? '+' : '';
+      html += `<td class="${cls}">${sign}${val.toFixed(1)}</td>`;
+    }
+    html += '</tr>';
+  }
+  body.innerHTML = html;
+}
+
+// ── Correlation Matrix ──
+async function _fetchCorrelationMatrix() {
+  try {
+    const res = await fetch('/api/correlation');
+    const data = await res.json();
+    _drawCorrelationMatrix(data);
+  } catch (e) {
+    console.error('[RG Corr]', e);
+  }
+}
+
+function _drawCorrelationMatrix(data) {
+  const container = document.getElementById('rg-corr-matrix');
+  if (!container || !data.matrix) return;
+
+  const assets = data.assets || Object.keys(data.matrix);
+  const matrix = data.matrix;
+  const n = assets.length;
+
+  container.style.gridTemplateColumns = `40px repeat(${n}, 1fr)`;
+  let html = '<div class="rg-corr-cell rg-corr-header"></div>';
+  // Headers
+  for (const a of assets) {
+    html += `<div class="rg-corr-cell rg-corr-header">${a}</div>`;
+  }
+  // Rows — handle both dict-of-dicts and array-of-arrays
+  for (let i = 0; i < n; i++) {
+    html += `<div class="rg-corr-cell rg-corr-header">${assets[i]}</div>`;
+    for (let j = 0; j < n; j++) {
+      let val;
+      if (Array.isArray(matrix)) {
+        val = matrix[i] ? matrix[i][j] : 0;
+      } else {
+        val = matrix[assets[i]] ? (matrix[assets[i]][assets[j]] || 0) : 0;
+      }
+      const absVal = Math.abs(val);
+      let bg, fg;
+      if (i === j) {
+        bg = 'rgba(6,182,212,0.15)'; fg = 'var(--neon-cyan)';
+      } else if (val > 0.5) {
+        bg = `rgba(5,150,105,${0.1 + absVal * 0.3})`; fg = '#059669';
+      } else if (val < -0.3) {
+        bg = `rgba(220,38,38,${0.1 + absVal * 0.3})`; fg = '#dc2626';
+      } else {
+        bg = 'var(--bg-deep)'; fg = 'var(--text-muted)';
+      }
+      html += `<div class="rg-corr-cell" style="background:${bg};color:${fg}">${val.toFixed(2)}</div>`;
+    }
+  }
+  container.innerHTML = html;
+}
+
+// ── Scenario Simulator ──
+function _populateSimulator(components) {
+  const mapping = {
+    'sim-fg': c => c.fear_greed?.value ?? 50,
+    'sim-vix': c => c.vix?.value ?? 20,
+    'sim-ls': c => c.long_short?.value ?? 50,
+    'sim-fr': c => c.funding_rate?.value ?? 0,
+    'sim-kp': c => c.kimchi?.value ?? 0,
+    'sim-oi': c => c.open_interest?.value ?? 20,
+    'sim-sc': c => c.stablecoin?.value ?? 5,
+  };
+  for (const [id, getter] of Object.entries(mapping)) {
+    const slider = document.getElementById(id);
+    const valSpan = document.getElementById(id + '-val');
+    if (slider) {
+      const val = getter(components);
+      slider.value = val;
+      if (valSpan) valSpan.textContent = typeof val === 'number' ? (Number.isInteger(val) ? val : val.toFixed(2)) : val;
+    }
+  }
+}
+
+let _simDebounce = null;
+function _runSimulation() {
+  clearTimeout(_simDebounce);
+  _simDebounce = setTimeout(async () => {
+    const params = {
+      fg: parseFloat(document.getElementById('sim-fg')?.value || 50),
+      vix: parseFloat(document.getElementById('sim-vix')?.value || 20),
+      ls: parseFloat(document.getElementById('sim-ls')?.value || 50),
+      fr: parseFloat(document.getElementById('sim-fr')?.value || 0),
+      kp: parseFloat(document.getElementById('sim-kp')?.value || 0),
+      oi: parseFloat(document.getElementById('sim-oi')?.value || 20),
+      sc: parseFloat(document.getElementById('sim-sc')?.value || 5),
+    };
+    try {
+      const res = await fetch('/api/risk-gauge/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      const data = await res.json();
+      const scoreEl = document.getElementById('rg-sim-score');
+      const labelEl = document.getElementById('rg-sim-label');
+      const levelColors = {
+        'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308',
+        'MODERATE': '#06b6d4', 'LOW': '#059669'
+      };
+      if (scoreEl) { scoreEl.textContent = data.score; scoreEl.style.color = levelColors[data.level] || '#64748b'; }
+      if (labelEl) { labelEl.textContent = data.label; labelEl.style.color = levelColors[data.level] || '#64748b'; }
+    } catch (e) {
+      console.error('[Sim]', e);
+    }
+  }, 200);
 }
 
 /**
@@ -285,7 +624,7 @@ async function fetchRiskGauge() {
  */
 let _vibeFromCouncil = false;
 function updateMarketVibe(riskData) {
-  if (_vibeFromCouncil) return; // Council already provided a vibe, skip auto
+  if (_vibeFromCouncil) return;
   const vStat = document.getElementById('vibe-status');
   const vMsg = document.getElementById('vibe-message');
   if (!vStat) return;
@@ -308,13 +647,15 @@ function updateMarketVibe(riskData) {
   if (vMsg) vMsg.innerText = vibe.msg;
 }
 
-/* ══ Risk Index 30-Day History Chart ══ */
+/* ══ Risk Index 30-Day History Chart (Interactive + BTC overlay + Zone Timeline) ══ */
 async function fetchRiskHistory() {
   try {
     const res = await fetch('/api/risk-gauge/history?days=30');
     const data = await res.json();
     if (data.history && data.history.length > 0) {
+      _cachedRiskHistory = data.history;
       drawRiskHistoryChart(data.history);
+      _drawZoneTimeline(data.history);
     }
   } catch (e) {
     console.error('[RiskHistory]', e);
@@ -324,6 +665,7 @@ async function fetchRiskHistory() {
 function drawRiskHistoryChart(history) {
   const canvas = document.getElementById('risk-history-canvas');
   const rangeEl = document.getElementById('risk-history-range');
+  const tooltipEl = document.getElementById('rg-chart-tooltip');
   if (!canvas || !history.length) return;
 
   const ctx = canvas.getContext('2d');
@@ -333,22 +675,18 @@ function drawRiskHistoryChart(history) {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
 
-  const w = rect.width;
-  const h = rect.height;
-  const pad = { top: 6, right: 8, bottom: 14, left: 28 };
+  const w = rect.width, h = rect.height;
+  const pad = { top: 8, right: _btcPriceOverlay ? 32 : 8, bottom: 16, left: 28 };
   const cw = w - pad.left - pad.right;
   const ch = h - pad.top - pad.bottom;
 
   ctx.clearRect(0, 0, w, h);
 
   const scores = history.map(r => r.score);
-  const minScore = -100;
-  const maxScore = 100;
+  const minScore = -100, maxScore = 100;
 
-  // Range display
   const latest = scores[scores.length - 1];
-  const min = Math.min(...scores);
-  const max = Math.max(...scores);
+  const min = Math.min(...scores), max = Math.max(...scores);
   if (rangeEl) rangeEl.textContent = `L:${min.toFixed(0)} / H:${max.toFixed(0)} / NOW:${latest.toFixed(0)}`;
 
   const step = cw / Math.max(scores.length - 1, 1);
@@ -377,6 +715,22 @@ function drawRiskHistoryChart(history) {
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // Alert threshold line
+  if (_riskAlertThreshold > -999) {
+    ctx.strokeStyle = 'rgba(239,68,68,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, yOf(_riskAlertThreshold));
+    ctx.lineTo(pad.left + cw, yOf(_riskAlertThreshold));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '6px monospace';
+    ctx.fillStyle = 'rgba(239,68,68,0.6)';
+    ctx.textAlign = 'left';
+    ctx.fillText('ALERT', pad.left + 2, yOf(_riskAlertThreshold) - 2);
+  }
+
   // Y-axis labels
   ctx.font = '7px monospace';
   ctx.fillStyle = 'rgba(100,116,139,0.6)';
@@ -391,7 +745,6 @@ function drawRiskHistoryChart(history) {
   gradient.addColorStop(0.5, 'rgba(100,116,139,0.05)');
   gradient.addColorStop(1, 'rgba(220,38,38,0.25)');
 
-  // Fill area
   ctx.beginPath();
   ctx.moveTo(pad.left, yOf(0));
   scores.forEach((s, i) => ctx.lineTo(pad.left + i * step, yOf(s)));
@@ -400,15 +753,12 @@ function drawRiskHistoryChart(history) {
   ctx.fillStyle = gradient;
   ctx.fill();
 
-  // Line
+  // Risk score line
   ctx.beginPath();
   scores.forEach((s, i) => {
-    const x = pad.left + i * step;
-    const y = yOf(s);
+    const x = pad.left + i * step, y = yOf(s);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-
-  // Color the line based on latest value
   const lineColor = latest > 30 ? '#059669' : latest > 0 ? '#06b6d4' : latest > -30 ? '#eab308' : latest > -60 ? '#f97316' : '#dc2626';
   ctx.strokeStyle = lineColor;
   ctx.lineWidth = 1.5;
@@ -417,29 +767,115 @@ function drawRiskHistoryChart(history) {
   // Latest point pulse
   const lastX = pad.left + (scores.length - 1) * step;
   const lastY = yOf(latest);
-  ctx.beginPath();
-  ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
-  ctx.fillStyle = lineColor;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(lastX, lastY, 7, 0, Math.PI * 2);
-  ctx.strokeStyle = lineColor;
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.3;
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(lastX, lastY, 4, 0, Math.PI * 2); ctx.fillStyle = lineColor; ctx.fill();
+  ctx.beginPath(); ctx.arc(lastX, lastY, 7, 0, Math.PI * 2); ctx.strokeStyle = lineColor; ctx.lineWidth = 1; ctx.globalAlpha = 0.3; ctx.stroke(); ctx.globalAlpha = 1;
 
-  // Level dots with color coding
+  // Level dots
   const levelColors = { 'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308', 'MODERATE': '#06b6d4', 'LOW': '#059669' };
   history.forEach((r, i) => {
-    const x = pad.left + i * step;
-    const y = yOf(r.score);
-    ctx.beginPath();
-    ctx.arc(x, y, 2, 0, Math.PI * 2);
-    ctx.fillStyle = levelColors[r.level] || '#94a3b8';
-    ctx.fill();
+    const x = pad.left + i * step, y = yOf(r.score);
+    ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fillStyle = levelColors[r.level] || '#94a3b8'; ctx.fill();
   });
+
+  // ── BTC Price Overlay (Feature 13) ──
+  if (_btcPriceOverlay) {
+    _drawBtcPriceOverlay(ctx, history, pad, cw, ch, w);
+  }
+
+  // ── Interactive tooltip on hover (Feature 3) ──
+  canvas.onmousemove = (e) => {
+    if (!tooltipEl) return;
+    const cRect = canvas.getBoundingClientRect();
+    const mx = e.clientX - cRect.left;
+    const idx = Math.round((mx - pad.left) / step);
+    if (idx >= 0 && idx < history.length) {
+      const r = history[idx];
+      const dateStr = r.timestamp ? r.timestamp.slice(0, 16).replace('T', ' ') : '';
+      tooltipEl.innerHTML = `<b>${dateStr}</b><br>Score: <b style="color:${levelColors[r.level]||'#fff'}">${r.score.toFixed(1)}</b> [${r.level}]`;
+      tooltipEl.classList.remove('hidden');
+      const tx = Math.min(mx + 10, w - 120);
+      tooltipEl.style.left = tx + 'px';
+      tooltipEl.style.top = '4px';
+    }
+  };
+  canvas.onmouseleave = () => { if (tooltipEl) tooltipEl.classList.add('hidden'); };
 }
+
+// ── BTC Price Overlay ──
+async function _drawBtcPriceOverlay(ctx, history, pad, cw, ch, w) {
+  try {
+    const res = await fetch('/api/market');
+    const marketData = await res.json();
+    const btcPrice = marketData?.market?.BTC?.price;
+    if (!btcPrice) return;
+
+    // We'll use a simple overlay showing just the latest BTC price indicator
+    // and scale line on right axis
+    const priceMin = btcPrice * 0.9, priceMax = btcPrice * 1.1;
+    const yPrice = (v) => pad.top + ch * (1 - (v - priceMin) / (priceMax - priceMin));
+
+    // Right Y-axis for BTC price
+    ctx.font = '6px monospace';
+    ctx.fillStyle = 'rgba(247,147,26,0.6)';
+    ctx.textAlign = 'left';
+    const rightX = pad.left + cw + 3;
+    ctx.fillText(`$${(btcPrice/1000).toFixed(1)}k`, rightX, yPrice(btcPrice) + 3);
+
+    // Horizontal price line
+    ctx.strokeStyle = 'rgba(247,147,26,0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, yPrice(btcPrice));
+    ctx.lineTo(pad.left + cw, yPrice(btcPrice));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // BTC label
+    ctx.fillStyle = 'rgba(247,147,26,0.5)';
+    ctx.font = '7px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('BTC ₿', pad.left + cw - 2, yPrice(btcPrice) - 3);
+  } catch (e) {
+    // silently fail
+  }
+}
+
+// ── Zone Timeline (Feature 4) ──
+function _drawZoneTimeline(history) {
+  const container = document.getElementById('rg-zone-timeline');
+  if (!container || !history.length) return;
+
+  const levelColors = {
+    'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308',
+    'MODERATE': '#06b6d4', 'LOW': '#059669'
+  };
+
+  // Group consecutive same-level segments
+  let segments = [];
+  let current = { level: history[0].level, count: 1 };
+  for (let i = 1; i < history.length; i++) {
+    if (history[i].level === current.level) {
+      current.count++;
+    } else {
+      segments.push(current);
+      current = { level: history[i].level, count: 1 };
+    }
+  }
+  segments.push(current);
+
+  const total = history.length;
+  container.innerHTML = segments.map(s => {
+    const pct = (s.count / total * 100).toFixed(1);
+    return `<div class="rg-zone-segment" style="width:${pct}%;background:${levelColors[s.level]||'#64748b'}" title="${s.level}: ${s.count} records"></div>`;
+  }).join('');
+}
+
+// Load correlation matrix once (delayed)
+setTimeout(() => _fetchCorrelationMatrix(), 5000);
+// Refresh correlation every 10 minutes
+setInterval(() => _fetchCorrelationMatrix(), 600000);
 
 // Fetch risk history on page load (delayed)
 setTimeout(() => fetchRiskHistory(), 4000);

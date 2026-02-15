@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from app.core.logger import logger
 from app.core.config import CACHE_TTL, MUSEUM_OF_SCARS
 from app.core.cache import cache, build_api_meta
-from app.core.database import get_risk_history, db_connect, _db_lock
+from app.core.database import get_risk_history, db_connect, _db_lock, get_risk_component_changes, get_component_sparklines
 from app.core.http_client import get_api_health
 from app.services.market_service import fetch_multi_timeframe
 from app.services.onchain_service import (
@@ -22,6 +22,7 @@ from app.services.scanner_service import fetch_alpha_scanner
 from app.services.analysis_service import (
     fetch_regime_data, fetch_correlation_matrix,
     generate_economic_calendar, compute_risk_gauge,
+    simulate_risk_gauge,
 )
 
 import sqlite3
@@ -173,6 +174,18 @@ def get_risk_gauge_history(days: int = 30):
     except Exception as e:
         logger.error(f"[API] Risk history error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch risk history")
+
+
+@router.post("/api/risk-gauge/simulate")
+async def post_risk_simulate(request: Request):
+    """Scenario simulator: compute hypothetical risk score."""
+    try:
+        body = await request.json()
+        result = simulate_risk_gauge(body)
+        return result
+    except Exception as e:
+        logger.error(f"[API] Risk simulate error: {e}")
+        raise HTTPException(status_code=500, detail="Simulation failed")
 
 
 @router.get("/api/scars")
