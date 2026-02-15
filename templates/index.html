@@ -19,6 +19,8 @@
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <!-- TradingView Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
   <link rel="stylesheet" href="/static/styles.css?v=3.6" />
@@ -406,20 +408,28 @@
 
       <div class="glass-panel chart-container" id="chart-panel"
         style="height:450px; padding:0; border:1px solid var(--border-bright);">
-        <!-- Multi-Symbol Tabs -->
-        <div class="chart-tabs" id="chart-tabs">
-          <button class="chart-tab active" data-symbol="BINANCE:BTCUSDT" data-name="BTC/USDT">BTC</button>
-          <button class="chart-tab" data-symbol="BINANCE:ETHUSDT" data-name="ETH/USDT">ETH</button>
-          <button class="chart-tab" data-symbol="BINANCE:SOLUSDT" data-name="SOL/USDT">SOL</button>
-          <button class="chart-tab" data-symbol="BINANCE:XRPUSDT" data-name="XRP/USDT">XRP</button>
-          <button class="chart-tab" data-symbol="FX:USDJPY" data-name="USD/JPY">USD/JPY</button>
-          <button class="chart-tab" data-symbol="TVC:DXY" data-name="DXY">DXY</button>
+        <!-- Symbol Tabs -->
+        <div class="chart-header">
+          <div class="chart-tabs" id="chart-tabs">
+            <button class="chart-tab active" data-binance="BTCUSDT" data-name="BTC/USDT"><span class="tab-label">BTC</span><span class="tab-price"></span></button>
+            <button class="chart-tab" data-binance="ETHUSDT" data-name="ETH/USDT"><span class="tab-label">ETH</span><span class="tab-price"></span></button>
+            <button class="chart-tab" data-binance="SOLUSDT" data-name="SOL/USDT"><span class="tab-label">SOL</span><span class="tab-price"></span></button>
+            <button class="chart-tab" data-binance="XRPUSDT" data-name="XRP/USDT"><span class="tab-label">XRP</span><span class="tab-price"></span></button>
+          </div>
+          <div class="chart-intervals" id="chart-intervals">
+            <button class="interval-btn" data-interval="1m">1m</button>
+            <button class="interval-btn" data-interval="5m">5m</button>
+            <button class="interval-btn" data-interval="15m">15m</button>
+            <button class="interval-btn active" data-interval="1H">1H</button>
+            <button class="interval-btn" data-interval="4H">4H</button>
+            <button class="interval-btn" data-interval="1D">1D</button>
+            <button class="interval-btn" data-interval="1W">1W</button>
+          </div>
         </div>
-        <div class="tradingview-widget-container" style="height:calc(100% - 36px); width:100%;">
-          <div id="tradingview_b1e30" style="height:100%; width:100%;"></div>
-          <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-          <!-- Initial chart loaded by initChartTabs() in core.js -->
-        </div>
+        <!-- OHLCV Legend -->
+        <div class="ryzm-chart-legend" id="ryzm-chart-legend"></div>
+        <!-- Chart Canvas -->
+        <div id="ryzm-chart-container" style="height:calc(100% - 64px); width:100%;"></div>
       </div>
 
       <button class="ai-scan-btn" id="btn-council-start">
@@ -715,7 +725,7 @@
     </div>
   </div>
 
-  <!-- TradingView Chart Modal -->
+  <!-- Ryzm Chart Modal (price card click) -->
   <div id="tv-modal" class="tv-modal" style="display:none;">
     <div class="tv-modal-content">
       <div class="tv-modal-header">
@@ -747,11 +757,12 @@
     </div>
   </div>
 
-  <!-- JS Modules (v1.6) -->
-  <script src="/static/js/core.js?v=1.6"></script>
-  <script src="/static/js/data.js?v=1.6"></script>
-  <script src="/static/js/council.js?v=1.6"></script>
-  <script src="/static/js/ui.js?v=1.6"></script>
+  <!-- JS Modules (v1.7) -->
+  <script src="/static/js/chart.js?v=1.7"></script>
+  <script src="/static/js/core.js?v=1.7"></script>
+  <script src="/static/js/data.js?v=1.7"></script>
+  <script src="/static/js/council.js?v=1.7"></script>
+  <script src="/static/js/ui.js?v=1.7"></script>
 
   <!-- ═══ Auth Modal ═══ -->
   <div id="auth-modal" class="auth-modal" style="display:none;">

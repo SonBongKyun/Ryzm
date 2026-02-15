@@ -266,22 +266,22 @@ async function fetchLiqZones() {
   } catch (e) { console.error('LiqZones Error:', e); }
 }
 
-/* ── TradingView Chart Modal ── */
+/* ── Chart Modal (Price Card Click) ── */
+let _modalChart = null;
+
 function initTradingViewModal() {
   const modal = document.getElementById('tv-modal');
   const closeBtn = document.getElementById('tv-modal-close');
   if (!modal || !closeBtn) return;
 
-  closeBtn.addEventListener('click', () => {
+  const destroyModal = () => {
     modal.style.display = 'none';
+    if (_modalChart) { _modalChart.remove(); _modalChart = null; }
     document.getElementById('tv-chart-container').innerHTML = '';
-  });
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.style.display = 'none';
-      document.getElementById('tv-chart-container').innerHTML = '';
-    }
-  });
+  };
+
+  closeBtn.addEventListener('click', destroyModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) destroyModal(); });
 
   // Attach click to price cards
   document.addEventListener('click', (e) => {
@@ -289,41 +289,81 @@ function initTradingViewModal() {
     if (!card) return;
     const symbol = card.querySelector('.coin-name')?.textContent?.trim();
     if (!symbol) return;
-    openTradingViewChart(symbol);
+    openRyzmModalChart(symbol);
   });
 }
 
-function openTradingViewChart(symbol) {
+function openRyzmModalChart(symbol) {
   const modal = document.getElementById('tv-modal');
   const title = document.getElementById('tv-modal-title');
   const container = document.getElementById('tv-chart-container');
   if (!modal || !container) return;
 
-  const tvSymbol = `BINANCE:${symbol.toUpperCase()}USDT`;
+  const binanceSymbol = `${symbol.toUpperCase()}USDT`;
   title.textContent = `${symbol}/USDT`;
   modal.style.display = 'flex';
-
   container.innerHTML = '';
-  const widgetDiv = document.createElement('div');
-  widgetDiv.id = 'tv-widget-' + Date.now();
-  widgetDiv.style.height = '100%';
-  container.appendChild(widgetDiv);
 
-  new TradingView.widget({
-    container_id: widgetDiv.id,
-    autosize: true,
-    symbol: tvSymbol,
-    interval: '60',
-    timezone: 'Asia/Seoul',
-    theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
-    style: '1',
-    locale: _currentLang === 'ko' ? 'kr' : 'en',
-    toolbar_bg: '#0a0e17',
-    hide_side_toolbar: false,
-    allow_symbol_change: true,
-    save_image: false,
-    studies: ['RSI@tv-basicstudies', 'MACD@tv-basicstudies']
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const t = isDark ? {
+    bg: 'rgba(5, 8, 18, 0)', text: 'rgba(140, 160, 190, 0.65)',
+    grid: 'rgba(30, 45, 70, 0.35)', cross: 'rgba(6, 182, 212, 0.35)',
+    border: 'rgba(30, 45, 70, 0.5)', up: '#06d6a0', down: '#ef476f',
+  } : {
+    bg: 'rgba(250, 250, 252, 0)', text: 'rgba(70, 80, 100, 0.65)',
+    grid: 'rgba(0, 0, 0, 0.06)', cross: 'rgba(6, 100, 150, 0.25)',
+    border: 'rgba(0, 0, 0, 0.08)', up: '#059669', down: '#dc2626',
+  };
+
+  _modalChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth, height: container.clientHeight,
+    layout: {
+      background: { type: 'solid', color: t.bg }, textColor: t.text,
+      fontFamily: "'Share Tech Mono', monospace", fontSize: 11,
+    },
+    grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
+    crosshair: {
+      vertLine: { color: t.cross, labelBackgroundColor: 'rgba(6,182,212,0.9)' },
+      horzLine: { color: t.cross, labelBackgroundColor: 'rgba(6,182,212,0.9)' },
+    },
+    rightPriceScale: { borderColor: t.border },
+    timeScale: { borderColor: t.border, timeVisible: true, secondsVisible: false },
+    watermark: { visible: true, fontSize: 36, horzAlign: 'center', vertAlign: 'center',
+      color: isDark ? 'rgba(6,182,212,0.06)' : 'rgba(0,0,0,0.03)', text: `${symbol}/USDT` },
   });
+
+  const candleSeries = _modalChart.addCandlestickSeries({
+    upColor: t.up, downColor: t.down, wickUpColor: t.up, wickDownColor: t.down, borderVisible: false,
+  });
+  const volSeries = _modalChart.addHistogramSeries({
+    priceFormat: { type: 'volume' }, priceScaleId: 'vol',
+  });
+  _modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+
+  // Fetch 1h klines for modal
+  fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1h&limit=300`)
+    .then(r => r.json())
+    .then(data => {
+      const candles = data.map(k => ({
+        time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+      }));
+      const vols = data.map(k => ({
+        time: Math.floor(k[0] / 1000), value: +k[5],
+        color: +k[4] >= +k[1]
+          ? (isDark ? 'rgba(6,214,160,0.18)' : 'rgba(5,150,105,0.15)')
+          : (isDark ? 'rgba(239,71,111,0.18)' : 'rgba(220,38,38,0.15)'),
+      }));
+      candleSeries.setData(candles);
+      volSeries.setData(vols);
+      _modalChart.timeScale().fitContent();
+    })
+    .catch(err => console.error('[RyzmModal] kline fetch error:', err));
+
+  // Resize on window resize
+  const ro = new ResizeObserver(() => {
+    if (_modalChart) _modalChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+  });
+  ro.observe(container);
 }
 
 /* ── PWA Service Worker Registration ── */

@@ -408,56 +408,39 @@ function initPanelCollapse() {
   });
 }
 
-/* ── Chart Multi-Symbol Tabs ── */
-let _tvWidget = null;
+/* ── Ryzm Custom Chart Tabs ── */
 
 function initChartTabs() {
   const tabContainer = document.getElementById('chart-tabs');
+  const intervalContainer = document.getElementById('chart-intervals');
   if (!tabContainer) return;
 
-  // Load initial chart (BTC)
-  setTimeout(() => loadTradingViewChart('BINANCE:BTCUSDT'), 300);
+  // Create chart and load initial BTC
+  setTimeout(() => {
+    RyzmChart.create('ryzm-chart-container');
+    RyzmChart.switchSymbol('BTCUSDT', '1h');
+  }, 200);
 
+  // Symbol tab clicks
   tabContainer.addEventListener('click', (e) => {
     const tab = e.target.closest('.chart-tab');
     if (!tab) return;
-
-    // Update active state
     tabContainer.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-
-    const symbol = tab.dataset.symbol;
-    loadTradingViewChart(symbol);
+    RyzmChart.switchSymbol(tab.dataset.binance);
     playSound('click');
   });
-}
 
-function loadTradingViewChart(symbol) {
-  const container = document.getElementById('tradingview_b1e30');
-  if (!container) return;
-
-  container.innerHTML = '';
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-
-  try {
-    _tvWidget = new TradingView.widget({
-      autosize: true,
-      symbol: symbol,
-      interval: 'D',
-      timezone: 'Asia/Seoul',
-      theme: isDark ? 'dark' : 'light',
-      style: '1',
-      locale: 'en',
-      enable_publishing: false,
-      backgroundColor: isDark ? 'rgba(15,23,42,1)' : 'rgba(255,255,255,1)',
-      gridColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-      hide_top_toolbar: false,
-      hide_legend: false,
-      save_image: false,
-      container_id: 'tradingview_b1e30'
+  // Interval button clicks
+  if (intervalContainer) {
+    intervalContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('.interval-btn');
+      if (!btn) return;
+      intervalContainer.querySelectorAll('.interval-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      RyzmChart.switchInterval(btn.dataset.interval);
+      playSound('click');
     });
-  } catch (e) {
-    console.error('TradingView load error:', e);
   }
 }
 

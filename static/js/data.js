@@ -130,8 +130,7 @@ function toggleTheme() {
   // Remove transition class after animation
   setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 500);
   // Reload chart with correct theme
-  const activeTab = document.querySelector('.chart-tab.active');
-  if (activeTab) loadTradingViewChart(activeTab.dataset.symbol);
+  if (typeof RyzmChart !== 'undefined') RyzmChart.updateTheme();
   playSound('click');
 }
 

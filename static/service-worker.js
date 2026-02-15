@@ -1,13 +1,14 @@
 /* ─────────────────────────────────────────────
    Ryzm Terminal – Service Worker v3.0
    ───────────────────────────────────────────── */
-const CACHE_NAME = 'ryzm-v3.1';
+const CACHE_NAME = 'ryzm-v3.2';
 const API_CACHE_NAME = 'ryzm-api-v3';
 
 // ── Precache: actual files loaded by index.html ──
 const STATIC_ASSETS = [
   '/',
   '/static/styles.css',
+  '/static/js/chart.js',
   '/static/js/core.js',
   '/static/js/data.js',
   '/static/js/council.js',
