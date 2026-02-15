@@ -40,10 +40,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://cdn.jsdelivr.net https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
             "img-src 'self' data: blob: https:; "
-            "font-src 'self' https://cdn.jsdelivr.net; "
-            "connect-src 'self' https://api.binance.com https://fapi.binance.com https://api.coingecko.com https://api.alternative.me https://s3.tradingview.com wss://stream.binance.com; "
+            "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+            "connect-src 'self' https://api.binance.com https://fapi.binance.com https://api.coingecko.com https://api.alternative.me https://s3.tradingview.com wss://stream.binance.com:9443 wss://stream.binance.com:443 wss://stream.binance.com wss://fstream.binance.com https://fonts.googleapis.com; "
             "frame-src https://s3.tradingview.com https://www.tradingview.com https://js.stripe.com; "
             "object-src 'none'; "
             "base-uri 'self'; "

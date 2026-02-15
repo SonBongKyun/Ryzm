@@ -449,9 +449,7 @@ function loadValidatorCredits() {
 
 let MAX_FREE_VALIDATIONS_SERVER = MAX_FREE_VALIDATIONS;
 
-function saveValidatorCredits() {
-  localStorage.setItem('validatorCredits', validatorCredits);
-}
+// saveValidatorCredits removed — server is the source of truth (PR-4)
 
 function updateCreditsDisplay() {
   const creditsEl = document.getElementById('val-credits');

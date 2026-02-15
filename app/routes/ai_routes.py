@@ -8,6 +8,8 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from fastapi.responses import JSONResponse
+
 from app.core.logger import logger
 from app.core.config import (
     DAILY_FREE_LIMITS, DAILY_PRO_LIMITS,
@@ -43,7 +45,14 @@ def get_council(request: Request, response: Response):
     limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     used = count_usage_today(uid, "council")
     if used >= limits["council"]:
-        raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['council']} councils/day). Upgrade to Pro for unlimited access.")
+        return JSONResponse(status_code=403, content={
+            "code": "LIMIT_REACHED",
+            "feature": "council",
+            "remaining": 0,
+            "used": used,
+            "limit": limits["council"],
+            "detail": f"Daily limit reached ({limits['council']} councils/day). Upgrade to Pro for unlimited access.",
+        })
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -200,7 +209,14 @@ def validate_trade(request: TradeValidationRequest, http_request: Request, respo
     limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     used = count_usage_today(uid, "validate")
     if used >= limits["validate"]:
-        raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['validate']} validations/day). Upgrade to Pro for unlimited access.")
+        return JSONResponse(status_code=403, content={
+            "code": "LIMIT_REACHED",
+            "feature": "validate",
+            "remaining": 0,
+            "used": used,
+            "limit": limits["validate"],
+            "detail": f"Daily limit reached ({limits['validate']} validations/day). Upgrade to Pro for unlimited access.",
+        })
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -255,7 +271,14 @@ def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Respon
     limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     used = count_usage_today(uid, "chat")
     if used >= limits["chat"]:
-        raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['chat']} chats/day). Upgrade to Pro for unlimited access.")
+        return JSONResponse(status_code=403, content={
+            "code": "LIMIT_REACHED",
+            "feature": "chat",
+            "remaining": 0,
+            "used": used,
+            "limit": limits["chat"],
+            "detail": f"Daily limit reached ({limits['chat']} chats/day). Upgrade to Pro for unlimited access.",
+        })
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]

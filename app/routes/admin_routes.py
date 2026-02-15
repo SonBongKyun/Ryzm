@@ -112,4 +112,5 @@ def publish_briefing(request: BriefingRequest, http_request: Request):
 
 @router.get("/admin")
 def admin_page(request: Request):
+    require_admin(request)  # PR-3: protect admin page
     return templates.TemplateResponse(request=request, name="admin.html")

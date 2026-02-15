@@ -114,6 +114,8 @@ async function fetchCalendar() {
 function initTheme() {
   const saved = localStorage.getItem('ryzm-theme') || 'light';
   document.documentElement.setAttribute('data-theme', saved);
+  // Sync body class for components that check body.classList (e.g. TradingView modal)
+  document.body.classList.toggle('white-theme', saved === 'light');
   updateThemeIcon(saved);
   const btn = document.getElementById('theme-toggle');
   if (btn) btn.addEventListener('click', toggleTheme);
@@ -125,6 +127,8 @@ function toggleTheme() {
   // Smooth transition class
   document.documentElement.classList.add('theme-transitioning');
   document.documentElement.setAttribute('data-theme', next);
+  // Sync body class for TradingView modal and other components
+  document.body.classList.toggle('white-theme', next === 'light');
   localStorage.setItem('ryzm-theme', next);
   updateThemeIcon(next);
   // Remove transition class after animation

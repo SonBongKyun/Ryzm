@@ -22,14 +22,21 @@ from app.core.database import (
 )
 from app.core.email import send_verification_email, send_password_reset_email
 
+from app.core.security import check_rate_limit
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+
+# ── Auth rate-limit category: stricter than general (10 req / 60s) ──
+RATE_LIMIT_AUTH = "auth"
 
 
 @router.post("/register")
 def register(body: RegisterRequest, request: Request):
     """Register a new account with email + password. Sends verification email."""
+    if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
+        raise HTTPException(429, "Too many requests. Please wait a moment.")
     if not _EMAIL_RE.match(body.email):
         raise HTTPException(400, "Invalid email format")
     if len(body.password) < 8:
@@ -71,14 +78,16 @@ def register(body: RegisterRequest, request: Request):
         "email_verified": False,
         "message": "Verification email sent. Please check your inbox.",
     })
-    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax")
+    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=True)
     logger.info(f"[Auth] User registered: {body.email}")
     return resp
 
 
 @router.post("/login")
-def login(body: LoginRequest):
+def login(body: LoginRequest, request: Request):
     """Login with email + password → JWT token."""
+    if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
+        raise HTTPException(429, "Too many attempts. Please wait a moment.")
     user = get_user_by_email(body.email)
     if not user:
         raise HTTPException(401, "Invalid credentials")
@@ -95,7 +104,7 @@ def login(body: LoginRequest):
         "tier": user["tier"],
         "token": token,
     })
-    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax")
+    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=True)
     logger.info(f"[Auth] Login: {body.email}")
     return resp
 
@@ -159,8 +168,10 @@ def resend_verification(request: Request):
 
 
 @router.post("/forgot-password")
-def forgot_password(body: ForgotPasswordRequest):
+def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Send password reset email. Always returns 200 to avoid email enumeration."""
+    if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
+        raise HTTPException(429, "Too many requests. Please wait a moment.")
     user = get_user_by_email(body.email)
     if user:
         reset_token = generate_reset_token()
@@ -189,4 +200,3 @@ def do_reset_password(body: ResetPasswordRequest):
 
     logger.info(f"[Auth] Password reset completed for {user_info['email']}")
     return {"status": "ok", "message": "Password reset successfully. You can now login."}
-    return resp

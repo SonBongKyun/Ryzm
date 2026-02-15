@@ -29,7 +29,7 @@ def check_rate_limit(ip: str, category: str = "general") -> bool:
     now = time.time()
     key = f"{ip}:{category}"
     _rate_limits[key] = [t for t in _rate_limits[key] if now - t < RATE_LIMIT_WINDOW]
-    max_req = RATE_LIMIT_MAX_AI if category == "ai" else RATE_LIMIT_MAX_GENERAL
+    max_req = RATE_LIMIT_MAX_AI if category == "ai" else (10 if category == "auth" else RATE_LIMIT_MAX_GENERAL)
     if len(_rate_limits[key]) >= max_req:
         return False
     _rate_limits[key].append(now)

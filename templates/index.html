@@ -622,6 +622,21 @@
               </div>
             </div>
           </div>
+          <!-- PR-5: Cumulative Return Curve -->
+          <div class="ch-equity-section" id="ch-equity-section" style="margin-top:8px;">
+            <div class="ch-overlay-header">
+              <span class="ch-overlay-title"><i data-lucide="trending-up" style="width:12px;height:12px;"></i> CUMULATIVE RETURN</span>
+            </div>
+            <canvas id="ch-equity-canvas" width="400" height="80" style="width:100%;height:80px;"></canvas>
+          </div>
+          <!-- PR-5: Regime Performance Badges -->
+          <div class="ch-regime-badges" id="ch-regime-badges" style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;font-size:0.62rem;"></div>
+          <!-- PR-5: CSV Export Button (Pro) -->
+          <div style="text-align:right;margin-top:4px;">
+            <button id="btn-export-csv" class="btn-export-csv" style="font-size:0.62rem;padding:2px 8px;border:1px solid var(--border-dim);background:transparent;color:var(--text-secondary);border-radius:4px;cursor:pointer;" title="Export CSV (Pro)">
+              <i data-lucide="download" style="width:10px;height:10px;"></i> CSV
+            </button>
+          </div>
           <div class="ch-records" id="ch-records" style="max-height:120px; overflow-y:auto; font-size:0.7rem;">
             <div style="text-align:center; color:var(--text-muted); padding:10px;">Run Council to start tracking...</div>
           </div>
@@ -851,12 +866,13 @@
     </div>
   </div>
 
-  <!-- JS Modules (v1.7) -->
-  <script src="/static/js/chart.js?v=2.0"></script>
-  <script src="/static/js/core.js?v=2.0"></script>
-  <script src="/static/js/data.js?v=3.0"></script>
-  <script src="/static/js/council.js?v=2.0"></script>
-  <script src="/static/js/ui.js?v=3.1"></script>
+  <!-- JS Modules (v4.0 — unified entry) -->
+  <script src="/static/js/api.js?v=4.0"></script>
+  <script src="/static/js/chart.js?v=4.0"></script>
+  <script src="/static/js/core.js?v=4.0"></script>
+  <script src="/static/js/data.js?v=4.0"></script>
+  <script src="/static/js/council.js?v=4.0"></script>
+  <script src="/static/js/ui.js?v=4.0"></script>
 
   <!-- ═══ Auth Modal ═══ -->
   <div id="auth-modal" class="auth-modal" style="display:none;">

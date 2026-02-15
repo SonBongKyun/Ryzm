@@ -382,8 +382,8 @@ function initPanelCollapse() {
     const body = panel.querySelector('.panel-body');
     if (!body) return;
 
-    // Generate a stable key from panel title text
-    const key = title.textContent.trim().replace(/\s+/g, '_').substring(0, 30);
+    // Generate a stable key: prefer data-panel-key attribute, fall back to id
+    const key = panel.dataset.panelKey || panel.id || title.textContent.trim().replace(/\s+/g, '_').substring(0, 30);
 
     // Restore saved state
     if (saved[key]) {

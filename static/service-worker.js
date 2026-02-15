@@ -1,13 +1,15 @@
 /* ─────────────────────────────────────────────
    Ryzm Terminal – Service Worker v3.0
    ───────────────────────────────────────────── */
-const CACHE_NAME = 'ryzm-v3.2';
-const API_CACHE_NAME = 'ryzm-api-v3';
+const CACHE_NAME = 'ryzm-v4.0';
+const API_CACHE_NAME = 'ryzm-api-v4';
 
 // ── Precache: actual files loaded by index.html ──
+// No ?v= suffix — SW uses ignoreSearch for cache matching
 const STATIC_ASSETS = [
   '/',
   '/static/styles.css',
+  '/static/js/api.js',
   '/static/js/chart.js',
   '/static/js/core.js',
   '/static/js/data.js',

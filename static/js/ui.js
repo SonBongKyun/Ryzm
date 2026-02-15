@@ -9,13 +9,23 @@ function showToast(type, title, message) {
 
   const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : '⚠';
 
-  toast.innerHTML = `
-    <div class="toast-icon">${icon}</div>
-    <div class="toast-message">
-      <strong>${title}</strong><br>
-      ${message}
-    </div>
-  `;
+  // PR-3: XSS-safe — use textContent instead of innerHTML for user-facing strings
+  const iconDiv = document.createElement('div');
+  iconDiv.className = 'toast-icon';
+  iconDiv.textContent = icon;
+
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'toast-message';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  const br = document.createElement('br');
+  const msgText = document.createTextNode(message);
+  msgDiv.appendChild(strong);
+  msgDiv.appendChild(br);
+  msgDiv.appendChild(msgText);
+
+  toast.appendChild(iconDiv);
+  toast.appendChild(msgDiv);
 
   document.body.appendChild(toast);
 
@@ -614,35 +624,6 @@ if (!document.getElementById('spin-animation-style')) {
   document.head.appendChild(style);
 }
 
-/* ─── Enhanced Data Loading States ─── */
-function showLoadingSkeleton(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  container.innerHTML = `
-    <div class="skeleton skeleton-title"></div>
-    <div class="skeleton skeleton-text"></div>
-    <div class="skeleton skeleton-text"></div>
-    <div class="skeleton skeleton-text" style="width: 80%;"></div>
-  `;
-  container.classList.add('panel-loading');
-}
-
-function hideLoadingSkeleton(containerId) {
-  const container = document.getElementById(containerId);
-  if (container) {
-    container.classList.remove('panel-loading');
-  }
-}
-
-/* ─── Smooth Scroll to Element ─── */
-function smoothScrollTo(elementId) {
-  const element = document.getElementById(elementId);
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-}
-
 /* ─── Keyboard Shortcuts ─── */
 document.addEventListener('keydown', (e) => {
   // Ctrl/Cmd + R: Refresh all data
@@ -757,6 +738,12 @@ function renderCouncilHistory(data) {
   // Score vs BTC Overlay Chart
   drawScoreVsBtcOverlay(records.slice().reverse());
 
+  // PR-5: Cumulative return curve
+  drawEquityCurve(records.slice().reverse());
+
+  // PR-5: Regime performance badges
+  renderRegimeBadges(records, score_vs_btc);
+
   // Score vs BTC Stats
   if (score_vs_btc) {
     const bullAvg = document.getElementById('ch-bull-avg');
@@ -793,9 +780,9 @@ function renderCouncilHistory(data) {
       '<span class="ch-pending">⏳</span>';
     const time = r.timestamp ? r.timestamp.split(' ')[1] || r.timestamp : '—';
     return `<div class="ch-record-row">
-      <span class="ch-record-time">${time}</span>
-      <span class="ch-record-score" style="color:${scoreColor}">${r.consensus_score}</span>
-      <span class="ch-record-vibe">${r.vibe_status || '—'}</span>
+      <span class="ch-record-time">${escapeHtml(time)}</span>
+      <span class="ch-record-score" style="color:${scoreColor}">${parseInt(r.consensus_score) || 0}</span>
+      <span class="ch-record-vibe">${escapeHtml(r.vibe_status || '—')}</span>
       <span class="ch-record-hit">${hitIcon}</span>
     </div>`;
   }).join('');
@@ -1882,3 +1869,174 @@ async function deleteAlert(id) {
     refreshAlertList();
   } catch {}
 }
+
+
+/* ═══════════════════════════════════════════════════════
+   PR-5: Accuracy Tracking 2.0
+   ═══════════════════════════════════════════════════════ */
+
+/**
+ * drawEquityCurve — cumulative hypothetical return curve.
+ * Simple strategy: follow the AI signal (BULL → +return, BEAR → -return).
+ */
+function drawEquityCurve(records) {
+  const canvas = document.getElementById('ch-equity-canvas');
+  if (!canvas) return;
+
+  const evaluated = records.filter(r =>
+    r.btc_price && r.btc_price > 0 && r.btc_price_after && parseFloat(r.btc_price_after) > 0
+  );
+  if (evaluated.length < 2) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  const pad = { top: 6, right: 10, bottom: 14, left: 28 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, w, h);
+
+  // Compute cumulative returns
+  let cumReturn = 0;
+  const curve = [0]; // start at 0%
+  evaluated.forEach(r => {
+    const after = parseFloat(r.btc_price_after);
+    const pctChange = (after - r.btc_price) / r.btc_price * 100;
+    const score = r.consensus_score || 50;
+    // Signal: score >= 60 → long (capture gain), score <= 40 → short (inverse), else flat
+    let signal = 0;
+    if (score >= 60) signal = 1;
+    else if (score <= 40) signal = -1;
+    cumReturn += pctChange * signal;
+    curve.push(cumReturn);
+  });
+
+  const minY = Math.min(...curve);
+  const maxY = Math.max(...curve);
+  const range = maxY - minY || 1;
+
+  const x = (i) => pad.left + (i / (curve.length - 1)) * cw;
+  const y = (v) => pad.top + ch - ((v - minY) / range) * ch;
+
+  // Zero line
+  ctx.strokeStyle = 'rgba(148,163,184,0.2)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  const zeroY = y(0);
+  ctx.beginPath(); ctx.moveTo(pad.left, zeroY); ctx.lineTo(w - pad.right, zeroY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Curve gradient
+  const gradient = ctx.createLinearGradient(0, pad.top, 0, h);
+  const finalReturn = curve[curve.length - 1];
+  if (finalReturn >= 0) {
+    gradient.addColorStop(0, 'rgba(5,150,105,0.3)');
+    gradient.addColorStop(1, 'rgba(5,150,105,0)');
+    ctx.strokeStyle = '#059669';
+  } else {
+    gradient.addColorStop(0, 'rgba(220,38,38,0)');
+    gradient.addColorStop(1, 'rgba(220,38,38,0.3)');
+    ctx.strokeStyle = '#dc2626';
+  }
+
+  // Fill area
+  ctx.beginPath();
+  ctx.moveTo(x(0), zeroY);
+  curve.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.lineTo(x(curve.length - 1), zeroY);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Line
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  curve.forEach((v, i) => {
+    if (i === 0) ctx.moveTo(x(i), y(v));
+    else ctx.lineTo(x(i), y(v));
+  });
+  ctx.stroke();
+
+  // End label
+  ctx.font = '9px Inter, system-ui';
+  ctx.fillStyle = finalReturn >= 0 ? '#059669' : '#dc2626';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${finalReturn >= 0 ? '+' : ''}${finalReturn.toFixed(2)}%`, w - 2, y(finalReturn) - 3);
+
+  // Y-axis labels
+  ctx.fillStyle = 'rgba(148,163,184,0.6)';
+  ctx.font = '8px Inter, system-ui';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${maxY >= 0 ? '+' : ''}${maxY.toFixed(1)}%`, pad.left - 2, pad.top + 8);
+  ctx.fillText(`${minY >= 0 ? '+' : ''}${minY.toFixed(1)}%`, pad.left - 2, h - pad.bottom);
+}
+
+/**
+ * renderRegimeBadges — show performance badges by market regime.
+ * Regimes: BULL (score ≥ 60), BEAR (score ≤ 40), NEUTRAL, HIGH_CONF, LOW_CONF
+ */
+function renderRegimeBadges(records, scoreVsBtc) {
+  const container = document.getElementById('ch-regime-badges');
+  if (!container) return;
+
+  const evaluated = records.filter(r => r.hit !== null && r.hit !== undefined);
+  if (!evaluated.length) { container.innerHTML = ''; return; }
+
+  // Group by regime
+  const regimes = {};
+  evaluated.forEach(r => {
+    let regime = 'NEUTRAL';
+    if (r.consensus_score >= 70) regime = 'BULL';
+    else if (r.consensus_score >= 60) regime = 'ALT';
+    else if (r.consensus_score <= 30) regime = 'BEAR';
+    else if (r.consensus_score <= 40) regime = 'RISK OFF';
+
+    if (!regimes[regime]) regimes[regime] = { hits: 0, total: 0 };
+    regimes[regime].total++;
+    if (r.hit === 1) regimes[regime].hits++;
+  });
+
+  // Render badges
+  const badgeColors = {
+    BULL: '#059669', BEAR: '#dc2626', ALT: '#f59e0b',
+    'RISK OFF': '#8b5cf6', NEUTRAL: '#64748b'
+  };
+
+  container.innerHTML = Object.entries(regimes)
+    .filter(([, v]) => v.total >= 2) // only show regimes with enough data
+    .map(([regime, data]) => {
+      const pct = Math.round((data.hits / data.total) * 100);
+      const color = badgeColors[regime] || '#64748b';
+      return `<span class="regime-badge" style="border-color:${color};color:${color};" title="${data.hits}/${data.total} hits">
+        ${escapeHtml(regime)} ${pct}%
+      </span>`;
+    }).join('');
+}
+
+/* PR-5: CSV Export button handler */
+document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/export/council-history', { credentials: 'same-origin' });
+    if (res.status === 403) {
+      if (typeof openUpgradeModal === 'function') openUpgradeModal('general');
+      showToast('warning', '⚡ Pro Feature', 'CSV export requires Pro subscription.');
+      return;
+    }
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ryzm_council_history.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('success', '✓ Exported', 'Council history CSV downloaded.');
+  } catch (e) {
+    console.error('[CSV Export]', e);
+    showToast('error', '⚠ Export Failed', 'Could not export data.');
+  }
+});
