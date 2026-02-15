@@ -2,14 +2,12 @@
 Ryzm Terminal — AI Service
 Gemini council debate generation (Phase 2: token-optimised).
 """
-import json
-
-import google.generativeai as genai
 
 from app.core.logger import logger
 from app.core.config import CouncilResponse
-from app.core.security import parse_gemini_json, validate_ai_response
-from app.core.prompt_utils import compress_market, compress_news, generation_config, COUNCIL_MAX_OUTPUT
+from app.core.security import validate_ai_response
+from app.core.ai_client import call_gemini_json
+from app.core.prompt_utils import compress_market, compress_news, COUNCIL_MAX_OUTPUT
 
 
 def generate_council_debate(market_data, news_data):
@@ -48,17 +46,10 @@ News:
 }}"""
 
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(
-            system_prompt,
-            generation_config=generation_config(COUNCIL_MAX_OUTPUT),
-        )
-        result = parse_gemini_json(response.text)
+        result = call_gemini_json(system_prompt, max_tokens=COUNCIL_MAX_OUTPUT)
         result = validate_ai_response(result, CouncilResponse)
         logger.info("[Council] Successfully generated AI analysis")
         return result
-    except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"[Ryzm Brain] JSON parsing error: {e}")
     except Exception as e:
         logger.error(f"[Ryzm Brain] Error: {e}")
 

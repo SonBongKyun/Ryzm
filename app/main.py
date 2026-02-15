@@ -12,6 +12,8 @@ from app.routes.data_routes import router as data_router
 from app.routes.ai_routes import router as ai_router
 from app.routes.admin_routes import router as admin_router
 from app.routes.user_routes import router as user_router
+from app.routes.auth_routes import router as auth_router
+from app.routes.payment_routes import router as payment_router
 from app.background import startup_background_tasks
 
 app = FastAPI(title="Ryzm Terminal API")
@@ -29,6 +31,8 @@ app.include_router(data_router)
 app.include_router(ai_router)
 app.include_router(admin_router)
 app.include_router(user_router)
+app.include_router(auth_router)
+app.include_router(payment_router)
 
 
 @app.on_event("startup")

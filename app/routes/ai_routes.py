@@ -7,11 +7,10 @@ import threading
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response
-import google.generativeai as genai
 
 from app.core.logger import logger
 from app.core.config import (
-    DAILY_FREE_LIMITS,
+    DAILY_FREE_LIMITS, DAILY_PRO_LIMITS,
     TradeValidationRequest, ChatRequest,
     ValidatorResponse, ChatResponse,
 )
@@ -21,11 +20,12 @@ from app.core.database import (
     evaluate_council_accuracy, count_usage_today, record_usage,
 )
 from app.core.security import (
-    check_rate_limit, parse_gemini_json, validate_ai_response,
-    sanitize_external_text, get_or_create_uid,
+    check_rate_limit, validate_ai_response,
+    sanitize_external_text, get_or_create_uid, get_user_tier,
 )
+from app.core.ai_client import call_gemini_json
 from app.core.prompt_utils import (
-    compress_market, compress_news, generation_config,
+    compress_market, compress_news,
     VALIDATE_MAX_OUTPUT, CHAT_MAX_OUTPUT,
 )
 from app.services.ai_service import generate_council_debate
@@ -39,8 +39,10 @@ def get_council(request: Request, response: Response):
     if not check_rate_limit(request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     uid = get_or_create_uid(request, response)
+    tier = get_user_tier(uid)
+    limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     used = count_usage_today(uid, "council")
-    if used >= DAILY_FREE_LIMITS["council"]:
+    if used >= limits["council"]:
         raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['council']} councils/day). Upgrade to Pro for unlimited access.")
     try:
         market = cache["market"]["data"]
@@ -194,8 +196,10 @@ def validate_trade(request: TradeValidationRequest, http_request: Request, respo
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     uid = get_or_create_uid(http_request, response)
+    tier = get_user_tier(uid)
+    limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     used = count_usage_today(uid, "validate")
-    if used >= DAILY_FREE_LIMITS["validate"]:
+    if used >= limits["validate"]:
         raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['validate']} validations/day). Upgrade to Pro for unlimited access.")
     try:
         market = cache["market"]["data"]
@@ -221,12 +225,7 @@ News:
 [OUTPUT SCHEMA]
 {{"overall_score":<0-100>,"verdict":"<STRONG LONG|CAUTIOUS LONG|NEUTRAL|CAUTIOUS SHORT|STRONG SHORT>","win_rate":"<0-100>%","personas":[{{"name":"Quant","stance":"BULLISH|BEARISH|NEUTRAL","score":<0-100>,"reason":"<1 sentence>"}},{{"name":"News Analyst","stance":"...","score":0,"reason":"..."}},{{"name":"Risk Manager","stance":"...","score":0,"reason":"..."}},{{"name":"Chart Reader","stance":"...","score":0,"reason":"..."}},{{"name":"Macro Analyst","stance":"...","score":0,"reason":"..."}}],"summary":"<1-2 sentences>"}}"""
 
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        ai_resp = model.generate_content(
-            prompt,
-            generation_config=generation_config(VALIDATE_MAX_OUTPUT),
-        )
-        result = parse_gemini_json(ai_resp.text)
+        result = call_gemini_json(prompt, max_tokens=VALIDATE_MAX_OUTPUT)
         result = validate_ai_response(result, ValidatorResponse)
         logger.info(f"[Validator] Trade validated: {request.symbol} @ ${request.entry_price}")
         record_usage(uid, "validate")
@@ -252,8 +251,10 @@ def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Respon
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     uid = get_or_create_uid(http_request, response)
+    tier = get_user_tier(uid)
+    limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     used = count_usage_today(uid, "chat")
-    if used >= DAILY_FREE_LIMITS["chat"]:
+    if used >= limits["chat"]:
         raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['chat']} chats/day). Upgrade to Pro for unlimited access.")
     try:
         market = cache["market"]["data"]
@@ -276,12 +277,7 @@ News:
 
 Return JSON: {{"response":"<answer>","confidence":"HIGH|MED|LOW"}}"""
 
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        ai_resp = model.generate_content(
-            prompt,
-            generation_config=generation_config(CHAT_MAX_OUTPUT),
-        )
-        result = parse_gemini_json(ai_resp.text)
+        result = call_gemini_json(prompt, max_tokens=CHAT_MAX_OUTPUT)
         result = validate_ai_response(result, ChatResponse)
         logger.info(f"[Chat] User asked: {request.message[:50]}...")
         record_usage(uid, "chat")

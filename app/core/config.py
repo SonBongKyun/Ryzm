@@ -7,7 +7,6 @@ import pathlib
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-import google.generativeai as genai
 
 # ── Project Root ──
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -21,7 +20,6 @@ if not GENAI_API_KEY:
     from app.core.logger import logger
     logger.error("GENAI_API_KEY not found in environment variables!")
     raise ValueError("GENAI_API_KEY is required. Please check your .env file.")
-genai.configure(api_key=GENAI_API_KEY)
 
 # ── Admin / Discord ──
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
@@ -45,7 +43,9 @@ RISK_SAVE_INTERVAL = 600  # 10 min
 
 # ── SaaS Limits ──
 DAILY_FREE_LIMITS = {"validate": 3, "chat": 20, "council": 10}
+DAILY_PRO_LIMITS = {"validate": 9999, "chat": 9999, "council": 9999}
 MAX_FREE_ALERTS = 3
+MAX_PRO_ALERTS = 100
 
 PRO_FEATURES = {
     "unlimited_validate",
@@ -129,6 +129,17 @@ class PriceAlertRequest(BaseModel):
 
 class LayoutSaveRequest(BaseModel):
     panels: dict = Field(default_factory=dict)
+
+
+# ── Auth Request Models ──
+class RegisterRequest(BaseModel):
+    email: str = Field(..., max_length=200)
+    password: str = Field(..., min_length=8, max_length=200)
+    display_name: str = Field(default="", max_length=50)
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., max_length=200)
+    password: str = Field(..., max_length=200)
 
 
 # ───────────────────────────────────────

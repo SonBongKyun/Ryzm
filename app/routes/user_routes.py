@@ -1,33 +1,57 @@
 """
 Ryzm Terminal — User API Routes
-Usage stats, feature gating, price alerts, layout persistence.
+Usage stats, feature gating, price alerts, layout persistence, data export.
 """
+import csv
+import io
 import json
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.core.logger import logger
-from app.core.config import DAILY_FREE_LIMITS, MAX_FREE_ALERTS, PriceAlertRequest, LayoutSaveRequest
+from app.core.config import DAILY_FREE_LIMITS, DAILY_PRO_LIMITS, MAX_FREE_ALERTS, MAX_PRO_ALERTS, PriceAlertRequest, LayoutSaveRequest
 from app.core.database import (
     db_connect, _db_lock, utc_now_str, count_usage_today,
+    get_user_by_id, get_council_history,
 )
 from app.core.security import get_or_create_uid, get_user_tier, check_pro
+from app.core.auth import get_current_user
 
 router = APIRouter()
 
 
 @router.get("/api/me")
 def get_me(request: Request):
-    """Return anonymous UID and daily usage stats."""
+    """Return user identity + daily usage stats (supports both anonymous & authenticated)."""
+    auth_user = get_current_user(request)
     uid = request.cookies.get("ryzm_uid") or str(uuid.uuid4())
+    tier = "free"
+    user_info = None
+
+    if auth_user:
+        user = get_user_by_id(int(auth_user["sub"]))
+        if user:
+            tier = user["tier"]
+            uid = user.get("uid") or uid
+            user_info = {
+                "user_id": user["id"],
+                "email": user["email"],
+                "display_name": user["display_name"],
+            }
+
+    limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
     usage = {}
-    for ep, limit in DAILY_FREE_LIMITS.items():
+    for ep, limit in limits.items():
         used = count_usage_today(uid, ep)
         usage[ep] = {"used": used, "limit": limit, "remaining": max(0, limit - used)}
-    tier = "free"
-    response = JSONResponse(content={"uid": uid, "usage": usage, "tier": tier})
+
+    content = {"uid": uid, "usage": usage, "tier": tier}
+    if user_info:
+        content["user"] = user_info
+
+    response = JSONResponse(content=content)
     if not request.cookies.get("ryzm_uid"):
         response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax")
     return response
@@ -172,3 +196,30 @@ def save_layout(request: LayoutSaveRequest, http_request: Request, response: Res
     except Exception as e:
         logger.error(f"[Layout] Save error: {e}")
         raise HTTPException(status_code=500, detail="Failed to save layout")
+
+
+# ─── Pro Feature: CSV Export ───
+@router.get("/api/export/council-history")
+def export_council_csv(request: Request, response: Response):
+    """Export council prediction history as CSV (Pro feature)."""
+    uid = get_or_create_uid(request, response)
+    tier = get_user_tier(uid)
+    if tier != "pro":
+        raise HTTPException(status_code=403, detail="Pro subscription required for data export. Upgrade to unlock.")
+    records = get_council_history(limit=500)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "timestamp", "consensus_score", "prediction", "confidence", "btc_price", "btc_price_after", "hit", "return_pct", "vibe_status"])
+    for r in records:
+        writer.writerow([
+            r.get("id"), r.get("timestamp"), r.get("consensus_score"),
+            r.get("prediction"), r.get("confidence"),
+            r.get("btc_price"), r.get("btc_price_after"),
+            r.get("hit"), r.get("return_pct"), r.get("vibe_status"),
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=ryzm_council_history.csv"},
+    )

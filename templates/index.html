@@ -92,6 +92,12 @@
       <span id="lang-label">EN</span>
     </button>
 
+    <!-- Auth Button -->
+    <button id="btn-auth" class="auth-btn" title="Login / Register" onclick="toggleAuthModal()">
+      <i data-lucide="user" style="width:14px;height:14px;"></i>
+      <span id="auth-label">Login</span>
+    </button>
+
     <!-- FX Rate -->
     <div class="header-fx" id="header-fx">
       <span class="fx-label">USD/KRW</span>
@@ -739,6 +745,148 @@
   <script src="/static/js/data.js?v=1.5"></script>
   <script src="/static/js/council.js?v=1.5"></script>
   <script src="/static/js/ui.js?v=1.5"></script>
+
+  <!-- ═══ Auth Modal ═══ -->
+  <div id="auth-modal" class="auth-modal" style="display:none;">
+    <div class="auth-modal-inner">
+      <button class="auth-close" onclick="toggleAuthModal()">&times;</button>
+      <div class="auth-logo"><span class="logo-dot"></span> Ryzm_OS</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">LOGIN</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">REGISTER</button>
+      </div>
+      <!-- Login Form -->
+      <form id="auth-login-form" class="auth-form" onsubmit="handleLogin(event)">
+        <input type="email" id="login-email" placeholder="Email" required autocomplete="email" />
+        <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password" />
+        <button type="submit" class="auth-submit">Sign In</button>
+        <div id="login-error" class="auth-error"></div>
+      </form>
+      <!-- Register Form -->
+      <form id="auth-register-form" class="auth-form" style="display:none;" onsubmit="handleRegister(event)">
+        <input type="text" id="reg-name" placeholder="Display Name (optional)" maxlength="50" autocomplete="name" />
+        <input type="email" id="reg-email" placeholder="Email" required autocomplete="email" />
+        <input type="password" id="reg-password" placeholder="Password (8+ chars)" required minlength="8" autocomplete="new-password" />
+        <button type="submit" class="auth-submit">Create Account</button>
+        <div id="reg-error" class="auth-error"></div>
+      </form>
+      <!-- Logged-in state -->
+      <div id="auth-profile" class="auth-profile" style="display:none;">
+        <div class="auth-profile-info">
+          <div class="auth-email" id="profile-email"></div>
+          <div class="auth-tier" id="profile-tier"></div>
+        </div>
+        <button class="auth-submit" id="btn-upgrade" style="display:none;" onclick="handleUpgrade()">
+          <i data-lucide="crown" style="width:14px;height:14px;"></i> Upgrade to PRO
+        </button>
+        <button class="auth-logout" onclick="handleLogout()">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* ── Auth UI Logic ── */
+  let _authUser = null;
+  function toggleAuthModal() {
+    const m = document.getElementById('auth-modal');
+    m.style.display = m.style.display === 'none' ? 'flex' : 'none';
+  }
+  function switchAuthTab(tab) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('auth-login-form').style.display = tab === 'login' ? '' : 'none';
+    document.getElementById('auth-register-form').style.display = tab === 'register' ? '' : 'none';
+    document.getElementById('auth-profile').style.display = 'none';
+    event.target.classList.add('active');
+  }
+  async function handleLogin(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({ email: document.getElementById('login-email').value, password: document.getElementById('login-password').value }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.detail || 'Login failed'; return; }
+      localStorage.setItem('ryzm_token', data.token);
+      _authUser = data;
+      updateAuthUI(data);
+      showToast('success', 'Welcome', `Logged in as ${data.email}`);
+    } catch (err) { errEl.textContent = 'Connection error'; }
+  }
+  async function handleRegister(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('reg-error');
+    errEl.textContent = '';
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({
+          email: document.getElementById('reg-email').value,
+          password: document.getElementById('reg-password').value,
+          display_name: document.getElementById('reg-name').value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.detail || 'Registration failed'; return; }
+      localStorage.setItem('ryzm_token', data.token);
+      _authUser = data;
+      updateAuthUI(data);
+      showToast('success', 'Account Created', 'Welcome to Ryzm Terminal!');
+    } catch (err) { errEl.textContent = 'Connection error'; }
+  }
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    localStorage.removeItem('ryzm_token');
+    _authUser = null;
+    updateAuthUI(null);
+    toggleAuthModal();
+    showToast('info', 'Logged Out', 'Session ended.');
+  }
+  async function handleUpgrade() {
+    try {
+      const res = await fetch('/api/payments/create-checkout', { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.checkout_url) window.location.href = data.checkout_url;
+      else showToast('warning', 'Payment', data.detail || 'Stripe not configured yet.');
+    } catch { showToast('error', 'Error', 'Payment system unavailable.'); }
+  }
+  function updateAuthUI(user) {
+    const label = document.getElementById('auth-label');
+    const badge = document.querySelector('.pro-badge');
+    const loginForm = document.getElementById('auth-login-form');
+    const regForm = document.getElementById('auth-register-form');
+    const profile = document.getElementById('auth-profile');
+    if (user && user.email) {
+      label.textContent = user.display_name || user.email.split('@')[0];
+      if (user.tier === 'pro' && badge) badge.style.display = 'inline-block';
+      loginForm.style.display = 'none';
+      regForm.style.display = 'none';
+      profile.style.display = '';
+      document.getElementById('profile-email').textContent = user.email;
+      document.getElementById('profile-tier').textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
+      document.getElementById('profile-tier').className = 'auth-tier tier-' + user.tier;
+      document.getElementById('btn-upgrade').style.display = user.tier === 'pro' ? 'none' : '';
+      document.querySelectorAll('.auth-tab').forEach(t => t.style.display = 'none');
+    } else {
+      label.textContent = 'Login';
+      if (badge) badge.style.display = 'none';
+      loginForm.style.display = '';
+      regForm.style.display = 'none';
+      profile.style.display = 'none';
+      document.querySelectorAll('.auth-tab').forEach(t => t.style.display = '');
+    }
+  }
+  // Check auth on load
+  (async function checkAuth() {
+    try {
+      const r = await fetch('/api/auth/profile', { credentials: 'same-origin' });
+      if (r.ok) { _authUser = await r.json(); updateAuthUI(_authUser); }
+      else updateAuthUI(null);
+    } catch { updateAuthUI(null); }
+  })();
+  </script>
 
 </body>
 

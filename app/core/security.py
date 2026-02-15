@@ -143,7 +143,11 @@ def get_or_create_uid(request: Request, response: Response) -> str:
 
 # ── Pro Feature Gating ──
 def get_user_tier(uid: str) -> str:
-    """Return 'free' or 'pro'. Placeholder for Stripe/DB integration."""
+    """Return 'free' or 'pro' based on DB lookup."""
+    from app.core.database import get_user_by_uid
+    user = get_user_by_uid(uid)
+    if user:
+        return user.get("tier", "free")
     return "free"
 
 

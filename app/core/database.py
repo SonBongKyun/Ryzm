@@ -153,6 +153,32 @@ def init_council_db():
             updated_at_utc TEXT NOT NULL
         )
     """)
+    # ── Auth & Payment tables ──
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT DEFAULT '',
+            uid TEXT UNIQUE,
+            tier TEXT DEFAULT 'free',
+            stripe_customer_id TEXT,
+            created_at_utc TEXT NOT NULL,
+            last_login_utc TEXT
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            stripe_subscription_id TEXT UNIQUE,
+            plan TEXT DEFAULT 'pro',
+            status TEXT DEFAULT 'active',
+            current_period_end TEXT,
+            created_at_utc TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
     # Migration: add new columns to existing council_history if missing
     for col_def in [
         ("timestamp_ms", "INTEGER DEFAULT 0"),
@@ -169,7 +195,206 @@ def init_council_db():
             pass
     conn.commit()
     conn.close()
-    logger.info("[DB] Council + Risk + PriceSnapshot + Eval + Briefings + Usage database initialized")
+    logger.info("[DB] Council + Risk + PriceSnapshot + Eval + Briefings + Usage + Auth database initialized")
+
+
+# ───────────────────────────────────────
+# User Management (Auth)
+# ───────────────────────────────────────
+def create_user(email: str, password_hash: str, display_name: str = "", uid: str = None) -> Optional[int]:
+    """Create a new user. Returns user_id or None on failure."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO users (email, password_hash, display_name, uid, tier, created_at_utc) VALUES (?, ?, ?, ?, 'free', ?)",
+                (email, password_hash, display_name, uid, utc_now_str())
+            )
+            user_id = c.lastrowid
+            conn.commit()
+            conn.close()
+        return user_id
+    except Exception as e:
+        logger.error(f"[DB] Create user error: {e}")
+        return None
+
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    """Fetch user by email."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE email = ?", (email,))
+            row = c.fetchone()
+            conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"[DB] Get user by email error: {e}")
+        return None
+
+
+def get_user_by_id(user_id: int) -> Optional[dict]:
+    """Fetch user by ID."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"[DB] Get user by id error: {e}")
+        return None
+
+
+def get_user_by_uid(uid: str) -> Optional[dict]:
+    """Fetch user by anonymous UID."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE uid = ?", (uid,))
+            row = c.fetchone()
+            conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"[DB] Get user by uid error: {e}")
+        return None
+
+
+def update_user_tier(user_id: int, tier: str):
+    """Update user's subscription tier."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("UPDATE users SET tier = ? WHERE id = ?", (tier, user_id))
+            conn.commit()
+            conn.close()
+        logger.info(f"[DB] User {user_id} tier → {tier}")
+    except Exception as e:
+        logger.error(f"[DB] Update tier error: {e}")
+
+
+def update_user_stripe_customer(user_id: int, stripe_customer_id: str):
+    """Link Stripe customer ID to user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", (stripe_customer_id, user_id))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Update Stripe customer error: {e}")
+
+
+def update_user_login(user_id: int):
+    """Update last login timestamp."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("UPDATE users SET last_login_utc = ? WHERE id = ?", (utc_now_str(), user_id))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Update login error: {e}")
+
+
+def link_uid_to_user(uid: str, user_id: int):
+    """Link anonymous UID data (usage, alerts, layouts) to an authenticated user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("UPDATE users SET uid = ? WHERE id = ?", (uid, user_id))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Link UID error: {e}")
+
+
+# ───────────────────────────────────────
+# Subscription Management (Stripe)
+# ───────────────────────────────────────
+def create_subscription(user_id: int, stripe_sub_id: str, plan: str, period_end: str):
+    """Record a new subscription."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "INSERT OR REPLACE INTO subscriptions (user_id, stripe_subscription_id, plan, status, current_period_end, created_at_utc) VALUES (?, ?, ?, 'active', ?, ?)",
+                (user_id, stripe_sub_id, plan, period_end, utc_now_str())
+            )
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Create subscription error: {e}")
+
+
+def get_active_subscription(user_id: int) -> Optional[dict]:
+    """Get active subscription for user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                "SELECT * FROM subscriptions WHERE user_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1",
+                (user_id,)
+            )
+            row = c.fetchone()
+            conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"[DB] Get subscription error: {e}")
+        return None
+
+
+def get_subscription_by_stripe_id(stripe_sub_id: str) -> Optional[dict]:
+    """Find subscription by Stripe subscription ID."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT * FROM subscriptions WHERE stripe_subscription_id = ?", (stripe_sub_id,))
+            row = c.fetchone()
+            conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"[DB] Get subscription by stripe id error: {e}")
+        return None
+
+
+def update_subscription_status(stripe_sub_id: str, status: str, period_end: str = None):
+    """Update subscription status (from Stripe webhook)."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            if period_end:
+                c.execute(
+                    "UPDATE subscriptions SET status = ?, current_period_end = ? WHERE stripe_subscription_id = ?",
+                    (status, period_end, stripe_sub_id)
+                )
+            else:
+                c.execute(
+                    "UPDATE subscriptions SET status = ? WHERE stripe_subscription_id = ?",
+                    (status, stripe_sub_id)
+                )
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Update subscription status error: {e}")
 
 
 # ───────────────────────────────────────

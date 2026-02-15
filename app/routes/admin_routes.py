@@ -6,7 +6,6 @@ import json
 from datetime import datetime, timezone
 
 import requests
-import google.generativeai as genai
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 
@@ -15,6 +14,7 @@ from app.core.config import DISCORD_WEBHOOK_URL, InfographicRequest, BriefingReq
 from app.core.cache import cache
 from app.core.database import db_connect, _db_lock, utc_now_str
 from app.core.security import require_admin
+from app.core.ai_client import call_gemini
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -49,9 +49,8 @@ def generate_infographic_api(request: InfographicRequest, http_request: Request)
     """
 
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
-        svg_code = response.text.replace("```svg", "").replace("```xml", "").replace("```", "").strip()
+        svg_code = call_gemini(prompt, json_mode=False, max_tokens=2048)
+        svg_code = svg_code.replace("```svg", "").replace("```xml", "").replace("```", "").strip()
         logger.info(f"[Admin] Generated infographic for topic: {topic}")
         return {"status": "success", "svg": svg_code}
     except Exception as e:
