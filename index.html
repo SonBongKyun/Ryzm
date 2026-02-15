@@ -435,6 +435,28 @@
         <i data-lucide="camera"></i> <span data-i18n-text="export_snapshot">EXPORT SNAPSHOT</span>
       </button>
 
+      <!-- Trade Validator (P0-1) -->
+      <div class="glass-panel validator-panel" id="validator-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="trade_validator">
+          <i data-lucide="shield-check"></i> Trade Validator
+          <span class="val-credits" id="val-credits">3/3 Free</span>
+        </div>
+        <div class="panel-body">
+          <div class="validator-form">
+            <input type="text" id="val-symbol" class="val-input" placeholder="Symbol (e.g. BTC)" maxlength="20" />
+            <input type="number" id="val-price" class="val-input" placeholder="Entry Price ($)" step="0.01" min="0" />
+            <select id="val-position" class="val-input">
+              <option value="LONG">LONG</option>
+              <option value="SHORT">SHORT</option>
+            </select>
+            <button id="btn-validate" class="validate-btn">
+              <i data-lucide="zap"></i> <span data-i18n-text="validate_trade">VALIDATE TRADE</span>
+            </button>
+          </div>
+          <div id="validator-result" class="validator-result" style="display:none;"></div>
+        </div>
+      </div>
+
       <!-- AI Council Prediction History -->
       <div class="glass-panel council-history-panel" id="council-history-panel" style="margin-top:12px;">
         <div class="panel-title" data-i18n="ai_tracker">

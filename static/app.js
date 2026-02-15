@@ -1447,16 +1447,20 @@ function renderCouncil(data) {
     sDisplay.style.color = data.consensus_score > 50 ? 'var(--neon-green)' : 'var(--neon-red)';
   }
 
-  // Edge Summary
+  // Edge Summary + Prediction/Confidence
   const edgeContainer = document.getElementById('edge-summary');
   const edgeBadge = document.getElementById('edge-badge');
   const edgeAgreement = document.getElementById('edge-agreement');
   if (edgeContainer && data.edge) {
     const e = data.edge;
     const sign = e.value > 0 ? '+' : '';
+    const confLabel = data.confidence || '';
+    const predLabel = data.prediction || '';
+    const confColor = confLabel === 'HIGH' ? 'var(--neon-green)' : confLabel === 'MED' ? 'var(--neon-cyan)' : 'var(--text-muted)';
     edgeBadge.textContent = `EDGE: ${sign}${e.value.toFixed(2)} (${e.bias})`;
     edgeBadge.className = 'edge-badge ' + (e.bias === 'Bull Bias' ? 'bull' : e.bias === 'Bear Bias' ? 'bear' : 'neutral');
-    edgeAgreement.textContent = `AGREEMENT: ${e.agreement}% │ ↑${e.bulls} ↓${e.bears}`;
+    edgeAgreement.innerHTML = `AGREEMENT: ${e.agreement}% │ ↑${e.bulls} ↓${e.bears}` +
+      (confLabel ? ` │ <span style="color:${confColor};font-weight:700;">${escapeHtml(predLabel)} [${escapeHtml(confLabel)}]</span>` : '');
     edgeContainer.style.display = 'flex';
   }
 
@@ -1745,12 +1749,27 @@ function initValidator() {
 }
 
 function loadValidatorCredits() {
-  const saved = localStorage.getItem('validatorCredits');
-  if (saved !== null) {
-    validatorCredits = parseInt(saved);
-  }
-  updateCreditsDisplay();
+  // Try server-side credit counting first, fall back to localStorage
+  fetch('/api/me', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.usage && data.usage.validate) {
+        const vu = data.usage.validate;
+        validatorCredits = vu.remaining;
+        MAX_FREE_VALIDATIONS_SERVER = vu.limit;
+      }
+      updateCreditsDisplay();
+    })
+    .catch(() => {
+      const saved = localStorage.getItem('validatorCredits');
+      if (saved !== null) {
+        validatorCredits = parseInt(saved);
+      }
+      updateCreditsDisplay();
+    });
 }
+
+let MAX_FREE_VALIDATIONS_SERVER = MAX_FREE_VALIDATIONS;
 
 function saveValidatorCredits() {
   localStorage.setItem('validatorCredits', validatorCredits);
@@ -1759,7 +1778,8 @@ function saveValidatorCredits() {
 function updateCreditsDisplay() {
   const creditsEl = document.getElementById('val-credits');
   if (creditsEl) {
-    creditsEl.innerText = `${validatorCredits}/${MAX_FREE_VALIDATIONS} Free`;
+    const limit = MAX_FREE_VALIDATIONS_SERVER || MAX_FREE_VALIDATIONS;
+    creditsEl.innerText = `${validatorCredits}/${limit} Free`;
 
     if (validatorCredits <= 0) {
       creditsEl.classList.add('depleted');
@@ -2527,7 +2547,7 @@ function renderCouncilHistory(data) {
   }
   if (elHits) elHits.textContent = `${stats.hits}/${stats.evaluated}`;
 
-  // Multi-horizon accuracy pills
+  // Multi-horizon accuracy pills (with coverage & confidence)
   if (accuracy_by_horizon) {
     for (const [key, hz] of Object.entries(accuracy_by_horizon)) {
       const mins = key.replace('min', '');
@@ -2537,8 +2557,14 @@ function renderCouncilHistory(data) {
           el.textContent = `${hz.accuracy_pct}%`;
           el.style.color = hz.accuracy_pct >= 60 ? 'var(--neon-green)' :
             hz.accuracy_pct >= 40 ? 'var(--neon-cyan)' : 'var(--neon-red)';
+          const covStr = hz.coverage_pct !== null ? ` | cov ${hz.coverage_pct}%` : '';
+          const highConf = hz.by_confidence && hz.by_confidence.HIGH;
+          const highStr = highConf && highConf.accuracy_pct !== null
+            ? ` | HIGH: ${highConf.accuracy_pct}% (${highConf.hits}/${highConf.evaluated})`
+            : '';
           el.title = `${hz.hits}/${hz.evaluated} hits` +
-            (hz.avg_return_pct !== null ? ` | avg ${hz.avg_return_pct > 0 ? '+' : ''}${hz.avg_return_pct}%` : '');
+            (hz.avg_return_pct !== null ? ` | avg ${hz.avg_return_pct > 0 ? '+' : ''}${hz.avg_return_pct}%` : '') +
+            covStr + highStr;
         } else {
           el.textContent = '—';
           el.title = 'Not enough data';
@@ -3170,7 +3196,15 @@ const _translations = {
     liq_heatmap: "Liquidation Kill Zone",
     // Whale Wallets
     whale_wallets: "Whale Wallets (BTC)",
-    no_whale_wallets: "No large transactions detected"
+    no_whale_wallets: "No large transactions detected",
+    // Trade Validator
+    trade_validator: "Trade Validator",
+    validate_trade: "VALIDATE TRADE",
+    val_no_credits: "Upgrade to Premium for unlimited validations!",
+    val_invalid_input: "Please fill all fields correctly!",
+    val_scanning: "SCANNING...",
+    val_complete: "Validation Complete",
+    val_failed: "Validation Failed"
   },
   ko: {
     market_vibe: "시장 분위기:",
@@ -3244,7 +3278,15 @@ const _translations = {
     liq_heatmap: "청산 킬존",
     // Whale Wallets
     whale_wallets: "고래 지갑 추적기 (BTC)",
-    no_whale_wallets: "대규모 거래가 감지되지 않았습니다"
+    no_whale_wallets: "대규모 거래가 감지되지 않았습니다",
+    // Trade Validator
+    trade_validator: "트레이드 검증기",
+    validate_trade: "트레이드 검증",
+    val_no_credits: "무제한 검증은 프리미엄으로 업그레이드하세요!",
+    val_invalid_input: "모든 필드를 올바르게 입력하세요!",
+    val_scanning: "스캐닝 중...",
+    val_complete: "검증 완료",
+    val_failed: "검증 실패"
   }
 };
 

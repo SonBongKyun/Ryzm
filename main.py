@@ -5,12 +5,13 @@ import threading
 import logging
 import sqlite3
 import re
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -1370,6 +1371,24 @@ def init_council_db():
             PRIMARY KEY (council_id, horizon_min)
         )
     """)
+    # ── Briefings table (P1-1: persistent briefing archive) ──
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS briefings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at_utc TEXT NOT NULL
+        )
+    """)
+    # ── AI usage table (P1-2: server-side credit counting) ──
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS ai_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            endpoint TEXT NOT NULL,
+            used_at_utc TEXT NOT NULL
+        )
+    """)
     # Migration: add new columns to existing council_history if missing
     for col_def in [
         ("timestamp_ms", "INTEGER DEFAULT 0"),
@@ -1377,6 +1396,8 @@ def init_council_db():
         ("return_pct", "REAL DEFAULT NULL"),
         ("evaluated_at_utc", "TEXT DEFAULT NULL"),
         ("price_source", "TEXT DEFAULT NULL"),
+        ("prediction", "TEXT DEFAULT 'NEUTRAL'"),
+        ("confidence", "TEXT DEFAULT 'LOW'"),
     ]:
         try:
             c.execute(f"ALTER TABLE council_history ADD COLUMN {col_def[0]} {col_def[1]}")
@@ -1384,7 +1405,7 @@ def init_council_db():
             pass  # Column already exists
     conn.commit()
     conn.close()
-    logger.info("[DB] Council + Risk + PriceSnapshot + Eval database initialized")
+    logger.info("[DB] Council + Risk + PriceSnapshot + Eval + Briefings + Usage database initialized")
 
 
 _db_lock = threading.Lock()
@@ -1444,27 +1465,31 @@ def get_risk_history(days: int = 30) -> List[dict]:
         return []
 
 def save_council_record(result: dict, btc_price: float = 0.0):
-    """Save a council analysis to the DB"""
+    """Save a council analysis to the DB (includes prediction & confidence)."""
     try:
         with _db_lock:
             conn = db_connect()
             c = conn.cursor()
             ts_utc = utc_now_str()
             ts_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            prediction = result.get("prediction", "NEUTRAL")
+            confidence = result.get("confidence", "LOW")
             c.execute(
-                "INSERT INTO council_history (timestamp, timestamp_ms, consensus_score, vibe_status, btc_price, full_result) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO council_history (timestamp, timestamp_ms, consensus_score, vibe_status, btc_price, prediction, confidence, full_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     ts_utc,
                     ts_ms,
                     result.get("consensus_score", 50),
                     result.get("vibe", {}).get("status", "UNKNOWN"),
                     btc_price,
+                    prediction,
+                    confidence,
                     json.dumps(result, ensure_ascii=False)
                 )
             )
             conn.commit()
             conn.close()
-        logger.info(f"[DB] Council record saved — score={result.get('consensus_score')}, btc=${btc_price:.0f}")
+        logger.info(f"[DB] Council record saved — score={result.get('consensus_score')}, pred={prediction}/{confidence}, btc=${btc_price:.0f}")
     except Exception as e:
         logger.error(f"[DB] Failed to save council record: {e}")
 
@@ -1498,7 +1523,10 @@ def get_council_history(limit: int = 50) -> List[dict]:
         return []
 
 def get_multi_horizon_accuracy() -> dict:
-    """Aggregate accuracy stats per evaluation horizon from council_eval table."""
+    """Aggregate accuracy stats per evaluation horizon from council_eval table.
+    Now includes coverage (% of non-NEUTRAL predictions) and per-confidence breakdown.
+    hit = -1 means NEUTRAL (excluded from accuracy).
+    """
     HORIZONS = [15, 60, 240, 1440]
     result = {}
     try:
@@ -1507,29 +1535,61 @@ def get_multi_horizon_accuracy() -> dict:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             for h in HORIZONS:
+                # Overall stats (excluding NEUTRAL = hit -1)
                 c.execute(
                     """
                     SELECT
-                      COUNT(*) AS total,
-                      SUM(hit) AS hits,
-                      AVG(CASE WHEN hit IS NOT NULL THEN (
-                        (price_after - (SELECT btc_price FROM council_history WHERE id = council_eval.council_id))
-                        / (SELECT btc_price FROM council_history WHERE id = council_eval.council_id) * 100
+                      COUNT(*) AS total_all,
+                      SUM(CASE WHEN e.hit >= 0 THEN 1 ELSE 0 END) AS total_active,
+                      SUM(CASE WHEN e.hit = 1 THEN 1 ELSE 0 END) AS hits,
+                      AVG(CASE WHEN e.hit >= 0 THEN (
+                        (e.price_after - h.btc_price) / h.btc_price * 100
                       ) END) AS avg_return_pct
-                    FROM council_eval
-                    WHERE horizon_min = ?
+                    FROM council_eval e
+                    JOIN council_history h ON h.id = e.council_id
+                    WHERE e.horizon_min = ?
                     """,
                     (h,)
                 )
                 row = c.fetchone()
-                total = row["total"] or 0
+                total_all = row["total_all"] or 0
+                total_active = row["total_active"] or 0
                 hits = row["hits"] or 0
                 avg_ret = round(row["avg_return_pct"], 3) if row["avg_return_pct"] is not None else None
+                coverage = round((total_active / total_all) * 100, 1) if total_all > 0 else None
+
+                # Per-confidence breakdown
+                confidence_stats = {}
+                for conf in ["HIGH", "MED", "LOW"]:
+                    c.execute(
+                        """
+                        SELECT
+                          COUNT(*) AS cnt,
+                          SUM(CASE WHEN e.hit = 1 THEN 1 ELSE 0 END) AS h_hits
+                        FROM council_eval e
+                        JOIN council_history h ON h.id = e.council_id
+                        WHERE e.horizon_min = ? AND e.hit >= 0
+                          AND COALESCE(h.confidence, 'LOW') = ?
+                        """,
+                        (h, conf)
+                    )
+                    cr = c.fetchone()
+                    cnt = cr["cnt"] or 0
+                    ch = cr["h_hits"] or 0
+                    confidence_stats[conf] = {
+                        "evaluated": cnt,
+                        "hits": ch,
+                        "accuracy_pct": round((ch / cnt) * 100, 1) if cnt > 0 else None,
+                    }
+
                 result[f"{h}min"] = {
-                    "evaluated": total,
+                    "evaluated": total_active,
+                    "total_with_neutral": total_all,
                     "hits": hits,
-                    "accuracy_pct": round((hits / total) * 100, 1) if total > 0 else None,
+                    "accuracy_pct": round((hits / total_active) * 100, 1) if total_active > 0 else None,
+                    "coverage_pct": coverage,
                     "avg_return_pct": avg_ret,
+                    "by_confidence": confidence_stats,
                 }
             conn.close()
     except Exception as e:
@@ -1595,7 +1655,8 @@ def find_price_near(symbol: str, target_dt_utc: datetime, window_min: int = 10) 
 def evaluate_council_accuracy(horizons_min: List[int] = [60]):
     """
     Evaluate past council predictions using price_snapshots.
-    score > 50 = bullish prediction. Compare base price vs price at +horizon.
+    NEUTRAL predictions are stored but marked hit=-1 (excluded from accuracy).
+    BULL/BEAR predictions are evaluated normally.
     Results stored in council_eval table. Each horizon is evaluated independently.
     """
     try:
@@ -1606,7 +1667,9 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute(f"""
-                    SELECT h.id, h.timestamp, h.consensus_score, h.btc_price
+                    SELECT h.id, h.timestamp, h.consensus_score, h.btc_price,
+                           COALESCE(h.prediction, 'NEUTRAL') AS prediction,
+                           COALESCE(h.confidence, 'LOW') AS confidence
                     FROM council_history h
                     LEFT JOIN council_eval e
                       ON e.council_id = h.id AND e.horizon_min = ?
@@ -1625,8 +1688,7 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
             evaluated = 0
             for row in rows:
                 base_price = float(row["btc_price"])
-                score = int(row["consensus_score"] or 50)
-                predicted_bull = score > 50
+                prediction = row["prediction"]  # BULL / BEAR / NEUTRAL
 
                 ts_dt = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
                 target_dt = ts_dt + timedelta(minutes=h)
@@ -1634,10 +1696,16 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                 if price_after is None:
                     continue
 
-                actual_bull = price_after > base_price
-                hit = 1 if (predicted_bull == actual_bull) else 0
                 return_pct = round(((price_after - base_price) / base_price) * 100, 4) if base_price > 0 else 0.0
                 eval_ts = utc_now_str()
+
+                # NEUTRAL predictions: store for record but mark hit = -1 (excluded from accuracy)
+                if prediction == "NEUTRAL":
+                    hit = -1
+                else:
+                    actual_bull = price_after > base_price
+                    predicted_bull = prediction == "BULL"
+                    hit = 1 if (predicted_bull == actual_bull) else 0
 
                 with _db_lock:
                     conn = db_connect()
@@ -2012,9 +2080,20 @@ async def get_long_short():
         raise HTTPException(status_code=500, detail="Failed to fetch L/S data")
 
 @app.get("/api/briefing")
-async def get_briefing():
-    """View latest briefing"""
+def get_briefing():
+    """View latest briefing (from DB, with in-memory cache fallback)"""
     try:
+        # Try DB first
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT id, title, content, created_at_utc FROM briefings ORDER BY id DESC LIMIT 1")
+            row = c.fetchone()
+            conn.close()
+        if row:
+            return {"status": "ok", "title": row["title"], "content": row["content"], "time": row["created_at_utc"]}
+        # Fallback to cache
         briefing = cache["latest_briefing"]
         if not briefing.get("title"):
             return {"status": "empty", "title": "", "content": "", "time": ""}
@@ -2022,6 +2101,28 @@ async def get_briefing():
     except Exception as e:
         logger.error(f"[API] Briefing endpoint error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch briefing")
+
+@app.get("/api/briefing/history")
+def get_briefing_history(days: int = 7):
+    """Retrieve briefing archive for the past N days"""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                """SELECT id, title, content, created_at_utc
+                   FROM briefings
+                   WHERE datetime(created_at_utc) >= datetime('now', ?)
+                   ORDER BY id DESC""",
+                (f"-{days} days",)
+            )
+            rows = [dict(r) for r in c.fetchall()]
+            conn.close()
+        return {"status": "ok", "briefings": rows, "days": days}
+    except Exception as e:
+        logger.error(f"[API] Briefing history error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch briefing history")
 
 @app.get("/api/funding-rate")
 async def get_funding_rate():
@@ -2183,8 +2284,8 @@ async def get_kimchi():
         raise HTTPException(status_code=500, detail="Failed to fetch kimchi premium data")
 
 @app.get("/api/council")
-async def get_council(request: Request):
-    """Convene AI Round Table"""
+def get_council(request: Request):
+    """Convene AI Round Table (sync — runs in threadpool to avoid event-loop blocking)"""
     if not check_rate_limit(request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     try:
@@ -2223,6 +2324,23 @@ async def get_council(request: Request):
             "bears": bears
         }
 
+        # P0-3: Compute prediction & confidence
+        edge_abs = abs(edge_val)
+        if edge_abs >= 0.35 and agreement >= 0.6:
+            confidence = "HIGH"
+        elif edge_abs >= 0.20:
+            confidence = "MED"
+        else:
+            confidence = "LOW"
+        if edge_val > 0.1:
+            prediction = "BULL"
+        elif edge_val < -0.1:
+            prediction = "BEAR"
+        else:
+            prediction = "NEUTRAL"
+        result["prediction"] = prediction
+        result["confidence"] = confidence
+
         # Save to SQLite history
         btc_price = 0.0
         if isinstance(market, dict):
@@ -2245,7 +2363,7 @@ async def get_council(request: Request):
         raise HTTPException(status_code=500, detail="Failed to generate council analysis")
 
 @app.get("/api/council/history")
-async def get_council_history_api(limit: int = 50):
+def get_council_history_api(limit: int = 50):
     """Retrieve AI Council prediction history & accuracy stats + score vs BTC analysis"""
     records = get_council_history(limit)
     # Compute accuracy stats
@@ -2368,8 +2486,8 @@ async def get_liq_zones():
         raise HTTPException(status_code=500, detail="Failed to fetch liquidation zones")
 
 @app.post("/api/validate")
-async def validate_trade(request: TradeValidationRequest, http_request: Request):
-    """AI evaluates user's trading plan"""
+def validate_trade(request: TradeValidationRequest, http_request: Request):
+    """AI evaluates user's trading plan (sync — runs in threadpool)"""
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     try:
@@ -2438,8 +2556,8 @@ async def validate_trade(request: TradeValidationRequest, http_request: Request)
 
 # ─── Ask Ryzm Chat ───
 @app.post("/api/chat")
-async def chat_with_ryzm(request: ChatRequest, http_request: Request):
-    """Real-time AI Chat"""
+def chat_with_ryzm(request: ChatRequest, http_request: Request):
+    """Real-time AI Chat (sync — runs in threadpool)"""
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     try:
@@ -2488,11 +2606,69 @@ async def chat_with_ryzm(request: ChatRequest, http_request: Request):
         logger.error(f"[Chat] Error: {e}")
         return {"response": "System temporarily offline. Try again in a moment.", "confidence": "LOW", "_ai_fallback": True}
 
+
+# ─── Anonymous UID & Server-Side Usage Counting (P1-2) ───
+DAILY_FREE_LIMITS = {"validate": 3, "chat": 20, "council": 10}
+
+def _get_or_create_uid(request: Request, response: Response) -> str:
+    """Get anonymous UID from cookie, or create one."""
+    uid = request.cookies.get("ryzm_uid")
+    if not uid:
+        uid = str(uuid.uuid4())
+        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax")
+    return uid
+
+def _count_usage_today(uid: str, endpoint: str) -> int:
+    """Count how many times this UID used this endpoint today."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "SELECT COUNT(*) FROM ai_usage WHERE uid = ? AND endpoint = ? AND date(used_at_utc) = date('now')",
+                (uid, endpoint)
+            )
+            count = c.fetchone()[0]
+            conn.close()
+        return count
+    except Exception as e:
+        logger.error(f"[Usage] Count error: {e}")
+        return 0
+
+def _record_usage(uid: str, endpoint: str):
+    """Record one usage event."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO ai_usage (uid, endpoint, used_at_utc) VALUES (?, ?, ?)",
+                (uid, endpoint, utc_now_str())
+            )
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[Usage] Record error: {e}")
+
+@app.get("/api/me")
+def get_me(request: Request):
+    """Return anonymous UID and daily usage stats. Sets cookie if new user."""
+    uid = request.cookies.get("ryzm_uid") or str(uuid.uuid4())
+    usage = {}
+    for ep, limit in DAILY_FREE_LIMITS.items():
+        used = _count_usage_today(uid, ep)
+        usage[ep] = {"used": used, "limit": limit, "remaining": max(0, limit - used)}
+    response = JSONResponse(content={"uid": uid, "usage": usage})
+    if not request.cookies.get("ryzm_uid"):
+        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax")
+    return response
+
+
 # ─── Admin: Infographic Generator (Gemini SVG) ───
 @app.post("/api/admin/generate-infographic")
-async def generate_infographic_api(request: InfographicRequest, http_request: Request):
+def generate_infographic_api(request: InfographicRequest, http_request: Request):
     """
-    Receive a topic and generate Ryzm-style SVG infographic code
+    Receive a topic and generate Ryzm-style SVG infographic code (sync — runs in threadpool)
     """
     require_admin(http_request)
 
@@ -2535,9 +2711,9 @@ async def generate_infographic_api(request: InfographicRequest, http_request: Re
 # ─── Admin: Discord Briefing Publisher ───
 
 @app.post("/api/admin/publish-briefing")
-async def publish_briefing(request: BriefingRequest, http_request: Request):
+def publish_briefing(request: BriefingRequest, http_request: Request):
     """
-    Send written report to Discord and save to server memory (for web publishing)
+    Save briefing to DB + send to Discord (sync — runs in threadpool)
     """
     require_admin(http_request)
 
@@ -2546,15 +2722,30 @@ async def publish_briefing(request: BriefingRequest, http_request: Request):
 
     title = request.title
     content = request.content
-    
-    # 1. Save to server memory (Cache)
-    cache["latest_briefing"] = {"title": title, "content": content, "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
+    ts_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # 1. Save to DB (persistent)
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO briefings (title, content, created_at_utc) VALUES (?, ?, ?)",
+                (title, content, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+            )
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[Admin] Briefing DB save error: {e}")
+
+    # 2. Also update in-memory cache (for immediate access)
+    cache["latest_briefing"] = {"title": title, "content": content, "time": ts_utc}
     logger.info(f"[Admin] Briefing saved: {title}")
 
-    # 2. Send to Discord
+    # 3. Send to Discord
     if not DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL == "YOUR_DISCORD_WEBHOOK_URL_HERE":
         logger.warning("[Admin] Discord webhook URL not configured")
-        return {"status": "warning", "message": "Please set the webhook URL in your .env file!"}
+        return {"status": "warning", "message": "Saved to DB. Discord webhook URL not configured."}
 
     discord_data = {
         "username": "Ryzm Operator",
@@ -2571,15 +2762,15 @@ async def publish_briefing(request: BriefingRequest, http_request: Request):
         resp = requests.post(DISCORD_WEBHOOK_URL, json=discord_data, timeout=10)
         resp.raise_for_status()
         logger.info(f"[Admin] Successfully published to Discord")
-        return {"status": "success", "message": "Published to Discord & Web"}
+        return {"status": "success", "message": "Published to Discord & DB"}
     except requests.RequestException as e:
         logger.error(f"[Admin] Discord publish error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to publish to Discord: {str(e)}")
+        return {"status": "partial", "message": f"Saved to DB but Discord failed: {str(e)}"}
 
 
 # ─── Admin Page Route ───
 @app.get("/admin")
-async def admin_page():
+def admin_page():
     return FileResponse("admin.html")
 
 
