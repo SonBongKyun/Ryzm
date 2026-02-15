@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   registerServiceWorker(); // PWA
   initMarketStatus();      // Market open/close indicators
   initKeyboardShortcutsModal(); // ? key help
+  initPriceAlerts();       // Price alerts UI
   lucide.createIcons();
 });
 
@@ -70,6 +71,7 @@ function initAudioEngine() {
   const progressTrack = document.getElementById('bgm-progress-track');
 
   bgmAudio.volume = 0.3;
+  bgmAudio.preload = 'auto';
   loadTrack(0, trackName);
 
   // Auto-advance to next track when current ends
@@ -82,6 +84,36 @@ function initAudioEngine() {
     if (trackName) {
       trackName.innerText = 'LOAD FAILED';
       trackName.className = 'bgm-track-name';
+    }
+    // Auto-skip to next track after 2s on error
+    if (isPlaying) {
+      setTimeout(() => { skipTrack(trackName); }, 2000);
+    }
+  });
+
+  // Stalled / waiting — attempt recovery when buffering hangs
+  let _stallRetries = 0;
+  bgmAudio.addEventListener('stalled', () => {
+    if (isPlaying && _stallRetries < 3) {
+      _stallRetries++;
+      console.warn(`[BGM] Stalled (retry ${_stallRetries}/3) — rebuffering...`);
+      const pos = bgmAudio.currentTime;
+      bgmAudio.load();
+      bgmAudio.currentTime = pos;
+      bgmAudio.play().catch(() => {});
+    }
+  });
+
+  bgmAudio.addEventListener('waiting', () => {
+    if (trackName && isPlaying) {
+      trackName.innerText = playlist[currentTrack]?.title + ' ⏳';
+    }
+  });
+
+  bgmAudio.addEventListener('playing', () => {
+    _stallRetries = 0;  // Reset retry counter on successful playback
+    if (trackName && isPlaying) {
+      trackName.innerText = playlist[currentTrack]?.title || 'Unknown';
     }
   });
 
@@ -767,9 +799,42 @@ async function fetchRiskGauge() {
       updateBar('rc-kp-bar', 'rc-kp', c.kimchi.contrib, 15,
         `<span style="color:${kpColor}">${kpVal > 0 ? '+' : ''}${kpVal}%</span>`, kpVal);
     }
+
+    // Auto-update Market Vibe from risk gauge (only if council hasn't set it)
+    updateMarketVibe(data);
+
   } catch (e) {
     console.error('Risk Gauge Error:', e);
   }
+}
+
+/**
+ * Auto-compute Market Vibe from risk gauge data.
+ * Council renderCouncil() will override this when executed.
+ */
+let _vibeFromCouncil = false;
+function updateMarketVibe(riskData) {
+  if (_vibeFromCouncil) return; // Council already provided a vibe, skip auto
+  const vStat = document.getElementById('vibe-status');
+  const vMsg = document.getElementById('vibe-message');
+  if (!vStat) return;
+
+  const score = riskData.score || 0;
+  const level = riskData.level || 'MODERATE';
+
+  const vibeMap = {
+    'CRITICAL': { text: 'EXTREME FEAR', color: '#dc2626', msg: '/// SYSTEM: High-risk environment detected — exercise extreme caution' },
+    'HIGH':     { text: 'FEARFUL',      color: '#f97316', msg: '/// SYSTEM: Elevated risk levels — monitor positions closely' },
+    'ELEVATED': { text: 'CAUTIOUS',     color: '#eab308', msg: '/// SYSTEM: Market uncertainty elevated — stay alert' },
+    'MODERATE': { text: 'NEUTRAL',      color: '#06b6d4', msg: '/// SYSTEM: Market conditions within normal range' },
+    'LOW':      { text: 'OPTIMISTIC',   color: '#059669', msg: '/// SYSTEM: Low-risk environment — favorable conditions' }
+  };
+  const vibe = vibeMap[level] || vibeMap['MODERATE'];
+
+  vStat.innerText = vibe.text;
+  vStat.style.color = vibe.color;
+  vStat.style.textShadow = `0 0 8px ${vibe.color}`;
+  if (vMsg) vMsg.innerText = vibe.msg;
 }
 
 /* ══ Risk Index 30-Day History Chart ══ */
@@ -1364,7 +1429,15 @@ function setupEventListeners() {
       }
 
       try {
-        const res = await fetch('/api/council');
+        const res = await fetch('/api/council', { credentials: 'same-origin' });
+        if (res.status === 403) {
+          const err = await res.json().catch(() => ({}));
+          showToast('warning', '⚡ Limit Reached', err.detail || 'Daily free council uses exhausted. Upgrade to Pro!');
+          btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
+          btnCouncil.disabled = false;
+          lucide.createIcons();
+          return;
+        }
         const data = await res.json();
         renderCouncil(data);
         playSound('alert');
@@ -1430,6 +1503,7 @@ function setupEventListeners() {
 function renderCouncil(data) {
   // Vibe
   if (data.vibe) {
+    _vibeFromCouncil = true; // Council vibe takes priority over auto-vibe
     const vStat = document.getElementById('vibe-status');
     const vMsg = document.getElementById('vibe-message');
     if (vStat) {
@@ -1718,17 +1792,22 @@ function initValidator() {
       const res = await fetch('/api/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, entry_price: price, position })
+        body: JSON.stringify({ symbol, entry_price: price, position }),
+        credentials: 'same-origin'
       });
 
+      if (res.status === 403) {
+        const err = await res.json().catch(() => ({}));
+        showToast('warning', '⚡ Limit Reached', err.detail || 'Daily free validations used up. Upgrade to Pro!');
+        loadValidatorCredits();
+        return;
+      }
       if (!res.ok) throw new Error('Validation failed');
 
       const data = await res.json();
 
-      // Deduct credit
-      validatorCredits--;
-      updateCreditsDisplay();
-      saveValidatorCredits();
+      // Refresh credits from server (server is source of truth)
+      loadValidatorCredits();
 
       displayValidationResult(data);
       playSound('alert');
@@ -1869,8 +1948,17 @@ function initChat() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message }),
+        credentials: 'same-origin'
       });
+
+      if (res.status === 403) {
+        const err = await res.json().catch(() => ({}));
+        const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
+        if (thinkingEl) thinkingEl.remove();
+        addChatMessage('ai', '⚡ ' + (err.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
+        return;
+      }
 
       const data = await res.json();
 
@@ -2359,7 +2447,9 @@ async function refreshAllData() {
   ];
 
   try {
-    const results = await Promise.all(promises);
+    const results = await Promise.allSettled(promises);
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
 
     // Trigger pulse indicators
     pulsePanels(['pulse-narratives', 'pulse-kimchi']);
@@ -2367,10 +2457,16 @@ async function refreshAllData() {
     // Update last refresh time
     updateLastRefreshTime();
 
+    if (failed > 0 && succeeded > 0) {
+      showToast('warning', '⚠ Partial Refresh', `${succeeded}/${results.length} sources updated`);
+    } else if (failed > 0 && succeeded === 0) {
+      showToast('error', '⚠ Refresh Failed', 'Could not update data sources');
+    }
+
     return results;
   } catch (e) {
     console.error('Refresh error:', e);
-    showToast('error', '⚠ Refresh Failed', 'Could not update all data sources');
+    showToast('error', '⚠ Refresh Failed', 'Could not update data sources');
   }
 }
 
@@ -3094,11 +3190,13 @@ function initPanelDragDrop() {
       filter: '.chart-container, .council-container, .ai-scan-btn',
       preventOnFilter: false,
       onEnd: () => {
-        // Save order
+        // Save order locally
         const order = Array.from(container.children)
           .filter(c => c.classList.contains('glass-panel') || c.classList.contains('council-container') || c.tagName === 'BUTTON')
           .map(c => c.id || c.className.split(' ').slice(0, 2).join('_'));
         localStorage.setItem(`ryzm_panel_order_${panelId}`, JSON.stringify(order));
+        // Sync all panel orders to server
+        _syncLayoutToServer();
       }
     });
   });
@@ -3542,3 +3640,138 @@ function _updateTimeAgo() {
 
 // Update time-ago every 5 seconds
 setInterval(_updateTimeAgo, 5000);
+
+
+/* ═══════════════════════════════════════
+   #17 Layout Server Sync
+   ═══════════════════════════════════════ */
+let _layoutSyncTimer = null;
+function _syncLayoutToServer() {
+  // Debounce: wait 2s after last drag before syncing
+  clearTimeout(_layoutSyncTimer);
+  _layoutSyncTimer = setTimeout(() => {
+    const panels = {};
+    ['panel-left', 'panel-center', 'panel-right'].forEach(pid => {
+      const saved = localStorage.getItem(`ryzm_panel_order_${pid}`);
+      if (saved) panels[pid] = JSON.parse(saved);
+    });
+    fetch('/api/layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ panels }),
+      credentials: 'same-origin'
+    }).catch(() => {}); // silent fail
+  }, 2000);
+}
+
+// On startup, try loading server layout (merge with local)
+function _loadServerLayout() {
+  fetch('/api/layout', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.layout) {
+        Object.entries(data.layout).forEach(([panelId, order]) => {
+          if (!localStorage.getItem(`ryzm_panel_order_${panelId}`)) {
+            localStorage.setItem(`ryzm_panel_order_${panelId}`, JSON.stringify(order));
+          }
+        });
+      }
+    })
+    .catch(() => {});
+}
+_loadServerLayout();
+
+
+/* ═══════════════════════════════════════
+   #18 Price Alerts UI
+   ═══════════════════════════════════════ */
+function initPriceAlerts() {
+  const container = document.getElementById('price-alerts-container');
+  if (!container) return;
+
+  const html = `
+    <div class="alert-form" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+      <input id="alert-symbol" type="text" placeholder="BTC" maxlength="10"
+        style="width:60px; background:rgba(255,255,255,0.05); border:1px solid rgba(6,182,212,0.3); border-radius:4px; color:var(--text-primary); padding:4px 8px; font-size:0.75rem; text-transform:uppercase;">
+      <select id="alert-direction" style="background:rgba(255,255,255,0.05); border:1px solid rgba(6,182,212,0.3); border-radius:4px; color:var(--text-primary); padding:4px 6px; font-size:0.75rem;">
+        <option value="above">Above</option>
+        <option value="below">Below</option>
+      </select>
+      <input id="alert-price" type="number" placeholder="$100,000" step="0.01"
+        style="width:100px; background:rgba(255,255,255,0.05); border:1px solid rgba(6,182,212,0.3); border-radius:4px; color:var(--text-primary); padding:4px 8px; font-size:0.75rem;">
+      <button id="alert-add-btn" style="background:var(--neon-cyan); color:#000; border:none; border-radius:4px; padding:4px 10px; font-size:0.7rem; cursor:pointer; font-weight:700;">
+        + ADD
+      </button>
+    </div>
+    <div id="alert-list" style="font-size:0.72rem;"></div>
+  `;
+  container.innerHTML = html;
+
+  document.getElementById('alert-add-btn')?.addEventListener('click', async () => {
+    const symbol = document.getElementById('alert-symbol').value.trim().toUpperCase() || 'BTC';
+    const direction = document.getElementById('alert-direction').value;
+    const target_price = parseFloat(document.getElementById('alert-price').value);
+    if (!target_price || target_price <= 0) {
+      showToast('error', 'Invalid Price', 'Enter a valid target price.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, target_price, direction }),
+        credentials: 'same-origin'
+      });
+      if (res.status === 403) {
+        const err = await res.json().catch(() => ({}));
+        showToast('warning', 'Limit Reached', err.detail || 'Free alert limit reached.');
+        return;
+      }
+      if (!res.ok) throw new Error('Failed');
+      showToast('success', 'Alert Set', `${symbol} ${direction} $${target_price.toLocaleString()}`);
+      document.getElementById('alert-price').value = '';
+      refreshAlertList();
+    } catch (e) {
+      showToast('error', 'Error', 'Could not create alert.');
+    }
+  });
+
+  refreshAlertList();
+  // Poll for triggered alerts every 60s
+  setInterval(refreshAlertList, 60000);
+}
+
+async function refreshAlertList() {
+  const list = document.getElementById('alert-list');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/alerts', { credentials: 'same-origin' });
+    const data = await res.json();
+    let html = '';
+    if (data.triggered && data.triggered.length > 0) {
+      data.triggered.slice(0, 3).forEach(a => {
+        html += `<div style="color:var(--neon-yellow); margin-bottom:3px;">🔔 ${a.symbol} hit $${a.target_price.toLocaleString()} (${a.direction})</div>`;
+      });
+    }
+    if (data.alerts && data.alerts.length > 0) {
+      data.alerts.forEach(a => {
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+          <span style="color:var(--text-secondary);">${a.symbol} ${a.direction} $${a.target_price.toLocaleString()}</span>
+          <button onclick="deleteAlert(${a.id})" style="background:none; border:none; color:var(--neon-red); cursor:pointer; font-size:0.7rem;">✕</button>
+        </div>`;
+      });
+    } else if (!data.triggered || data.triggered.length === 0) {
+      html = '<div style="color:var(--text-tertiary); font-style:italic;">No active alerts</div>';
+    }
+    list.innerHTML = html;
+  } catch {
+    list.innerHTML = '<div style="color:var(--text-tertiary);">—</div>';
+  }
+}
+
+async function deleteAlert(id) {
+  try {
+    await fetch(`/api/alerts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+    refreshAlertList();
+  } catch {}
+}

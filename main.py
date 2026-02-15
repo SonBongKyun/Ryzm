@@ -254,6 +254,15 @@ class TradeValidationRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=500)
 
+class PriceAlertRequest(BaseModel):
+    symbol: str = Field(..., max_length=20)
+    target_price: float = Field(..., gt=0, le=10_000_000)
+    direction: str = Field(..., pattern="^(above|below)$")  # trigger when price goes above/below
+    note: str = Field(default="", max_length=200)
+
+class LayoutSaveRequest(BaseModel):
+    panels: dict = Field(default_factory=dict)
+
 # ── Pydantic Models (AI Response Validation) ──
 class CouncilVibe(BaseModel):
     status: str = "UNKNOWN"
@@ -1389,6 +1398,28 @@ def init_council_db():
             used_at_utc TEXT NOT NULL
         )
     """)
+    # ── Price alerts table ──
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS price_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            target_price REAL NOT NULL,
+            direction TEXT NOT NULL,
+            note TEXT DEFAULT '',
+            triggered INTEGER DEFAULT 0,
+            triggered_at_utc TEXT DEFAULT NULL,
+            created_at_utc TEXT NOT NULL
+        )
+    """)
+    # ── User layouts table ──
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_layouts (
+            uid TEXT PRIMARY KEY,
+            layout_json TEXT NOT NULL,
+            updated_at_utc TEXT NOT NULL
+        )
+    """)
     # Migration: add new columns to existing council_history if missing
     for col_def in [
         ("timestamp_ms", "INTEGER DEFAULT 0"),
@@ -2030,6 +2061,12 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[Snapshot] Error: {e}")
 
+        # Check price alerts (every 1 min)
+        try:
+            check_price_alerts()
+        except Exception as e:
+            logger.error(f"[Alerts] Check loop error: {e}")
+
         # Evaluate council predictions — multi-horizon (15m, 1h, 4h, 1d)
         try:
             evaluate_council_accuracy([15, 60, 240, 1440])
@@ -2153,8 +2190,8 @@ async def get_calendar():
         raise HTTPException(status_code=500, detail="Failed to fetch calendar")
 
 @app.get("/api/risk-gauge")
-async def get_risk_gauge():
-    """Composite System Risk Gauge"""
+def get_risk_gauge():
+    """Composite System Risk Gauge — sync to avoid event-loop blocking (save_risk_record uses SQLite)"""
     try:
         return compute_risk_gauge()
     except Exception as e:
@@ -2162,8 +2199,8 @@ async def get_risk_gauge():
         raise HTTPException(status_code=500, detail="Failed to compute risk gauge")
 
 @app.get("/api/risk-gauge/history")
-async def get_risk_gauge_history(days: int = 30):
-    """Risk Gauge history for the last N days"""
+def get_risk_gauge_history(days: int = 30):
+    """Risk Gauge history for the last N days — sync to avoid event-loop blocking (SQLite)"""
     try:
         rows = get_risk_history(days)
         return {"history": rows, "count": len(rows)}
@@ -2284,10 +2321,15 @@ async def get_kimchi():
         raise HTTPException(status_code=500, detail="Failed to fetch kimchi premium data")
 
 @app.get("/api/council")
-def get_council(request: Request):
+def get_council(request: Request, response: Response):
     """Convene AI Round Table (sync — runs in threadpool to avoid event-loop blocking)"""
     if not check_rate_limit(request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+    # ── Server-side credit enforcement ──
+    uid = _get_or_create_uid(request, response)
+    used = _count_usage_today(uid, "council")
+    if used >= DAILY_FREE_LIMITS["council"]:
+        raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['council']} councils/day). Upgrade to Pro for unlimited access.")
     try:
         # Use current cached data
         market = cache["market"]["data"]
@@ -2355,6 +2397,9 @@ def get_council(request: Request):
         # Evaluate past predictions in background
         threading.Thread(target=evaluate_council_accuracy, daemon=True).start()
 
+        # Record usage after success
+        _record_usage(uid, "council")
+
         return result
     except HTTPException:
         raise
@@ -2413,8 +2458,8 @@ def get_council_history_api(limit: int = 50):
     }
 
 @app.get("/api/multi-timeframe")
-async def get_multi_timeframe():
-    """Multi-Timeframe Technical Analysis (RSI + EMA Cross)"""
+def get_multi_timeframe():
+    """Multi-Timeframe Technical Analysis (RSI + EMA Cross) — sync to avoid event-loop blocking"""
     try:
         return cache["multi_tf"]["data"] or fetch_multi_timeframe()
     except Exception as e:
@@ -2422,8 +2467,8 @@ async def get_multi_timeframe():
         raise HTTPException(status_code=500, detail="Failed to fetch multi-timeframe data")
 
 @app.get("/api/onchain")
-async def get_onchain():
-    """On-Chain Data (Open Interest + Mempool + Hashrate)"""
+def get_onchain():
+    """On-Chain Data (Open Interest + Mempool + Hashrate) — sync to avoid event-loop blocking"""
     try:
         return cache["onchain"]["data"] or fetch_onchain_data()
     except Exception as e:
@@ -2431,8 +2476,8 @@ async def get_onchain():
         raise HTTPException(status_code=500, detail="Failed to fetch on-chain data")
 
 @app.get("/api/scanner")
-async def get_scanner():
-    """Alpha Scanner — Oversold/Overbought + Volume Spike Alerts"""
+def get_scanner():
+    """Alpha Scanner — Oversold/Overbought + Volume Spike Alerts — sync to avoid event-loop blocking"""
     try:
         data = cache["scanner"]["data"]
         if not data:
@@ -2446,8 +2491,8 @@ async def get_scanner():
 # ─── Trade Validator ───
 
 @app.get("/api/regime")
-async def get_regime():
-    """Market Regime Detector"""
+def get_regime():
+    """Market Regime Detector — sync to avoid event-loop blocking"""
     try:
         data = cache["regime"]["data"]
         return data if data else fetch_regime_data()
@@ -2456,8 +2501,8 @@ async def get_regime():
         raise HTTPException(status_code=500, detail="Failed to detect regime")
 
 @app.get("/api/correlation")
-async def get_correlation():
-    """30-Day Correlation Matrix"""
+def get_correlation():
+    """30-Day Correlation Matrix — sync to avoid event-loop blocking"""
     try:
         data = cache["correlation"]["data"]
         return data if data else fetch_correlation_matrix()
@@ -2466,7 +2511,7 @@ async def get_correlation():
         raise HTTPException(status_code=500, detail="Failed to compute correlation")
 
 @app.get("/api/whale-wallets")
-async def get_whale_wallets():
+def get_whale_wallets():
     """Large BTC Wallet Transactions"""
     try:
         data = cache["whale_wallets"]["data"]
@@ -2476,8 +2521,8 @@ async def get_whale_wallets():
         raise HTTPException(status_code=500, detail="Failed to fetch whale wallets")
 
 @app.get("/api/liq-zones")
-async def get_liq_zones():
-    """Liquidation Heatmap Zones"""
+def get_liq_zones():
+    """Liquidation Heatmap Zones — sync to avoid event-loop blocking"""
     try:
         data = cache["liq_zones"]["data"]
         return data if data else fetch_liquidation_zones()
@@ -2486,10 +2531,15 @@ async def get_liq_zones():
         raise HTTPException(status_code=500, detail="Failed to fetch liquidation zones")
 
 @app.post("/api/validate")
-def validate_trade(request: TradeValidationRequest, http_request: Request):
+def validate_trade(request: TradeValidationRequest, http_request: Request, response: Response):
     """AI evaluates user's trading plan (sync — runs in threadpool)"""
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+    # ── Server-side credit enforcement ──
+    uid = _get_or_create_uid(http_request, response)
+    used = _count_usage_today(uid, "validate")
+    if used >= DAILY_FREE_LIMITS["validate"]:
+        raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['validate']} validations/day). Upgrade to Pro for unlimited access.")
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -2539,6 +2589,9 @@ def validate_trade(request: TradeValidationRequest, http_request: Request):
         result = validate_ai_response(result, ValidatorResponse)
         logger.info(f"[Validator] Trade validated: {request.symbol} @ ${request.entry_price}")
 
+        # Record usage after success
+        _record_usage(uid, "validate")
+
         return result
 
     except (json.JSONDecodeError, ValueError) as e:
@@ -2556,10 +2609,15 @@ def validate_trade(request: TradeValidationRequest, http_request: Request):
 
 # ─── Ask Ryzm Chat ───
 @app.post("/api/chat")
-def chat_with_ryzm(request: ChatRequest, http_request: Request):
+def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Response):
     """Real-time AI Chat (sync — runs in threadpool)"""
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+    # ── Server-side credit enforcement ──
+    uid = _get_or_create_uid(http_request, response)
+    used = _count_usage_today(uid, "chat")
+    if used >= DAILY_FREE_LIMITS["chat"]:
+        raise HTTPException(status_code=403, detail=f"Daily free limit reached ({DAILY_FREE_LIMITS['chat']} chats/day). Upgrade to Pro for unlimited access.")
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -2596,6 +2654,9 @@ def chat_with_ryzm(request: ChatRequest, http_request: Request):
         result = parse_gemini_json(response.text)
         result = validate_ai_response(result, ChatResponse)
         logger.info(f"[Chat] User asked: {request.message[:50]}...")
+
+        # Record usage after success
+        _record_usage(uid, "chat")
 
         return result
 
@@ -2658,10 +2719,207 @@ def get_me(request: Request):
     for ep, limit in DAILY_FREE_LIMITS.items():
         used = _count_usage_today(uid, ep)
         usage[ep] = {"used": used, "limit": limit, "remaining": max(0, limit - used)}
-    response = JSONResponse(content={"uid": uid, "usage": usage})
+    tier = "free"  # TODO: check DB/Stripe for paid users
+    response = JSONResponse(content={"uid": uid, "usage": usage, "tier": tier})
     if not request.cookies.get("ryzm_uid"):
         response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax")
     return response
+
+
+# ─── Free / Pro Feature Gating Skeleton ───
+PRO_FEATURES = {
+    "unlimited_validate",    # unlimited trade validations
+    "unlimited_council",     # unlimited council sessions
+    "unlimited_chat",        # unlimited AI chat
+    "price_alerts",          # custom price alerts
+    "layout_sync",           # server-side layout persistence
+    "export_pdf",            # export dashboard to PDF
+    "telegram_alerts",       # Telegram push notifications
+    "backtest",              # strategy back-testing (future)
+}
+
+def _get_user_tier(uid: str) -> str:
+    """Return 'free' or 'pro'. Placeholder for Stripe/DB integration."""
+    # TODO Phase C: Check payment DB / Stripe subscription status
+    return "free"
+
+def _check_pro(uid: str, feature: str) -> bool:
+    """Return True if user can access this feature."""
+    if feature not in PRO_FEATURES:
+        return True  # not gated
+    return _get_user_tier(uid) == "pro"
+
+@app.get("/api/check-feature/{feature}")
+def check_feature(feature: str, request: Request):
+    """Check if current user can access a Pro feature."""
+    uid = request.cookies.get("ryzm_uid") or "anonymous"
+    tier = _get_user_tier(uid)
+    allowed = _check_pro(uid, feature)
+    return {"feature": feature, "allowed": allowed, "tier": tier}
+
+
+# ─── Price Alert System ───
+MAX_FREE_ALERTS = 3  # Free tier limit
+
+@app.get("/api/alerts")
+def get_alerts(request: Request):
+    """Get all active (un-triggered) alerts for this user."""
+    uid = request.cookies.get("ryzm_uid")
+    if not uid:
+        return {"alerts": [], "triggered": []}
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "SELECT id, symbol, target_price, direction, note, created_at_utc FROM price_alerts WHERE uid = ? AND triggered = 0 ORDER BY created_at_utc DESC",
+                (uid,)
+            )
+            active = [{"id": r[0], "symbol": r[1], "target_price": r[2], "direction": r[3], "note": r[4], "created_at": r[5]} for r in c.fetchall()]
+            c.execute(
+                "SELECT id, symbol, target_price, direction, note, triggered_at_utc FROM price_alerts WHERE uid = ? AND triggered = 1 ORDER BY triggered_at_utc DESC LIMIT 20",
+                (uid,)
+            )
+            triggered = [{"id": r[0], "symbol": r[1], "target_price": r[2], "direction": r[3], "note": r[4], "triggered_at": r[5]} for r in c.fetchall()]
+            conn.close()
+        return {"alerts": active, "triggered": triggered}
+    except Exception as e:
+        logger.error(f"[Alerts] Fetch error: {e}")
+        return {"alerts": [], "triggered": []}
+
+@app.post("/api/alerts")
+def create_alert(request: PriceAlertRequest, http_request: Request, response: Response):
+    """Create a new price alert."""
+    uid = _get_or_create_uid(http_request, response)
+    # Check free limit
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM price_alerts WHERE uid = ? AND triggered = 0", (uid,))
+            count = c.fetchone()[0]
+            conn.close()
+        if count >= MAX_FREE_ALERTS and _get_user_tier(uid) != "pro":
+            raise HTTPException(status_code=403, detail=f"Free tier limit: {MAX_FREE_ALERTS} active alerts. Upgrade to Pro for unlimited.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Alerts] Count error: {e}")
+
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO price_alerts (uid, symbol, target_price, direction, note, created_at_utc) VALUES (?, ?, ?, ?, ?, ?)",
+                (uid, request.symbol.upper(), request.target_price, request.direction, request.note, utc_now_str())
+            )
+            alert_id = c.lastrowid
+            conn.commit()
+            conn.close()
+        logger.info(f"[Alerts] Created alert #{alert_id}: {request.symbol} {request.direction} ${request.target_price}")
+        return {"status": "created", "id": alert_id}
+    except Exception as e:
+        logger.error(f"[Alerts] Create error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create alert")
+
+@app.delete("/api/alerts/{alert_id}")
+def delete_alert(alert_id: int, request: Request):
+    """Delete a price alert (only owner can delete)."""
+    uid = request.cookies.get("ryzm_uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="No user identity")
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("DELETE FROM price_alerts WHERE id = ? AND uid = ?", (alert_id, uid))
+            deleted = c.rowcount
+            conn.commit()
+            conn.close()
+        if deleted == 0:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        return {"status": "deleted", "id": alert_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Alerts] Delete error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete alert")
+
+def check_price_alerts():
+    """Check all active alerts against current market prices. Called from refresh_cache loop."""
+    try:
+        market = cache["market"]["data"]
+        if not market or not isinstance(market, dict):
+            return
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("SELECT id, uid, symbol, target_price, direction FROM price_alerts WHERE triggered = 0")
+            alerts = c.fetchall()
+            now_str = utc_now_str()
+            triggered_count = 0
+            for alert_id, uid, symbol, target, direction in alerts:
+                current = market.get(symbol.upper(), {}).get("price")
+                if current is None:
+                    continue
+                hit = False
+                if direction == "above" and current >= target:
+                    hit = True
+                elif direction == "below" and current <= target:
+                    hit = True
+                if hit:
+                    c.execute("UPDATE price_alerts SET triggered = 1, triggered_at_utc = ? WHERE id = ?", (now_str, alert_id))
+                    triggered_count += 1
+                    logger.info(f"[Alerts] TRIGGERED #{alert_id}: {symbol} {direction} ${target} (current: ${current})")
+            if triggered_count > 0:
+                conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[Alerts] Check error: {e}")
+
+
+# ─── Layout Server Save ───
+@app.get("/api/layout")
+def get_layout(request: Request):
+    """Get saved dashboard layout for this user."""
+    uid = request.cookies.get("ryzm_uid")
+    if not uid:
+        return {"layout": None}
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("SELECT layout_json FROM user_layouts WHERE uid = ? ORDER BY updated_at_utc DESC LIMIT 1", (uid,))
+            row = c.fetchone()
+            conn.close()
+        if row:
+            return {"layout": json.loads(row[0])}
+        return {"layout": None}
+    except Exception as e:
+        logger.error(f"[Layout] Fetch error: {e}")
+        return {"layout": None}
+
+@app.post("/api/layout")
+def save_layout(request: LayoutSaveRequest, http_request: Request, response: Response):
+    """Save dashboard panel layout for this user."""
+    uid = _get_or_create_uid(http_request, response)
+    layout_json = json.dumps(request.panels)
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "INSERT OR REPLACE INTO user_layouts (uid, layout_json, updated_at_utc) VALUES (?, ?, ?)",
+                (uid, layout_json, utc_now_str())
+            )
+            conn.commit()
+            conn.close()
+        logger.info(f"[Layout] Saved for uid={uid[:8]}...")
+        return {"status": "saved"}
+    except Exception as e:
+        logger.error(f"[Layout] Save error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save layout")
 
 
 # ─── Admin: Infographic Generator (Gemini SVG) ───
