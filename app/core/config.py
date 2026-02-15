@@ -150,17 +150,11 @@ class RegisterRequest(BaseModel):
     email: str = Field(..., max_length=200)
     password: str = Field(..., min_length=8, max_length=200)
     display_name: str = Field(default="", max_length=50)
+    accept_tos: bool = Field(default=False)
 
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=200)
     password: str = Field(..., max_length=200)
-
-class RegisterRequest2(BaseModel):
-    """Extended register with ToS acceptance."""
-    email: str = Field(..., max_length=200)
-    password: str = Field(..., min_length=8, max_length=200)
-    display_name: str = Field(default="", max_length=50)
-    accept_tos: bool = Field(default=False)
 
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(..., max_length=200)

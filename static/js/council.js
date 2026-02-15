@@ -21,18 +21,7 @@ function setupEventListeners() {
       }
 
       try {
-        const res = await fetch('/api/council', { credentials: 'same-origin' });
-        if (res.status === 403) {
-          const err = await res.json().catch(() => ({}));
-          showToast('warning', '⚡ Limit Reached', err.detail || 'Daily free council uses exhausted. Upgrade to Pro!');
-          if (typeof openUpgradeModal === 'function') openUpgradeModal('council_limit');
-          btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
-          btnCouncil.disabled = false;
-          lucide.createIcons();
-          refreshAllQuotas();
-          return;
-        }
-        const data = await res.json();
+        const data = await apiFetch('/api/council');
         window._lastCouncilData = data; // Store for journal
         renderCouncil(data);
         playSound('alert');
@@ -47,6 +36,14 @@ function setupEventListeners() {
         setTimeout(() => fetchCouncilHistory(), 1500);
 
       } catch (e) {
+        if (e.status === 403) {
+          showToast('warning', '⚡ Limit Reached', e.data?.detail || 'Daily free council uses exhausted. Upgrade to Pro!');
+          btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
+          btnCouncil.disabled = false;
+          lucide.createIcons();
+          refreshAllQuotas();
+          return;
+        }
         console.error(e);
         if (agentsGrid) agentsGrid.innerHTML = '<div style="color:var(--neon-red); grid-column:span 5; text-align:center;">' + t('connection_failed') + '</div>';
         btnCouncil.innerHTML = '<i data-lucide="alert-triangle"></i> RETRY';
@@ -387,23 +384,11 @@ function initValidator() {
     resultDiv.style.display = 'none';
 
     try {
-      const res = await fetch('/api/validate', {
+      const data = await apiFetch('/api/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, entry_price: price, position }),
-        credentials: 'same-origin'
+        body: JSON.stringify({ symbol, entry_price: price, position })
       });
-
-      if (res.status === 403) {
-        const err = await res.json().catch(() => ({}));
-        showToast('warning', '⚡ Limit Reached', err.detail || 'Daily free validations used up. Upgrade to Pro!');
-        if (typeof openUpgradeModal === 'function') openUpgradeModal('validator_limit');
-        loadValidatorCredits();
-        return;
-      }
-      if (!res.ok) throw new Error('Validation failed');
-
-      const data = await res.json();
 
       // Refresh credits from server (server is source of truth)
       loadValidatorCredits();
@@ -413,6 +398,11 @@ function initValidator() {
       showToast('success', '✓ Validation Complete', `Trade analyzed by 5 AI personas. Score: ${data.overall_score}/100`);
 
     } catch (e) {
+      if (e.status === 403) {
+        showToast('warning', '⚡ Limit Reached', e.data?.detail || 'Daily free validations used up. Upgrade to Pro!');
+        loadValidatorCredits();
+        return;
+      }
       console.error(e);
       resultDiv.innerHTML = '<div style="color:var(--neon-red); font-size:0.8rem;">⚠ Validation Failed. Try again.</div>';
       resultDiv.style.display = 'block';
@@ -428,8 +418,7 @@ function initValidator() {
 
 function loadValidatorCredits() {
   // Try server-side credit counting first, fall back to localStorage
-  fetch('/api/me', { credentials: 'same-origin' })
-    .then(r => r.json())
+  apiFetch('/api/me', { silent: true })
     .then(data => {
       if (data && data.usage && data.usage.validate) {
         const vu = data.usage.validate;
@@ -542,24 +531,11 @@ function initChat() {
     addChatMessage('ai', '...', thinkingId);
 
     try {
-      const res = await fetch('/api/chat', {
+      const data = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-        credentials: 'same-origin'
+        body: JSON.stringify({ message })
       });
-
-      if (res.status === 403) {
-        const err = await res.json().catch(() => ({}));
-        const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
-        if (thinkingEl) thinkingEl.remove();
-        addChatMessage('ai', '⚡ ' + (err.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
-        if (typeof openUpgradeModal === 'function') openUpgradeModal('chat_limit');
-        refreshAllQuotas();
-        return;
-      }
-
-      const data = await res.json();
 
       // Remove thinking message
       const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
@@ -570,9 +546,14 @@ function initChat() {
       playSound('alert');
 
     } catch (e) {
-      console.error(e);
       const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
       if (thinkingEl) thinkingEl.remove();
+      if (e.status === 403) {
+        addChatMessage('ai', '⚡ ' + (e.data?.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
+        refreshAllQuotas();
+        return;
+      }
+      console.error(e);
       addChatMessage('ai', '⚠ Connection lost. Try again.');
     }
   };
@@ -609,8 +590,7 @@ function addChatMessage(type, text, id = null, confidence = null) {
 
 /* ── Quota Refresh (called after any 403) ── */
 function refreshAllQuotas() {
-  fetch('/api/me', { credentials: 'same-origin' })
-    .then(r => r.json())
+  apiFetch('/api/me', { silent: true })
     .then(data => {
       if (!data || !data.usage) return;
       // Update validator credits

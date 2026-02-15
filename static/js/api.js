@@ -18,6 +18,7 @@ async function apiFetch(url, opts = {}) {
     timeoutMs = 8000,
     raw = false,
     dedupe = true,
+    silent = false,   // suppress 401/403 modal popups (for background polling)
     ...fetchOpts
   } = opts;
 
@@ -42,7 +43,7 @@ async function apiFetch(url, opts = {}) {
 
       // 401 → redirect to login
       if (res.status === 401) {
-        if (typeof toggleAuthModal === 'function') toggleAuthModal();
+        if (!silent && typeof toggleAuthModal === 'function') toggleAuthModal();
         throw new ApiError('Unauthorized', 401);
       }
 
@@ -50,12 +51,13 @@ async function apiFetch(url, opts = {}) {
       if (res.status === 403) {
         const body = await res.json().catch(() => ({}));
         const feature = body.feature || 'general';
-        if (typeof openUpgradeModal === 'function') openUpgradeModal(feature + '_limit');
+        if (!silent && typeof openUpgradeModal === 'function') openUpgradeModal(feature + '_limit');
         throw new ApiError(body.detail || 'Forbidden', 403, body);
       }
 
       if (!res.ok) {
-        throw new ApiError(`HTTP ${res.status}`, res.status);
+        const body = await res.json().catch(() => ({}));
+        throw new ApiError(body.detail || `HTTP ${res.status}`, res.status, body);
       }
 
       if (raw) return res;
@@ -93,17 +95,9 @@ class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
     this.status = status;
-    this.body = body;
+    this.data = body;        // canonical property
+    this.body = body;        // alias for compat
   }
 }
 
-/**
- * safeUrl — allow only http/https URLs, block javascript: etc.
- * Moved here as shared utility; original in core.js preserved for compat.
- */
-function safeUrl(url) {
-  if (typeof url !== 'string') return '#';
-  const trimmed = url.trim();
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return '#';
-}
+// safeUrl() is defined in core.js — single source of truth (M-4 fix)

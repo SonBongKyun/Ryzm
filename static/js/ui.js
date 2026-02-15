@@ -170,9 +170,7 @@ function initQuickActions() {
 /* ── Alpha Scanner ── */
 async function fetchScanner() {
   try {
-    const res = await fetch('/api/scanner');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await apiFetch('/api/scanner', { silent: true });
     const feed = document.getElementById('scanner-feed');
     if (!feed) return;
 
@@ -218,9 +216,7 @@ async function fetchScanner() {
 /* ── Regime Detector ── */
 async function fetchRegime() {
   try {
-    const res = await fetch('/api/regime');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await apiFetch('/api/regime', { silent: true });
     const badge = document.getElementById('regime-badge');
     if (!badge) return;
     if (data.regime) {
@@ -243,9 +239,7 @@ async function fetchRegime() {
 /* ── Correlation Matrix ── */
 async function fetchCorrelation() {
   try {
-    const res = await fetch('/api/correlation');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await apiFetch('/api/correlation', { silent: true });
     const el = document.getElementById('corr-matrix');
     if (!el || !data.matrix) return;
 
@@ -279,9 +273,7 @@ async function fetchCorrelation() {
 /* ── Whale Wallet Tracker ── */
 async function fetchWhaleWallets() {
   try {
-    const res = await fetch('/api/whale-wallets');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await apiFetch('/api/whale-wallets', { silent: true });
     const feed = document.getElementById('whale-wallet-feed');
     if (!feed) return;
 
@@ -305,9 +297,7 @@ async function fetchWhaleWallets() {
 /* ── Liquidation Kill Zone ── */
 async function fetchLiqZones() {
   try {
-    const res = await fetch('/api/liq-zones');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await apiFetch('/api/liq-zones', { silent: true });
     const el = document.getElementById('liq-zones');
     if (!el) return;
 
@@ -459,8 +449,7 @@ function registerServiceWorker() {
 /* ── Mini Heatmap ── */
 async function fetchHeatmap() {
   try {
-    const res = await fetch('/api/heatmap');
-    const data = await res.json();
+    const data = await apiFetch('/api/heatmap', { silent: true });
     const grid = document.getElementById('heatmap-grid');
     if (!grid || !data.coins || data.coins.length === 0) return;
 
@@ -486,8 +475,7 @@ async function fetchHeatmap() {
 /* ── Health Check / Connection Status ── */
 async function fetchHealthCheck() {
   try {
-    const res = await fetch('/api/health-check');
-    const data = await res.json();
+    const data = await apiFetch('/api/health-check', { silent: true });
     const dot = document.getElementById('connection-status');
     const srcEl = document.getElementById('data-sources');
     const tooltip = document.getElementById('source-tooltip');
@@ -681,8 +669,7 @@ document.addEventListener('keydown', (e) => {
 /* ─── AI Council Prediction History ─── */
 async function fetchCouncilHistory() {
   try {
-    const res = await fetch('/api/council/history?limit=30');
-    const data = await res.json();
+    const data = await apiFetch('/api/council/history?limit=30', { silent: true });
     renderCouncilHistory(data);
   } catch (e) {
     console.error('[CouncilHistory]', e);
@@ -1014,9 +1001,7 @@ document.addEventListener('visibilitychange', () => {
    ═══════════════════════════════════════ */
 async function fetchFearGreedChart() {
   try {
-    const res = await fetch('/api/fear-greed');
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await apiFetch('/api/fear-greed', { silent: true });
 
     // Update score display
     const scoreEl = document.getElementById('fg-score-big');
@@ -1138,8 +1123,7 @@ function drawFGChart(history) {
    ═══════════════════════════════════════ */
 async function fetchMultiTimeframe() {
   try {
-    const res = await fetch('/api/multi-timeframe');
-    const data = await res.json();
+    const data = await apiFetch('/api/multi-timeframe', { silent: true });
     renderMultiTimeframe(data);
   } catch (e) {
     console.error('[MTF]', e);
@@ -1186,8 +1170,7 @@ function renderMultiTimeframe(data) {
    ═══════════════════════════════════════ */
 async function fetchOnChainData() {
   try {
-    const res = await fetch('/api/onchain');
-    const data = await res.json();
+    const data = await apiFetch('/api/onchain', { silent: true });
     renderOnChainData(data);
   } catch (e) {
     console.error('[OnChain]', e);
@@ -1743,19 +1726,18 @@ function _syncLayoutToServer() {
       const saved = localStorage.getItem(`ryzm_panel_order_${pid}`);
       if (saved) panels[pid] = JSON.parse(saved);
     });
-    fetch('/api/layout', {
+    apiFetch('/api/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ panels }),
-      credentials: 'same-origin'
+      silent: true
     }).catch(() => {}); // silent fail
   }, 2000);
 }
 
 // On startup, try loading server layout (merge with local)
 function _loadServerLayout() {
-  fetch('/api/layout', { credentials: 'same-origin' })
-    .then(r => r.json())
+  apiFetch('/api/layout', { silent: true })
     .then(data => {
       if (data && data.layout) {
         Object.entries(data.layout).forEach(([panelId, order]) => {
@@ -1804,24 +1786,20 @@ function initPriceAlerts() {
       return;
     }
     try {
-      const res = await fetch('/api/alerts', {
+      await apiFetch('/api/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, target_price, direction }),
-        credentials: 'same-origin'
+        body: JSON.stringify({ symbol, target_price, direction })
       });
-      if (res.status === 403) {
-        const err = await res.json().catch(() => ({}));
-        showToast('warning', 'Limit Reached', err.detail || 'Free alert limit reached.');
-        if (typeof openUpgradeModal === 'function') openUpgradeModal('alerts_limit');
-        return;
-      }
-      if (!res.ok) throw new Error('Failed');
       showToast('success', 'Alert Set', `${symbol} ${direction} $${target_price.toLocaleString()}`);
       document.getElementById('alert-price').value = '';
       refreshAlertList();
     } catch (e) {
-      showToast('error', 'Error', 'Could not create alert.');
+      if (e.status === 403) {
+        showToast('warning', 'Limit Reached', e.data?.detail || 'Free alert limit reached.');
+      } else {
+        showToast('error', 'Error', 'Could not create alert.');
+      }
     }
   });
 
@@ -1834,8 +1812,7 @@ async function refreshAlertList() {
   const list = document.getElementById('alert-list');
   if (!list) return;
   try {
-    const res = await fetch('/api/alerts', { credentials: 'same-origin' });
-    const data = await res.json();
+    const data = await apiFetch('/api/alerts', { silent: true });
     let html = '';
     if (data.triggered && data.triggered.length > 0) {
       data.triggered.slice(0, 3).forEach(a => {
@@ -1865,7 +1842,7 @@ async function refreshAlertList() {
 
 async function deleteAlert(id) {
   try {
-    await fetch(`/api/alerts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+    await apiFetch(`/api/alerts/${id}`, { method: 'DELETE', silent: true });
     refreshAlertList();
   } catch {}
 }
@@ -2020,13 +1997,7 @@ function renderRegimeBadges(records, scoreVsBtc) {
 /* PR-5: CSV Export button handler */
 document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
   try {
-    const res = await fetch('/api/export/council-history', { credentials: 'same-origin' });
-    if (res.status === 403) {
-      if (typeof openUpgradeModal === 'function') openUpgradeModal('general');
-      showToast('warning', '⚡ Pro Feature', 'CSV export requires Pro subscription.');
-      return;
-    }
-    if (!res.ok) throw new Error('Export failed');
+    const res = await apiFetch('/api/export/council-history', { raw: true });
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -53,7 +53,7 @@ def get_me(request: Request):
 
     response = JSONResponse(content=content)
     if not request.cookies.get("ryzm_uid"):
-        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax")
+        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax", secure=True)
     return response
 
 

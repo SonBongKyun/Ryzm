@@ -17,13 +17,13 @@
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <!-- TradingView Lightweight Charts -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=3.8" />
+  <link rel="stylesheet" href="/static/styles.css?v=4.1" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#06b6d4" />
@@ -445,6 +445,10 @@
             <div class="agent-msg">Standby...</div>
           </div>
         </div>
+        <!-- Bubble Chart (C-3 fix: required by council.js renderBubbleChart) -->
+        <div id="bubble-chart" style="width:100%;max-width:300px;height:250px;margin:8px auto;">
+          <svg id="bubble-svg" style="width:100%;height:100%;"></svg>
+        </div>
       </div>
 
       <div class="glass-panel chart-container" id="chart-panel"
@@ -862,17 +866,17 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v3.3</span>
+      <span>Ryzm Terminal v4.1</span>
     </div>
   </div>
 
-  <!-- JS Modules (v4.0 — unified entry) -->
-  <script src="/static/js/api.js?v=4.0"></script>
-  <script src="/static/js/chart.js?v=4.0"></script>
-  <script src="/static/js/core.js?v=4.0"></script>
-  <script src="/static/js/data.js?v=4.0"></script>
-  <script src="/static/js/council.js?v=4.0"></script>
-  <script src="/static/js/ui.js?v=4.0"></script>
+  <!-- JS Modules (v4.1 — unified entry) -->
+  <script src="/static/js/api.js?v=4.1"></script>
+  <script src="/static/js/chart.js?v=4.1"></script>
+  <script src="/static/js/core.js?v=4.1"></script>
+  <script src="/static/js/data.js?v=4.1"></script>
+  <script src="/static/js/council.js?v=4.1"></script>
+  <script src="/static/js/ui.js?v=4.1"></script>
 
   <!-- ═══ Auth Modal ═══ -->
   <div id="auth-modal" class="auth-modal" style="display:none;">
@@ -970,20 +974,18 @@
     const sucEl = document.getElementById('forgot-success');
     errEl.textContent = ''; sucEl.style.display = 'none';
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
+      const data = await apiFetch('/api/auth/forgot-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, silent: true,
         body: JSON.stringify({ email: document.getElementById('forgot-email').value }),
       });
-      const data = await res.json();
       sucEl.textContent = data.message || 'Reset link sent.';
       sucEl.style.display = 'block';
-    } catch { errEl.textContent = 'Connection error'; }
+    } catch (e) { errEl.textContent = e.data?.detail || 'Connection error'; }
   }
   async function resendVerification(e) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/auth/resend-verification', { method: 'POST', credentials: 'same-origin' });
-      const data = await res.json();
+      const data = await apiFetch('/api/auth/resend-verification', { method: 'POST', silent: true });
       showToast('info', 'Email', data.message || 'Verification email resent.');
     } catch { showToast('error', 'Error', 'Failed to resend verification.'); }
   }
@@ -992,17 +994,15 @@
     const errEl = document.getElementById('login-error');
     errEl.textContent = '';
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+      const data = await apiFetch('/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, silent: true,
         body: JSON.stringify({ email: document.getElementById('login-email').value, password: document.getElementById('login-password').value }),
       });
-      const data = await res.json();
-      if (!res.ok) { errEl.textContent = data.detail || 'Login failed'; return; }
       localStorage.setItem('ryzm_token', data.token);
       _authUser = data;
       updateAuthUI(data);
       showToast('success', 'Welcome', `Logged in as ${data.email}`);
-    } catch (err) { errEl.textContent = 'Connection error'; }
+    } catch (e) { errEl.textContent = e.data?.detail || 'Connection error'; }
   }
   async function handleRegister(e) {
     e.preventDefault();
@@ -1011,24 +1011,22 @@
     const tosChecked = document.getElementById('reg-tos').checked;
     if (!tosChecked) { errEl.textContent = 'You must accept the Terms of Service.'; return; }
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+      const data = await apiFetch('/api/auth/register', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, silent: true,
         body: JSON.stringify({
           email: document.getElementById('reg-email').value,
           password: document.getElementById('reg-password').value,
           display_name: document.getElementById('reg-name').value,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) { errEl.textContent = data.detail || 'Registration failed'; return; }
       localStorage.setItem('ryzm_token', data.token);
       _authUser = data;
       updateAuthUI(data);
       showToast('success', 'Account Created', data.message || 'Welcome to Ryzm Terminal!');
-    } catch (err) { errEl.textContent = 'Connection error'; }
+    } catch (e) { errEl.textContent = e.data?.detail || 'Connection error'; }
   }
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    await apiFetch('/api/auth/logout', { method: 'POST', silent: true }).catch(() => {});
     localStorage.removeItem('ryzm_token');
     _authUser = null;
     updateAuthUI(null);
@@ -1037,8 +1035,7 @@
   }
   async function handleUpgrade() {
     try {
-      const res = await fetch('/api/payments/create-checkout', { method: 'POST', credentials: 'same-origin' });
-      const data = await res.json();
+      const data = await apiFetch('/api/payments/create-checkout', { method: 'POST' });
       if (data.checkout_url) window.location.href = data.checkout_url;
       else showToast('warning', 'Payment', data.detail || 'Stripe not configured yet.');
     } catch { showToast('error', 'Error', 'Payment system unavailable.'); }
@@ -1090,9 +1087,8 @@
   // Check auth on load
   (async function checkAuth() {
     try {
-      const r = await fetch('/api/auth/profile', { credentials: 'same-origin' });
-      if (r.ok) { _authUser = await r.json(); updateAuthUI(_authUser); }
-      else updateAuthUI(null);
+      _authUser = await apiFetch('/api/auth/profile', { silent: true });
+      updateAuthUI(_authUser);
     } catch { updateAuthUI(null); }
   })();
   // Handle email verification from URL params
@@ -1101,8 +1097,7 @@
     const token = params.get('verify_token') || params.get('token');
     const path = window.location.pathname;
     if (path === '/verify-email' && token) {
-      fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
-        .then(r => r.json())
+      apiFetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`, { silent: true })
         .then(data => {
           if (data.status === 'verified') {
             showToast('success', '✓ Verified', 'Email verified successfully!');
@@ -1171,13 +1166,14 @@
   }
   async function handleUpgradeFromModal() {
     try {
-      const r = await fetch('/api/auth/profile', { credentials: 'same-origin' });
-      if (!r.ok) { closeUpgradeModal(); toggleAuthModal(); return; } // not logged in → show login
-      const res = await fetch('/api/payments/create-checkout', { method: 'POST', credentials: 'same-origin' });
-      const data = await res.json();
+      await apiFetch('/api/auth/profile', { silent: true });
+      const data = await apiFetch('/api/payments/create-checkout', { method: 'POST' });
       if (data.checkout_url) window.location.href = data.checkout_url;
       else showToast('warning', 'Payment', data.detail || 'Stripe not configured.');
-    } catch { showToast('error', 'Error', 'Payment unavailable.'); }
+    } catch (e) {
+      if (e.status === 401) { closeUpgradeModal(); toggleAuthModal(); return; }
+      showToast('error', 'Error', 'Payment unavailable.');
+    }
   }
   // Close on backdrop click
   document.getElementById('upgrade-modal')?.addEventListener('click', e => {
@@ -1340,8 +1336,8 @@
     errEl.textContent = '';
     const data = window._lastCouncilData || {};
     try {
-      const res = await fetch('/api/journal', {
-        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+      const result = await apiFetch('/api/journal', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           council_id: 0,
           snapshot: data,
@@ -1353,23 +1349,17 @@
           tags: document.getElementById('j-tags').value,
         }),
       });
-      const result = await res.json();
-      if (!res.ok) {
-        if (res.status === 403 && typeof openUpgradeModal === 'function') openUpgradeModal('general');
-        errEl.textContent = result.detail || 'Save failed';
-        return;
-      }
       showToast('success', '📔 Saved', 'Entry saved to Signal Journal.');
       closeJournalSaveModal();
       document.getElementById('journal-save-form').reset();
-    } catch { errEl.textContent = 'Connection error'; }
+    } catch (e) {
+      errEl.textContent = e.data?.detail || 'Connection error';
+    }
   }
 
   async function loadJournalEntries() {
     try {
-      const res = await fetch('/api/journal?limit=50', { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await apiFetch('/api/journal?limit=50', { silent: true });
       const container = document.getElementById('journal-entries');
       const empty = document.getElementById('journal-empty');
       // Stats
@@ -1430,15 +1420,14 @@
     e.preventDefault();
     const entryId = document.getElementById('jo-entry-id').value;
     try {
-      const res = await fetch(`/api/journal/${entryId}`, {
-        method: 'PUT', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+      await apiFetch(`/api/journal/${entryId}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           outcome: document.getElementById('jo-outcome').value,
           outcome_price: parseFloat(document.getElementById('jo-price').value) || 0,
           outcome_note: document.getElementById('jo-note').value,
         }),
       });
-      if (!res.ok) { showToast('error', 'Error', 'Failed to update.'); return; }
       showToast('success', '📊 Updated', 'Outcome recorded.');
       closeJournalOutcomeModal();
       document.getElementById('journal-outcome-form').reset();
@@ -1449,8 +1438,8 @@
   async function deleteJournalEntry(entryId) {
     if (!confirm('Delete this journal entry?')) return;
     try {
-      const res = await fetch(`/api/journal/${entryId}`, { method: 'DELETE', credentials: 'same-origin' });
-      if (res.ok) { showToast('info', 'Deleted', 'Entry removed.'); loadJournalEntries(); }
+      await apiFetch(`/api/journal/${entryId}`, { method: 'DELETE', silent: true });
+      showToast('info', 'Deleted', 'Entry removed.'); loadJournalEntries();
     } catch { /* silent */ }
   }
 
@@ -1469,16 +1458,14 @@
     const confirm = document.getElementById('reset-confirm-pw').value;
     if (pw !== confirm) { errEl.textContent = 'Passwords do not match.'; return; }
     try {
-      const res = await fetch('/api/auth/reset-password', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
+      const data = await apiFetch('/api/auth/reset-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, silent: true,
         body: JSON.stringify({ token: document.getElementById('reset-token').value, new_password: pw }),
       });
-      const data = await res.json();
-      if (!res.ok) { errEl.textContent = data.detail || 'Reset failed.'; return; }
       sucEl.textContent = data.message || 'Password reset! You can now login.';
       sucEl.style.display = 'block';
       setTimeout(() => { closeResetPasswordModal(); toggleAuthModal(); }, 2000);
-    } catch { errEl.textContent = 'Connection error.'; }
+    } catch (e) { errEl.textContent = e.data?.detail || 'Connection error.'; }
   }
 
   /* ── ToS Modal ── */

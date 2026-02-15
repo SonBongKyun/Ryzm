@@ -36,7 +36,7 @@ router = APIRouter()
 
 
 @router.get("/api/council")
-def get_council(request: Request, response: Response):
+async def get_council(request: Request, response: Response):
     """Convene AI Round Table."""
     if not check_rate_limit(request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
@@ -125,7 +125,7 @@ def get_council(request: Request, response: Response):
 
 
 @router.get("/api/council/history")
-def get_council_history_api(limit: int = 50):
+async def get_council_history_api(limit: int = 50):
     """Retrieve AI Council prediction history & accuracy stats."""
     records = get_council_history(limit)
     evaluated = [r for r in records if r["hit"] is not None]
@@ -200,7 +200,7 @@ def get_council_history_api(limit: int = 50):
 
 
 @router.post("/api/validate")
-def validate_trade(request: TradeValidationRequest, http_request: Request, response: Response):
+async def validate_trade(request: TradeValidationRequest, http_request: Request, response: Response):
     """AI evaluates user's trading plan."""
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
@@ -262,7 +262,7 @@ News:
 
 
 @router.post("/api/chat")
-def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Response):
+async def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Response):
     """Real-time AI Chat."""
     if not check_rate_limit(http_request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")

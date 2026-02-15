@@ -2,6 +2,7 @@
 Ryzm Terminal — FastAPI Application Entry Point
 Creates app, adds middleware, includes routers, mounts static files.
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,16 @@ from app.routes.payment_routes import router as payment_router
 from app.routes.journal_routes import router as journal_router
 from app.background import startup_background_tasks
 
-app = FastAPI(title="Ryzm Terminal API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown lifecycle hook (replaces deprecated on_event)."""
+    startup_background_tasks()
+    yield
+    # Shutdown logic (if needed) goes here
+
+
+app = FastAPI(title="Ryzm Terminal API", lifespan=lifespan)
 
 
 # ── Security Headers Middleware ──
@@ -43,7 +53,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
             "img-src 'self' data: blob: https:; "
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
-            "connect-src 'self' https://api.binance.com https://fapi.binance.com https://api.coingecko.com https://api.alternative.me https://s3.tradingview.com wss://stream.binance.com:9443 wss://stream.binance.com:443 wss://stream.binance.com wss://fstream.binance.com https://fonts.googleapis.com; "
+            "connect-src 'self' https://api.binance.com https://fapi.binance.com https://api.coingecko.com https://api.alternative.me https://s3.tradingview.com wss://stream.binance.com:9443 wss://stream.binance.com:443 wss://stream.binance.com wss://fstream.binance.com https://html2canvas.hertzen.com; "
             "frame-src https://s3.tradingview.com https://www.tradingview.com https://js.stripe.com; "
             "object-src 'none'; "
             "base-uri 'self'; "
@@ -73,11 +83,6 @@ app.include_router(user_router)
 app.include_router(auth_router)
 app.include_router(payment_router)
 app.include_router(journal_router)
-
-
-@app.on_event("startup")
-def on_startup():
-    startup_background_tasks()
 
 
 # Static file mount (after API routes)

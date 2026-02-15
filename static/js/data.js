@@ -1,8 +1,7 @@
 
 async function fetchBriefing() {
   try {
-    const res = await fetch('/api/briefing');
-    const data = await res.json();
+    const data = await apiFetch('/api/briefing', { silent: true });
     const panel = document.getElementById('briefing-panel');
     const titleEl = document.getElementById('briefing-title');
     const contentEl = document.getElementById('briefing-content');
@@ -39,8 +38,7 @@ async function fetchBriefing() {
 
 async function fetchFundingRate() {
   try {
-    const res = await fetch('/api/funding-rate');
-    const data = await res.json();
+    const data = await apiFetch('/api/funding-rate', { silent: true });
     if (!data.rates || data.rates.length === 0) return;
     data.rates.forEach(r => {
       const el = document.getElementById(`fr-${String(r.symbol).toLowerCase().replace(/[^a-z0-9]/g,'')}`);
@@ -56,8 +54,7 @@ async function fetchFundingRate() {
 
 async function fetchWhaleFeed() {
   try {
-    const res = await fetch('/api/liquidations');
-    const data = await res.json();
+    const data = await apiFetch('/api/liquidations', { silent: true });
     const container = document.getElementById('whale-feed');
     if (!container) return;
     if (!data.trades || data.trades.length === 0) {
@@ -84,8 +81,7 @@ async function fetchWhaleFeed() {
 
 async function fetchCalendar() {
   try {
-    const res = await fetch('/api/calendar');
-    const data = await res.json();
+    const data = await apiFetch('/api/calendar', { silent: true });
     const container = document.getElementById('calendar-feed');
     if (!container) return;
     if (!data.events || data.events.length === 0) {
@@ -233,8 +229,7 @@ function _updateThresholdLine(score) {
 
 async function fetchRiskGauge() {
   try {
-    const res = await fetch('/api/risk-gauge');
-    const data = await res.json();
+    const data = await apiFetch('/api/risk-gauge', { silent: true });
 
     const needleEl = document.getElementById('gauge-needle');
     const arcEl = document.getElementById('gauge-arc');
@@ -517,8 +512,7 @@ function _drawChangeHeatmap(changes) {
 // ── Correlation Matrix ──
 async function _fetchCorrelationMatrix() {
   try {
-    const res = await fetch('/api/correlation');
-    const data = await res.json();
+    const data = await apiFetch('/api/correlation', { silent: true });
     _drawCorrelationMatrix(data);
   } catch (e) {
     console.error('[RG Corr]', e);
@@ -602,12 +596,12 @@ function _runSimulation() {
       sc: parseFloat(document.getElementById('sim-sc')?.value || 5),
     };
     try {
-      const res = await fetch('/api/risk-gauge/simulate', {
+      const data = await apiFetch('/api/risk-gauge/simulate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
+        body: JSON.stringify(params),
+        silent: true
       });
-      const data = await res.json();
       const scoreEl = document.getElementById('rg-sim-score');
       const labelEl = document.getElementById('rg-sim-label');
       const levelColors = {
@@ -654,8 +648,7 @@ function updateMarketVibe(riskData) {
 /* ══ Risk Index 30-Day History Chart (Interactive + BTC overlay + Zone Timeline) ══ */
 async function fetchRiskHistory() {
   try {
-    const res = await fetch('/api/risk-gauge/history?days=30');
-    const data = await res.json();
+    const data = await apiFetch('/api/risk-gauge/history?days=30', { silent: true });
     if (data.history && data.history.length > 0) {
       _cachedRiskHistory = data.history;
       drawRiskHistoryChart(data.history);
@@ -809,8 +802,7 @@ function drawRiskHistoryChart(history) {
 // ── BTC Price Overlay ──
 async function _drawBtcPriceOverlay(ctx, history, pad, cw, ch, w) {
   try {
-    const res = await fetch('/api/market');
-    const marketData = await res.json();
+    const marketData = await apiFetch('/api/market', { silent: true });
     const btcPrice = marketData?.market?.BTC?.price;
     if (!btcPrice) return;
 
@@ -876,21 +868,13 @@ function _drawZoneTimeline(history) {
   }).join('');
 }
 
-// Load correlation matrix once (delayed)
-setTimeout(() => _fetchCorrelationMatrix(), 5000);
-// Refresh correlation every 10 minutes
-setInterval(() => _fetchCorrelationMatrix(), 600000);
-
-// Fetch risk history on page load (delayed)
-setTimeout(() => fetchRiskHistory(), 4000);
-// Refresh risk history every 10 minutes
-setInterval(() => fetchRiskHistory(), 600000);
+// Correlation matrix and risk history are now managed via RyzmScheduler (H-5/M-2 fix)
+// Removed standalone setTimeout/setInterval to prevent duplicate polling.
 
 /* ── Museum of Scars ── */
 async function fetchMuseumOfScars() {
   try {
-    const res = await fetch('/api/scars');
-    const data = await res.json();
+    const data = await apiFetch('/api/scars', { silent: true });
     const container = document.getElementById('scars-feed');
     if (!container || !data.scars) return;
 
@@ -935,8 +919,7 @@ function renderStrategicNarrative(narrativeData) {
 
 async function fetchLongShortRatio() {
   try {
-    const res = await fetch('/api/long-short');
-    const data = await res.json();
+    const data = await apiFetch('/api/long-short', { silent: true });
     
     const lsLong = document.getElementById('ls-long');
     const lsShort = document.getElementById('ls-short');
@@ -973,8 +956,7 @@ async function fetchLongShortRatio() {
 
 async function fetchMacroTicker() {
   try {
-    const res = await fetch('/api/market');
-    const data = await res.json();
+    const data = await apiFetch('/api/market', { silent: true });
     const market = data.market;
     const container = document.getElementById('macro-ticker');
 
@@ -1030,15 +1012,13 @@ async function fetchMacroTicker() {
     });
     if (container) container.innerHTML = html + html;
 
-    // Kimchi Premium Update
-    fetchKimchi();
+    // Kimchi is handled by its own scheduler entry — no duplicate call needed (H-4 fix)
   } catch (e) { console.error("Ticker Error:", e); }
 }
 
 async function fetchKimchi() {
   try {
-    const res = await fetch('/api/kimchi');
-    const data = await res.json();
+    const data = await apiFetch('/api/kimchi', { silent: true });
     const p = data.premium;
     if (p === undefined) return;
 
@@ -1288,8 +1268,7 @@ function buildPriceCards() {
 // Also updates BTC/ETH/SOL as fallback when Binance WS is unavailable
 async function fetchRealtimePrices() {
   try {
-    const res = await fetch('/api/market');
-    const data = await res.json();
+    const data = await apiFetch('/api/market', { silent: true });
     const market = data.market;
     if (!market) return;
 
@@ -1354,8 +1333,7 @@ async function fetchRealtimePrices() {
 
 async function fetchNews() {
   try {
-    const res = await fetch('/api/news');
-    const data = await res.json();
+    const data = await apiFetch('/api/news', { silent: true });
     const feed = document.getElementById('news-feed');
 
     if (!data.news || data.news.length === 0) return;

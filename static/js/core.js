@@ -28,7 +28,6 @@ function safeColor(str) {
 // Global state
 let validatorCredits = 3;
 const MAX_FREE_VALIDATIONS = 3;
-const _intervals = [];  // Track all setIntervals for cleanup
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
@@ -605,7 +604,6 @@ const RyzmScheduler = (() => {
         _exec(name);
       }, job.interval);
       job.handle = id;
-      _intervals.push(id);
     }
   }
 
@@ -623,7 +621,6 @@ const RyzmScheduler = (() => {
       _exec(name);
       const id = setInterval(() => _exec(name), job.interval);
       job.handle = id;
-      _intervals.push(id);
     }
   }
 
@@ -657,6 +654,8 @@ function initDataFeeds() {
   RyzmScheduler.register('whaleWallets', 120000,  fetchWhaleWallets);
   RyzmScheduler.register('liqZones',     120000,  fetchLiqZones);
   RyzmScheduler.register('kimchi',        60000,  fetchKimchi);
+  RyzmScheduler.register('riskHistory',  600000,  fetchRiskHistory);
+  RyzmScheduler.register('riskCorr',     600000,  _fetchCorrelationMatrix);
 
   // Non-scheduler init
   buildPriceCards();

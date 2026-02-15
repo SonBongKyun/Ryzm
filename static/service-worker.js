@@ -1,7 +1,7 @@
 /* ─────────────────────────────────────────────
-   Ryzm Terminal – Service Worker v3.0
+   Ryzm Terminal – Service Worker v4.1
    ───────────────────────────────────────────── */
-const CACHE_NAME = 'ryzm-v4.0';
+const CACHE_NAME = 'ryzm-v4.1';
 const API_CACHE_NAME = 'ryzm-api-v4';
 
 // ── Precache: actual files loaded by index.html ──
@@ -28,7 +28,7 @@ const API_CACHE_RULES = {
   '/api/funding-rate':    3 * 60_000,
   '/api/liquidations':    2 * 60_000,
   '/api/calendar':       10 * 60_000,
-  '/api/risk':            3 * 60_000,
+  '/api/risk-gauge':      3 * 60_000,
   '/api/scars':          30 * 60_000,
   '/api/health-check':    1 * 60_000,
   '/api/multi-timeframe': 5 * 60_000,
@@ -39,7 +39,7 @@ const API_CACHE_RULES = {
   '/api/whale-wallets':   3 * 60_000,
   '/api/liq-zones':       5 * 60_000,
   '/api/kimchi':          3 * 60_000,
-  '/api/ls-ratio':        3 * 60_000,
+  '/api/long-short':      3 * 60_000,
   '/api/briefing':        5 * 60_000,
 };
 

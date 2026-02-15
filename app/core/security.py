@@ -137,7 +137,7 @@ def get_or_create_uid(request: Request, response: Response) -> str:
     uid = request.cookies.get("ryzm_uid")
     if not uid:
         uid = str(uuid.uuid4())
-        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax")
+        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax", secure=True)
     return uid
 
 

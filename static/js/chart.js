@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Ryzm Terminal — Chart Engine v2.0
+   Ryzm Terminal — Chart Engine v4.1
    TradingView Lightweight Charts + Binance Data Feed
    ═══════════════════════════════════════════════════════════
    Features:
@@ -73,6 +73,9 @@ const RyzmChart = (() => {
   // Multi-chart
   let _layoutMode = '1x1';      // '1x1' | '2x2'
   let _subCharts = {};           // { slot: { chart, candle, ws, symbol } }
+
+  // ResizeObserver tracking (M-3 fix)
+  const _resizeObservers = [];
 
   // Live EMA state
   let _liveEma7 = null, _liveEma25 = null, _liveEma99 = null;
@@ -237,6 +240,7 @@ const RyzmChart = (() => {
       if (_chart) _chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
     });
     ro.observe(container);
+    _resizeObservers.push(ro);
 
     return _chart;
   }
@@ -450,6 +454,7 @@ const RyzmChart = (() => {
 
     const ro = new ResizeObserver(() => { if (_rsiChart) _rsiChart.applyOptions({ width: rsiContainer.clientWidth }); });
     ro.observe(rsiContainer);
+    _resizeObservers.push(ro);
   }
 
   // ── MACD (12, 26, 9) ──
@@ -637,22 +642,20 @@ const RyzmChart = (() => {
 
   async function loadCouncilSignals() {
     try {
-      const res = await fetch('/api/council/history?limit=20', { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.history) return;
+      const data = await apiFetch('/api/council/history?limit=20', { silent: true });
+      if (!data.records) return;
       _signalMarkers = [];
-      data.history.forEach(h => {
-        if (!h.timestamp || !h.edge_score) return;
+      data.records.forEach(h => {
+        if (!h.timestamp || !h.consensus_score) return;
         const ts = Math.floor(new Date(h.timestamp).getTime() / 1000);
-        const pos = h.edge_score >= 60 ? 'LONG' : h.edge_score <= 40 ? 'SHORT' : null;
+        const pos = h.consensus_score >= 60 ? 'LONG' : h.consensus_score <= 40 ? 'SHORT' : null;
         if (pos) {
           _signalMarkers.push({
             time: ts,
             position: pos === 'LONG' ? 'belowBar' : 'aboveBar',
             shape: pos === 'LONG' ? 'arrowUp' : 'arrowDown',
             color: pos === 'LONG' ? '#06d6a0' : '#ef476f',
-            text: `AI ${h.edge_score}`, size: 2,
+            text: `AI ${h.consensus_score}`, size: 2,
           });
         }
       });
@@ -666,8 +669,7 @@ const RyzmChart = (() => {
   function syncAlertLines() {
     Object.values(_alertLines).forEach(l => { try { _candleSeries.removePriceLine(l); } catch {} });
     _alertLines = {};
-    fetch('/api/alerts', { credentials: 'same-origin' })
-      .then(r => r.json())
+    apiFetch('/api/alerts', { silent: true })
       .then(data => {
         if (!data.alerts || !_candleSeries) return;
         const t = getTheme();
@@ -721,9 +723,7 @@ const RyzmChart = (() => {
   async function fetchLiqOverlay() {
     clearLiqOverlay();
     try {
-      const res = await fetch('/api/liq-zones');
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await apiFetch('/api/liq-zones', { silent: true });
       if (!data.zones || !_candleSeries) return;
       const t = getTheme();
       data.zones.forEach(z => {
@@ -792,6 +792,7 @@ const RyzmChart = (() => {
 
       const ro = new ResizeObserver(() => { if (_depthChart) _depthChart.applyOptions({ width: container.clientWidth }); });
       ro.observe(container);
+      _resizeObservers.push(ro);
     } catch (e) { console.warn('[RyzmChart] Depth:', e); }
   }
 
@@ -843,9 +844,7 @@ const RyzmChart = (() => {
      ═══════════════════════════════════════ */
   async function loadJournalOnChart() {
     try {
-      const res = await fetch('/api/journal?limit=50', { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await apiFetch('/api/journal?limit=50', { silent: true });
       if (!data.entries || !_candleSeries) return;
       const markers = [];
       data.entries.forEach(entry => {
@@ -953,6 +952,7 @@ const RyzmChart = (() => {
           const cell = document.getElementById(`multi-chart-${i}`);
           const ro = new ResizeObserver(() => { ch.applyOptions({ width: cell.clientWidth, height: cell.clientHeight }); });
           ro.observe(cell);
+          _resizeObservers.push(ro);
           ch.applyOptions({ width: cell.clientWidth, height: cell.clientHeight });
 
           const binInt = INTERVALS[_currentInterval] || _currentInterval;
@@ -1096,9 +1096,17 @@ const RyzmChart = (() => {
   /* ═══════════════════════════════════════
      §21  PUBLIC API
      ═══════════════════════════════════════ */
+
+  /** Disconnect all ResizeObservers (M-3 cleanup) */
+  function destroyResizeObservers() {
+    _resizeObservers.forEach(ro => ro.disconnect());
+    _resizeObservers.length = 0;
+  }
+
   return {
     create: createChart, switchSymbol, switchInterval, updateTheme,
     disconnect: disconnectWebSocket,
+    destroyResizeObservers,
     toggleIndicator, getIndicators,
     setDrawingMode, clearAllDrawings,
     addSignalMarker, clearSignalMarkers, loadCouncilSignals,
