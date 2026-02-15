@@ -2523,6 +2523,20 @@ button:active::before {
     font-size: 0.52rem;
     padding: 1px 6px;
   }
+  .chart-toolbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 2px 4px;
+    gap: 2px;
+  }
+  .toolbar-divider { display: none; }
+  .ind-toggle, .draw-tool-btn, .layout-btn, .toolbar-action-btn {
+    font-size: 0.45rem;
+    padding: 2px 4px;
+  }
+  .comp-select { font-size: 0.45rem; }
+  .chart-layout-1x1 { height: calc(100% - 110px); }
+  .chart-layout-2x2 { height: calc(100% - 110px); }
 
   /* ── AI Action Buttons ── */
   .ai-scan-btn {
@@ -3620,6 +3634,183 @@ html[data-theme="dark"] .skeleton {
 }
 #ryzm-chart-container .tv-lightweight-charts {
   border-radius: 0 0 12px 12px;
+}
+
+/* ─── Chart Toolbar ─── */
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-dim);
+  height: 28px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+}
+.chart-toolbar::-webkit-scrollbar { height: 0; }
+.toolbar-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-dim);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Indicator toggles */
+.ind-toggle {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 3px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.ind-toggle:hover {
+  color: var(--text-main);
+  border-color: var(--border-dim);
+}
+.ind-toggle.active {
+  color: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  background: rgba(6, 182, 212, 0.1);
+  font-weight: 600;
+}
+
+/* Drawing tool buttons */
+.draw-tool-btn {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 3px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.draw-tool-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-dim);
+}
+.draw-tool-btn.active {
+  color: var(--neon-magenta);
+  border-color: var(--neon-magenta);
+  background: rgba(168, 85, 247, 0.1);
+}
+.draw-clear:hover {
+  color: var(--neon-red);
+  border-color: var(--neon-red);
+}
+
+/* Layout buttons */
+.layout-btn {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+.layout-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-dim);
+}
+.layout-btn.active {
+  color: var(--neon-green);
+  border-color: var(--neon-green);
+  background: rgba(6, 214, 160, 0.08);
+}
+
+/* Action buttons */
+.toolbar-action-btn {
+  font-size: 0.6rem;
+  padding: 2px 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+.toolbar-action-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-dim);
+  background: rgba(255,255,255,0.04);
+}
+
+/* Comparison select */
+.comp-select {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  padding: 1px 4px;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  outline: none;
+}
+.comp-select:focus {
+  border-color: var(--neon-cyan);
+}
+.comp-select option {
+  background: var(--bg-panel);
+  color: var(--text-main);
+}
+
+/* ─── Chart Layout Wrapper ─── */
+#chart-layout-wrapper {
+  width: 100%;
+  background: var(--bg-base);
+}
+.chart-layout-1x1 {
+  height: calc(100% - 84px);
+}
+.chart-layout-2x2 {
+  height: calc(100% - 84px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  background: var(--border-dim);
+}
+.multi-chart-cell {
+  background: var(--bg-base);
+  position: relative;
+  overflow: hidden;
+}
+.multi-chart-label {
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  z-index: 2;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+/* ─── RSI / Depth Sub-containers ─── */
+#ryzm-rsi-container,
+#ryzm-depth-container {
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-dim);
 }
 
 /* ═══ Number Countup ═══ */

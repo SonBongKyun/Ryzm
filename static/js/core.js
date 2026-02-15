@@ -442,6 +442,84 @@ function initChartTabs() {
       playSound('click');
     });
   }
+
+  // ── Chart Toolbar Event Handlers ──
+  initChartToolbar();
+}
+
+function initChartToolbar() {
+  const toolbar = document.getElementById('chart-toolbar');
+  if (!toolbar) return;
+
+  // Indicator toggles
+  toolbar.querySelectorAll('.ind-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      RyzmChart.toggleIndicator(btn.dataset.ind);
+      playSound('click');
+    });
+  });
+
+  // Drawing tools
+  toolbar.querySelectorAll('.draw-tool-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tool = btn.dataset.tool;
+      if (tool === 'clear') {
+        RyzmChart.clearAllDrawings();
+      } else {
+        RyzmChart.setDrawingMode(tool);
+      }
+      playSound('click');
+    });
+  });
+
+  // Layout buttons
+  toolbar.querySelectorAll('.layout-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      RyzmChart.setLayout(btn.dataset.layout);
+      playSound('click');
+    });
+  });
+
+  // AI Signals
+  const signalsBtn = document.getElementById('btn-chart-signals');
+  if (signalsBtn) {
+    signalsBtn.addEventListener('click', () => {
+      RyzmChart.loadCouncilSignals();
+      playSound('click');
+    });
+  }
+
+  // Journal on Chart
+  const journalBtn = document.getElementById('btn-chart-journal');
+  if (journalBtn) {
+    journalBtn.addEventListener('click', () => {
+      RyzmChart.loadJournalOnChart();
+      playSound('click');
+    });
+  }
+
+  // Snapshot
+  const snapBtn = document.getElementById('btn-chart-snapshot');
+  if (snapBtn) {
+    snapBtn.addEventListener('click', () => {
+      RyzmChart.shareSnapshot();
+      playSound('click');
+    });
+  }
+
+  // Comparison select
+  const compSelect = document.getElementById('comp-select');
+  if (compSelect) {
+    compSelect.addEventListener('change', () => {
+      const sym = compSelect.value;
+      if (sym) {
+        RyzmChart.enableComparison(sym);
+      } else {
+        RyzmChart.disableComparison();
+      }
+      playSound('click');
+    });
+  }
 }
 
 /* ── Number Countup Animation ── */
