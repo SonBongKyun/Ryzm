@@ -407,7 +407,7 @@
       </div>
 
       <div class="glass-panel chart-container" id="chart-panel"
-        style="min-height:500px; padding:0; border:1px solid var(--border-bright);">
+        style="height:500px; padding:0; border:1px solid var(--border-bright); overflow:hidden;">
         <!-- Symbol Tabs + Intervals -->
         <div class="chart-header">
           <div class="chart-tabs" id="chart-tabs">
@@ -472,14 +472,17 @@
         </div>
         <!-- OHLCV Legend -->
         <div class="ryzm-chart-legend" id="ryzm-chart-legend"></div>
-        <!-- Chart Layout Wrapper -->
-        <div id="chart-layout-wrapper" class="chart-layout-1x1">
-          <div id="ryzm-chart-container" style="height:100%; width:100%;"></div>
+        <!-- Chart Body (flex container) -->
+        <div class="chart-body">
+          <!-- Chart Layout Wrapper -->
+          <div id="chart-layout-wrapper" class="chart-layout-1x1">
+            <div id="ryzm-chart-container" style="height:100%; width:100%;"></div>
+          </div>
+          <!-- RSI Sub-chart Container -->
+          <div id="ryzm-rsi-container" class="chart-sub"></div>
+          <!-- Depth Sub-chart Container -->
+          <div id="ryzm-depth-container" class="chart-sub"></div>
         </div>
-        <!-- RSI Sub-chart Container -->
-        <div id="ryzm-rsi-container" style="display:none; width:100%; height:80px;"></div>
-        <!-- Depth Sub-chart Container -->
-        <div id="ryzm-depth-container" style="display:none; width:100%; height:100px;"></div>
       </div>
 
       <button class="ai-scan-btn" id="btn-council-start">

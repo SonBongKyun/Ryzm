@@ -241,6 +241,16 @@ const RyzmChart = (() => {
     return _chart;
   }
 
+  /** Trigger main chart resize after sub-chart show/hide */
+  function refreshMainChartSize() {
+    requestAnimationFrame(() => {
+      const container = document.getElementById(_containerId);
+      if (_chart && container) {
+        _chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+      }
+    });
+  }
+
   /* ═══════════════════════════════════════
      §3  LOAD HISTORICAL DATA
      ═══════════════════════════════════════ */
@@ -510,6 +520,7 @@ const RyzmChart = (() => {
           const times = _klineData.map(k => Math.floor(k[0]/1000));
           plotRSIExternal(closes, times);
         }
+        refreshMainChartSize();
         break;
       case 'funding':
         if (v) fetchFundingOverlay(); else clearFundingOverlay();
@@ -519,6 +530,7 @@ const RyzmChart = (() => {
         break;
       case 'depth':
         if (v) fetchDepthChart(); else clearDepthChart();
+        refreshMainChartSize();
         break;
     }
 

@@ -2535,8 +2535,8 @@ button:active::before {
     padding: 2px 4px;
   }
   .comp-select { font-size: 0.45rem; }
-  .chart-layout-1x1 { height: calc(100% - 110px); }
-  .chart-layout-2x2 { height: calc(100% - 110px); }
+  .chart-layout-1x1 { height: 100%; }
+  .chart-layout-2x2 { height: 100%; }
 
   /* ── AI Action Buttons ── */
   .ai-scan-btn {
@@ -3629,6 +3629,10 @@ html[data-theme="dark"] .skeleton {
 }
 
 /* ─── Chart Container ─── */
+#chart-panel {
+  display: flex;
+  flex-direction: column;
+}
 #ryzm-chart-container {
   background: var(--bg-base);
 }
@@ -3773,16 +3777,27 @@ html[data-theme="dark"] .skeleton {
   color: var(--text-main);
 }
 
+/* ─── Chart Body Flex Container ─── */
+.chart-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ─── Chart Layout Wrapper ─── */
 #chart-layout-wrapper {
+  flex: 1;
+  min-height: 0;
   width: 100%;
   background: var(--bg-base);
 }
 .chart-layout-1x1 {
-  height: calc(100% - 84px);
+  height: 100%;
 }
 .chart-layout-2x2 {
-  height: calc(100% - 84px);
+  height: 100%;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
@@ -3807,11 +3822,15 @@ html[data-theme="dark"] .skeleton {
 }
 
 /* ─── RSI / Depth Sub-containers ─── */
-#ryzm-rsi-container,
-#ryzm-depth-container {
+.chart-sub {
+  display: none;
+  width: 100%;
+  flex-shrink: 0;
   background: var(--bg-base);
   border-top: 1px solid var(--border-dim);
 }
+#ryzm-rsi-container { height: 80px; }
+#ryzm-depth-container { height: 90px; }
 
 /* ═══ Number Countup ═══ */
 .countup-flash {
