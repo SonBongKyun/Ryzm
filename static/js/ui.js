@@ -39,7 +39,78 @@ document.addEventListener('DOMContentLoaded', () => {
   initQuickActions();
   initStatusBar();
   initPulseIndicators();
+  initSectionNav();
 });
+
+/* ─── Section Navigation (scroll-to + active highlight) ─── */
+function initSectionNav() {
+  const nav = document.getElementById('section-nav');
+  if (!nav) return;
+
+  const items = [...nav.querySelectorAll('.snav-item')];
+  const sections = [];
+  items.forEach(item => {
+    const el = document.getElementById(item.dataset.target);
+    if (el) sections.push({ item, el });
+  });
+
+  /* Click → smooth scroll to section */
+  let _navClicking = false;
+  let _navClickTimer = null;
+
+  items.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = document.getElementById(item.dataset.target);
+      if (!target) return;
+
+      _navClicking = true;
+      clearTimeout(_navClickTimer);
+
+      items.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      // Scroll nav track to show the active item
+      item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+      const headerH = document.querySelector('.header')?.offsetHeight || 56;
+      const navH = nav.offsetHeight || 34;
+      const y = target.getBoundingClientRect().top + window.scrollY - headerH - navH - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+
+      _navClickTimer = setTimeout(() => { _navClicking = false; }, 1200);
+    });
+  });
+
+  /* Scroll → auto-highlight nearest section in viewport */
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (_navClicking || ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const offset = (nav.getBoundingClientRect().bottom || 120) + 40;
+      let best = null;
+      let bestDist = Infinity;
+
+      for (const s of sections) {
+        const rect = s.el.getBoundingClientRect();
+        // Section should be near/above the trigger line and still partially visible
+        if (rect.bottom > 0 && rect.top < offset + 300) {
+          const dist = Math.abs(rect.top - offset);
+          if (dist < bestDist) { bestDist = dist; best = s; }
+        }
+      }
+      if (best) {
+        const alreadyActive = best.item.classList.contains('active');
+        if (!alreadyActive) {
+          items.forEach(i => i.classList.remove('active'));
+          best.item.classList.add('active');
+          best.item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
+      ticking = false;
+    });
+  }, { passive: true });
+}
 
 function initQuickActions() {
   // Refresh All Data
@@ -1270,6 +1341,12 @@ const _translations = {
     rc_kimchi: "KIMCHI P.",
     rc_oi: "OI",
     rc_stablecoin: "USDT DOM",
+    // Section nav
+    snav_risk: "Risk", snav_fg: "F&G", snav_mtf: "MTF",
+    snav_council: "Council", snav_chart: "Chart", snav_validator: "Validator",
+    snav_tracker: "Tracker", snav_heatmap: "Heatmap",
+    snav_prices: "Prices", snav_ls: "L/S", snav_scanner: "Scanner",
+    snav_whale: "Whale", snav_onchain: "On-Chain", snav_news: "News",
     // L/S
     ls_long: "LONG", ls_short: "SHORT",
     // Funding
@@ -1360,6 +1437,12 @@ const _translations = {
     rc_kimchi: "김프",
     rc_oi: "미결제약정",
     rc_stablecoin: "USDT 점유",
+    // Section nav
+    snav_risk: "리스크", snav_fg: "탐욕/공포", snav_mtf: "MTF",
+    snav_council: "카운슬", snav_chart: "차트", snav_validator: "검증",
+    snav_tracker: "트래커", snav_heatmap: "히트맵",
+    snav_prices: "시세", snav_ls: "롱/숏", snav_scanner: "스캐너",
+    snav_whale: "고래", snav_onchain: "온체인", snav_news: "뉴스",
     ls_long: "롱", ls_short: "숏",
     fr_label: "펀딩비:",
     arb_low: "차익 기회: 낮음",

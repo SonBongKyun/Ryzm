@@ -757,6 +757,77 @@ html[data-theme="dark"] .macro-ticker-container {
   animation: marquee 20s linear infinite;
 }
 
+/* ─── Section Navigation Bar ─── */
+.section-nav {
+  position: sticky;
+  top: 56px;
+  z-index: 98;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--border-dim);
+  backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+.section-nav-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+.section-nav-track::-webkit-scrollbar { display: none; }
+
+.snav-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 11px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.3s, background 0.2s;
+  flex-shrink: 0;
+  user-select: none;
+}
+.snav-item i {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.snav-item:hover {
+  color: var(--neon-cyan);
+  background: rgba(6, 182, 212, 0.06);
+}
+.snav-item:hover i { opacity: 1; }
+.snav-item.active {
+  color: var(--neon-cyan);
+  border-bottom-color: var(--neon-cyan);
+}
+.snav-item.active i { opacity: 1; }
+.snav-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-dim);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+/* Dark theme */
+html[data-theme="dark"] .section-nav {
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .snav-item.active {
+  text-shadow: 0 0 8px var(--neon-cyan-glow);
+}
+
 /* ── Layout Grid - Premium Spacing ── */
 .main-grid {
   flex: 1;
@@ -2377,12 +2448,21 @@ button:active::before {
   .agents-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .section-nav { top: 0; }
+  .snav-item { padding: 7px 9px; font-size: 0.65rem; }
 }
 
 /* ═══════════════════════════════════════
    RESPONSIVE: MOBILE (≤768px)
    ═══════════════════════════════════════ */
 @media (max-width: 768px) {
+  /* ── Section Nav ── */
+  .section-nav { top: 0; }
+  .snav-item { padding: 6px 7px; font-size: 0.6rem; gap: 3px; }
+  .snav-item span { display: none; }
+  .snav-sep { margin: 0 2px; height: 14px; }
+
   /* ── Header ── */
   .header {
     flex-wrap: wrap;
