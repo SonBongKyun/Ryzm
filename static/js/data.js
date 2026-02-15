@@ -1076,14 +1076,26 @@ const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol}, 
 const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 30 pts)
 let _priceWs = null;
 let _priceWsRetry = 0;
+const _wsHosts = [
+  'wss://stream.binance.com:9443',
+  'wss://stream.binance.com:443',
+  'wss://fstream.binance.com'
+];
+let _wsHostIdx = 0;
 
 function initBinanceWebSocket() {
   if (_priceWs && _priceWs.readyState <= 1) return; // already open/connecting
   const streams = 'btcusdt@miniTicker/ethusdt@miniTicker/solusdt@miniTicker';
-  const url = `wss://stream.binance.com:9443/stream?streams=${streams}`;
-  _priceWs = new WebSocket(url);
+  const host = _wsHosts[_wsHostIdx % _wsHosts.length];
+  const url = `${host}/stream?streams=${streams}`;
+  console.log(`[WS] Connecting to ${host}...`);
+  try { _priceWs = new WebSocket(url); } catch (e) { _wsHostIdx++; scheduleWsReconnect(); return; }
 
-  _priceWs.onopen = () => { _priceWsRetry = 0; console.log('[WS] Binance connected'); };
+  const connectTimeout = setTimeout(() => {
+    if (_priceWs && _priceWs.readyState !== 1) { _priceWs.close(); }
+  }, 8000);
+
+  _priceWs.onopen = () => { clearTimeout(connectTimeout); _priceWsRetry = 0; console.log('[WS] Binance connected via ' + host); };
 
   _priceWs.onmessage = (evt) => {
     try {
@@ -1116,11 +1128,19 @@ function initBinanceWebSocket() {
   };
 
   _priceWs.onclose = () => {
-    console.log('[WS] Binance disconnected, reconnecting...');
-    const delay = Math.min(30000, 1000 * Math.pow(2, _priceWsRetry++));
-    setTimeout(initBinanceWebSocket, delay);
+    clearTimeout(connectTimeout);
+    console.log('[WS] Binance disconnected, trying next host...');
+    _wsHostIdx++;
+    scheduleWsReconnect();
   };
-  _priceWs.onerror = () => _priceWs.close();
+  _priceWs.onerror = () => { clearTimeout(connectTimeout); _priceWs.close(); };
+}
+
+function scheduleWsReconnect() {
+  const delay = Math.min(15000, 1000 * Math.pow(2, _priceWsRetry++));
+  console.log(`[WS] Reconnect in ${delay}ms (attempt ${_priceWsRetry})`);
+  _priceWs = null;
+  setTimeout(initBinanceWebSocket, delay);
 }
 
 function round2(v) { return Math.round(v * 100) / 100; }

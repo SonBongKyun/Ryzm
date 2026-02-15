@@ -10,7 +10,7 @@ import requests
 
 from app.core.logger import logger
 from app.core.config import (
-    CACHE_TTL, AUTO_COUNCIL_INTERVAL, CRITICAL_ALERT_COOLDOWN,
+    CACHE_TTL, MARKET_CACHE_TTL, AUTO_COUNCIL_INTERVAL, CRITICAL_ALERT_COOLDOWN,
     DISCORD_WEBHOOK_URL,
 )
 from app.core.cache import cache
@@ -116,7 +116,7 @@ def refresh_cache():
             logger.error(f"[Cache] News refresh error: {e}")
 
         try:
-            if now - cache["market"]["updated"] > CACHE_TTL:
+            if now - cache["market"]["updated"] > MARKET_CACHE_TTL:
                 cache["market"]["data"] = fetch_market_data()
                 cache["market"]["updated"] = now
                 logger.info("[Cache] Market data refreshed")

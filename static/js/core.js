@@ -661,6 +661,7 @@ function initDataFeeds() {
   // Non-scheduler init
   buildPriceCards();
   initBinanceWebSocket();
+  fetchRealtimePrices(); // Immediate first fetch so prices show instantly
   fetchMuseumOfScars(); // static data, no polling needed
 
   // Start all intervals
