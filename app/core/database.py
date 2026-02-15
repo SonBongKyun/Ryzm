@@ -275,6 +275,7 @@ def get_council_history(limit: int = 50) -> List[dict]:
                 SELECT
                   h.id, h.timestamp, h.timestamp_ms, h.consensus_score, h.vibe_status, h.btc_price,
                   h.horizon_min, h.return_pct, h.evaluated_at_utc, h.price_source,
+                  h.prediction, h.confidence,
                   e.price_after AS btc_price_after,
                   e.hit AS hit
                 FROM council_history h
