@@ -3772,14 +3772,14 @@ html[data-theme="dark"] .ch-chart {
 }
 
 /* White theme scanner overrides */
-body:not(.dark-mode) .scanner-panel {
+html[data-theme="light"] .scanner-panel {
   border-color: rgba(139,92,246,0.3) !important;
 }
-body:not(.dark-mode) .scanner-alert {
+html[data-theme="light"] .scanner-alert {
   background: rgba(0,0,0,0.02);
   border-color: rgba(0,0,0,0.06);
 }
-body:not(.dark-mode) .scanner-alert:hover {
+html[data-theme="light"] .scanner-alert:hover {
   background: rgba(0,0,0,0.04);
 }
 
@@ -4188,31 +4188,31 @@ html[data-theme="dark"] .oc-fee-item {
 /* ═══════════════════════════════════════
    White Theme Overrides (new panels)
    ═══════════════════════════════════════ */
-body.white-theme .regime-badge {
+html[data-theme="light"] .regime-badge {
   box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
-body.white-theme .corr-table th {
+html[data-theme="light"] .corr-table th {
   background: rgba(6,182,212,0.08);
   color: #0891b2;
 }
-body.white-theme .corr-label {
+html[data-theme="light"] .corr-label {
   color: #0891b2;
 }
-body.white-theme .liq-current-price {
+html[data-theme="light"] .liq-current-price {
   color: #0891b2;
 }
-body.white-theme .whale-tx-item:hover {
+html[data-theme="light"] .whale-tx-item:hover {
   background: rgba(6,182,212,0.06);
 }
-body.white-theme .tv-modal {
+html[data-theme="light"] .tv-modal {
   background: rgba(255,255,255,0.6);
 }
-body.white-theme .tv-modal-content {
+html[data-theme="light"] .tv-modal-content {
   background: #fff;
   border-color: #0891b2;
   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
 }
-body.white-theme .tv-modal-header {
+html[data-theme="light"] .tv-modal-header {
   color: #0891b2;
 }
 

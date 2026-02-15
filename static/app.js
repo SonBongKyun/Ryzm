@@ -72,6 +72,7 @@ function initAudioEngine() {
 
   bgmAudio.volume = 0.3;
   bgmAudio.preload = 'auto';
+  if (slider) slider.value = 30;  // Match initial volume (30%)
   loadTrack(0, trackName);
 
   // Auto-advance to next track when current ends
@@ -2283,16 +2284,26 @@ async function fetchLiqZones() {
       html += '<div class="liq-bar-container">';
 
       data.zones.forEach(z => {
-        const dist = ((z.price - price) / price * 100).toFixed(1);
-        const isAbove = z.price > price;
-        const barColor = isAbove ? 'var(--neon-red)' : 'var(--neon-green)';
-        const width = Math.min(Math.abs(dist) * 3, 80);
-        html += `<div class="liq-zone-row">
-          <span class="liq-lev">${z.leverage}x</span>
-          <div class="liq-bar-track">
-            <div class="liq-bar-fill ${isAbove ? 'liq-short' : 'liq-long'}" style="width:${width}%;background:${barColor};"></div>
+        // Long liq (price drop) — show as green bar below
+        const longDist = ((z.long_liq_price - price) / price * 100).toFixed(1);
+        const longWidth = Math.min(Math.abs(longDist) * 3, 80);
+        // Short liq (price rise) — show as red bar above
+        const shortDist = ((z.short_liq_price - price) / price * 100).toFixed(1);
+        const shortWidth = Math.min(Math.abs(shortDist) * 3, 80);
+
+        html += `<div class="liq-zone-row" style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+          <span class="liq-lev" style="width:32px; text-align:right; font-size:0.7rem; color:var(--text-muted);">${z.leverage}</span>
+          <div style="flex:1; display:flex; gap:2px;">
+            <div class="liq-bar-track" style="flex:1; position:relative; height:14px; background:rgba(255,255,255,0.03); border-radius:2px; overflow:hidden;">
+              <div style="width:${longWidth}%; height:100%; background:var(--neon-green); opacity:0.7; border-radius:2px;"></div>
+            </div>
+            <div class="liq-bar-track" style="flex:1; position:relative; height:14px; background:rgba(255,255,255,0.03); border-radius:2px; overflow:hidden;">
+              <div style="width:${shortWidth}%; height:100%; background:var(--neon-red); opacity:0.7; border-radius:2px;"></div>
+            </div>
           </div>
-          <span class="liq-price">$${z.price.toLocaleString()} <small>(${dist > 0 ? '+' : ''}${dist}%)</small></span>
+          <span style="width:120px; font-size:0.65rem; color:var(--text-secondary); text-align:right;">
+            $${z.long_liq_price.toLocaleString()} / $${z.short_liq_price.toLocaleString()}
+          </span>
         </div>`;
       });
 
@@ -2351,7 +2362,7 @@ function openTradingViewChart(symbol) {
     symbol: tvSymbol,
     interval: '60',
     timezone: 'Asia/Seoul',
-    theme: document.body.classList.contains('white-theme') ? 'light' : 'dark',
+    theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
     style: '1',
     locale: _currentLang === 'ko' ? 'kr' : 'en',
     toolbar_bg: '#0a0e17',
@@ -2434,22 +2445,30 @@ async function refreshAllData() {
   if (_refreshDebounce) return;
   _refreshDebounce = true;
   setTimeout(() => { _refreshDebounce = false; }, 5000);
-  const promises = [
-    fetch('/api/market').then(r => r.json()),
-    fetch('/api/news').then(r => r.json()),
-    fetch('/api/kimchi').then(r => r.json()),
-    fetch('/api/fear-greed').then(r => r.json()),
-    fetch('/api/funding-rate').then(r => r.json()),
-    fetch('/api/liquidations').then(r => r.json()),
-    fetch('/api/calendar').then(r => r.json()),
-    fetch('/api/heatmap').then(r => r.json()),
-    fetch('/api/health-check').then(r => r.json())
-  ];
 
   try {
-    const results = await Promise.allSettled(promises);
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    // Re-fetch all data feeds — each function both fetches and renders
+    await Promise.allSettled([
+      fetchMacroTicker(),
+      fetchNews(),
+      fetchRealtimePrices(),
+      fetchLongShortRatio(),
+      fetchFundingRate(),
+      fetchWhaleFeed(),
+      fetchCalendar(),
+      fetchRiskGauge(),
+      fetchHeatmap(),
+      fetchFearGreedChart(),
+      fetchMultiTimeframe(),
+      fetchOnChainData(),
+      fetchScanner(),
+      fetchRegime(),
+      fetchCorrelation(),
+      fetchWhaleWallets(),
+      fetchLiqZones(),
+      fetchKimchi(),
+      fetchHealthCheck()
+    ]);
 
     // Trigger pulse indicators
     pulsePanels(['pulse-narratives', 'pulse-kimchi']);
@@ -2457,13 +2476,7 @@ async function refreshAllData() {
     // Update last refresh time
     updateLastRefreshTime();
 
-    if (failed > 0 && succeeded > 0) {
-      showToast('warning', '⚠ Partial Refresh', `${succeeded}/${results.length} sources updated`);
-    } else if (failed > 0 && succeeded === 0) {
-      showToast('error', '⚠ Refresh Failed', 'Could not update data sources');
-    }
-
-    return results;
+    showToast('success', '✓ Refreshed', 'All panels updated');
   } catch (e) {
     console.error('Refresh error:', e);
     showToast('error', '⚠ Refresh Failed', 'Could not update data sources');
@@ -2927,15 +2940,16 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-/* ─── Performance Monitor (Optional Debug) ─── */
-if (window.performance && window.performance.memory) {
-  setInterval(() => {
-    const memory = window.performance.memory;
-    const used = (memory.usedJSHeapSize / 1048576).toFixed(2);
-    const total = (memory.totalJSHeapSize / 1048576).toFixed(2);
-    console.log(`Memory: ${used}MB / ${total}MB`);
-  }, 60000); // Every minute
-}
+/* ─── Performance Monitor (Debug Only) ─── */
+// Disabled in production. Uncomment for debugging:
+// if (window.performance && window.performance.memory) {
+//   setInterval(() => {
+//     const memory = window.performance.memory;
+//     const used = (memory.usedJSHeapSize / 1048576).toFixed(2);
+//     const total = (memory.totalJSHeapSize / 1048576).toFixed(2);
+//     console.log(`Memory: ${used}MB / ${total}MB`);
+//   }, 60000);
+// }
 
 /* ═══════════════════════════════════════
    #3 Fear & Greed 30-Day Chart

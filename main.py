@@ -87,7 +87,7 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE", "PUT"],
     allow_headers=["Content-Type", "X-Admin-Token"],
 )
 
@@ -108,6 +108,20 @@ def check_rate_limit(ip: str, category: str = "general") -> bool:
         return False
     _rate_limits[key].append(now)
     return True
+
+_rate_limit_last_cleanup = 0
+def _cleanup_rate_limits():
+    """Remove stale rate-limit keys to prevent memory leak (called from refresh_cache)."""
+    global _rate_limit_last_cleanup
+    now = time.time()
+    if now - _rate_limit_last_cleanup < 600:  # every 10 min
+        return
+    _rate_limit_last_cleanup = now
+    stale = [k for k, v in _rate_limits.items() if not v or (now - max(v)) > RATE_LIMIT_WINDOW * 2]
+    for k in stale:
+        del _rate_limits[k]
+    if stale:
+        logger.debug(f"[RateLimit] Cleaned {len(stale)} stale keys")
 
 # ── Resilient HTTP Client (429 backoff + circuit breaker) ──
 _api_429_backoff: Dict[str, float] = {}  # domain -> earliest retry time
@@ -1061,6 +1075,7 @@ def fetch_liquidation_zones():
 
         # Bias: if funding positive → more longs → more long liq risk
         bias = "LONG_HEAVY" if funding > 0.0001 else "SHORT_HEAVY" if funding < -0.0001 else "BALANCED"
+        bias_color = "#dc2626" if bias == "LONG_HEAVY" else "#059669" if bias == "SHORT_HEAVY" else "#888"
 
         return {
             "current_price": current_price,
@@ -1068,6 +1083,7 @@ def fetch_liquidation_zones():
             "total_oi_usd": round(oi_btc * current_price),
             "funding_rate": funding,
             "bias": bias,
+            "bias_color": bias_color,
             "zones": zones
         }
     except Exception as e:
@@ -1194,7 +1210,7 @@ def generate_economic_calendar():
         first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
         events.append({"date": first_friday.strftime("%Y-%m-%d"), "event": "Non-Farm Payrolls", "impact": "HIGH", "region": "US"})
         # CPI: ~10th-14th of each month
-        events.append({"date": f"{y}-{m:02d}-12", "event": f"CPI ({datetime(y, m-1 if m > 1 else 12, 1).strftime('%b')} YoY)", "impact": "HIGH", "region": "US"})
+        events.append({"date": f"{y}-{m:02d}-12", "event": f"CPI ({datetime(y-1 if m == 1 else y, 12 if m == 1 else m-1, 1).strftime('%b')} YoY)", "impact": "HIGH", "region": "US"})
 
     # Sort by date and filter future only
     today_str = now.strftime("%Y-%m-%d")
@@ -2067,6 +2083,12 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[Alerts] Check loop error: {e}")
 
+        # Cleanup stale rate-limit keys (every 10 min)
+        try:
+            _cleanup_rate_limits()
+        except Exception as e:
+            logger.error(f"[RateLimit] Cleanup error: {e}")
+
         # Evaluate council predictions — multi-horizon (15m, 1h, 4h, 1d)
         try:
             evaluate_council_accuracy([15, 60, 240, 1440])
@@ -2583,9 +2605,9 @@ def validate_trade(request: TradeValidationRequest, http_request: Request, respo
         """
 
         model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
+        ai_resp = model.generate_content(prompt)
 
-        result = parse_gemini_json(response.text)
+        result = parse_gemini_json(ai_resp.text)
         result = validate_ai_response(result, ValidatorResponse)
         logger.info(f"[Validator] Trade validated: {request.symbol} @ ${request.entry_price}")
 
@@ -2649,9 +2671,9 @@ def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Respon
         """
 
         model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
+        ai_resp = model.generate_content(prompt)
 
-        result = parse_gemini_json(response.text)
+        result = parse_gemini_json(ai_resp.text)
         result = validate_ai_response(result, ChatResponse)
         logger.info(f"[Chat] User asked: {request.message[:50]}...")
 

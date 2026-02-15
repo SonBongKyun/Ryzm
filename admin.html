@@ -282,7 +282,11 @@
                 const data = await res.json();
 
                 if (data.status === 'success') {
-                    preview.innerHTML = data.svg;
+                    // Sanitize SVG: remove script tags and event handlers
+                    const sanitized = data.svg
+                      .replace(/<script[\s\S]*?<\/script>/gi, '')
+                      .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
+                    preview.innerHTML = sanitized;
                     status.innerText = "✓ Done!";
                     status.className = "status success";
                 } else {
