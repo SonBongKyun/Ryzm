@@ -5,8 +5,9 @@ All market/news/onchain/scanner data endpoints.
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
+from fastapi.templating import Jinja2Templates
 
 from app.core.logger import logger
 from app.core.config import CACHE_TTL, MUSEUM_OF_SCARS
@@ -26,12 +27,13 @@ from app.services.analysis_service import (
 import sqlite3
 
 router = APIRouter()
+templates = Jinja2Templates(directory="templates")
 
 
 # ── Static Pages ──
 @router.get("/")
-async def read_index():
-    return FileResponse("index.html")
+async def read_index(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @router.get("/manifest.json")
 async def get_manifest():

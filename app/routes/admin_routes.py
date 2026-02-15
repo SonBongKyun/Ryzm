@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import requests
 import google.generativeai as genai
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.templating import Jinja2Templates
 
 from app.core.logger import logger
 from app.core.config import DISCORD_WEBHOOK_URL, InfographicRequest, BriefingRequest
@@ -17,6 +17,7 @@ from app.core.database import db_connect, _db_lock, utc_now_str
 from app.core.security import require_admin
 
 router = APIRouter()
+templates = Jinja2Templates(directory="templates")
 
 
 @router.post("/api/admin/generate-infographic")
@@ -111,5 +112,5 @@ def publish_briefing(request: BriefingRequest, http_request: Request):
 
 
 @router.get("/admin")
-def admin_page():
-    return FileResponse("admin.html")
+def admin_page(request: Request):
+    return templates.TemplateResponse(request=request, name="admin.html")

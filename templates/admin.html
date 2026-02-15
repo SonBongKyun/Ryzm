@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Ryzm Operator Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700;900&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        :root {
+            --bg: #05050a;
+            --panel: #0f0f15;
+            --cyan: #06b6d4;
+            --pink: #ec4899;
+            --text: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* Layout */
+        .sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .main-area {
+            flex: 1;
+            background: var(--panel);
+            border-radius: 12px;
+            border: 1px solid #222;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Components */
+        .card {
+            background: var(--panel);
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.1rem;
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            background: #000;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-family: 'Inter', monospace;
+            font-size: 0.9rem;
+        }
+
+        textarea {
+            height: 150px;
+            resize: vertical;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--cyan);
+            box-shadow: 0 0 8px rgba(6, 182, 212, 0.2);
+        }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, var(--cyan), #0891b2);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, #333, #222);
+            color: #fff;
+        }
+
+        button.secondary:hover {
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+        }
+
+        /* SVG Preview */
+        #svg-preview {
+            flex: 1;
+            background: #000;
+            border: 1px dashed #333;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            min-height: 300px;
+        }
+
+        #svg-preview svg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .status {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .status.success {
+            color: var(--cyan);
+        }
+
+        .status.error {
+            color: var(--pink);
+        }
+
+        /* Logo */
+        .logo-title {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            color: var(--cyan);
+            font-size: 1.5rem;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #222;
+        }
+
+        .logo-title span {
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <div class="logo-title">
+            RYZM <span>OP_MODE</span>
+        </div>
+
+        <div class="card">
+            <h2><i data-lucide="shield"></i> Admin Token</h2>
+            <input type="password" id="admin-token" placeholder="X-Admin-Token">
+            <div class="status" id="token-status">Not set</div>
+        </div>
+
+        <div class="card">
+            <h2><i data-lucide="image"></i> Visual Generator</h2>
+            <input type="text" id="img-topic" placeholder="ex) Yield Curve Inversion">
+            <button id="btn-gen-img"><i data-lucide="zap"></i> Generate SVG</button>
+            <div id="img-status" class="status">Ready</div>
+        </div>
+
+        <div class="card" style="flex:1;">
+            <h2><i data-lucide="send"></i> Briefing Publisher</h2>
+            <input type="text" id="brief-title" placeholder="Title (ex: Market Update)">
+            <textarea id="brief-content" placeholder="Write your insight here..."></textarea>
+            <button id="btn-publish" class="secondary"><i data-lucide="rss"></i> Publish to Discord</button>
+            <div id="pub-status" class="status">Ready</div>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <h2><i data-lucide="monitor"></i> Output Preview</h2>
+        <div id="svg-preview">
+            <span style="color:#444;">Generated Image will appear here</span>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:10px;">
+            <button class="secondary" onclick="copySVG()"><i data-lucide="copy"></i> Copy SVG Code</button>
+            <button class="secondary" onclick="downloadSVG()"><i data-lucide="download"></i> Download .svg</button>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // Admin token handling (local only)
+        const tokenInput = document.getElementById('admin-token');
+        const tokenStatus = document.getElementById('token-status');
+        if (tokenInput && tokenStatus) {
+            const saved = localStorage.getItem('adminToken');
+            if (saved) {
+                tokenInput.value = saved;
+                tokenStatus.innerText = 'Saved';
+                tokenStatus.className = 'status success';
+            }
+            tokenInput.addEventListener('input', () => {
+                const val = tokenInput.value.trim();
+                if (val) {
+                    localStorage.setItem('adminToken', val);
+                    tokenStatus.innerText = 'Saved';
+                    tokenStatus.className = 'status success';
+                } else {
+                    localStorage.removeItem('adminToken');
+                    tokenStatus.innerText = 'Not set';
+                    tokenStatus.className = 'status';
+                }
+            });
+        }
+
+        // 1. Image generation logic
+        document.getElementById('btn-gen-img').addEventListener('click', async () => {
+            const topic = document.getElementById('img-topic').value;
+            const status = document.getElementById('img-status');
+            const preview = document.getElementById('svg-preview');
+            const btn = document.getElementById('btn-gen-img');
+            const adminToken = localStorage.getItem('adminToken');
+
+            if (!topic) return alert("Please enter a topic!");
+
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Generating...';
+            status.innerText = "Gemini is drawing...";
+            status.className = "status";
+            preview.innerHTML = '<span style="color:var(--cyan)">⚡ Generating...</span>';
+            lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/admin/generate-infographic', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': adminToken || ''
+                    },
+                    body: JSON.stringify({ topic })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    // Sanitize SVG: remove script tags and event handlers
+                    const sanitized = data.svg
+                      .replace(/<script[\s\S]*?<\/script>/gi, '')
+                      .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
+                    preview.innerHTML = sanitized;
+                    status.innerText = "✓ Done!";
+                    status.className = "status success";
+                } else {
+                    preview.innerHTML = '<span style="color:var(--pink)">Error generating image</span>';
+                    status.innerText = data.message;
+                    status.className = "status error";
+                }
+            } catch (e) {
+                console.error(e);
+                status.innerText = "Connection Error";
+                status.className = "status error";
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="zap"></i> Generate SVG';
+                lucide.createIcons();
+            }
+        });
+
+        // 2. Briefing publish logic
+        document.getElementById('btn-publish').addEventListener('click', async () => {
+            const title = document.getElementById('brief-title').value;
+            const content = document.getElementById('brief-content').value;
+            const status = document.getElementById('pub-status');
+            const btn = document.getElementById('btn-publish');
+            const adminToken = localStorage.getItem('adminToken');
+
+            if (!title || !content) return alert("Please enter title and content!");
+
+            btn.disabled = true;
+            status.innerText = "Sending...";
+            status.className = "status";
+
+            try {
+                const res = await fetch('/api/admin/publish-briefing', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Token': adminToken || ''
+                    },
+                    body: JSON.stringify({ title, content })
+                });
+                const data = await res.json();
+                status.innerText = data.message;
+                status.className = data.status === 'success' ? "status success" : "status error";
+            } catch (e) {
+                status.innerText = "Connection Error";
+                status.className = "status error";
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // Utility: Copy SVG
+        function copySVG() {
+            const svgContent = document.getElementById('svg-preview').innerHTML;
+            if (!svgContent.includes('<svg')) return alert("No image to copy");
+            navigator.clipboard.writeText(svgContent).then(() => {
+                alert("SVG code copied!");
+            });
+        }
+
+        // Utility: Download SVG
+        function downloadSVG() {
+            const svgContent = document.getElementById('svg-preview').innerHTML;
+            if (!svgContent.includes('<svg')) return alert("No image to download");
+            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ryzm_infographic.svg';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+
+    <style>
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</body>
+
+</html>
