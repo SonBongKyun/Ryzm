@@ -7,6 +7,24 @@ function escapeHtml(str) {
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** safeUrl — only allow http/https URLs, reject javascript: etc. */
+function safeUrl(url) {
+  if (typeof url !== 'string') return '#';
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '#';
+}
+
+/** safeColor — only allow hex, rgb/rgba, hsl/hsla, CSS variables */
+function safeColor(str) {
+  if (typeof str !== 'string') return 'var(--text-muted)';
+  const s = str.trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(s)) return s;
+  if (/^(rgb|rgba|hsl|hsla)\(\s*[\d.,\s%]+\)$/i.test(s)) return s;
+  if (/^var\(--.+\)$/i.test(s)) return s;
+  return 'var(--text-muted)';
+}
+
 // Global state
 let validatorCredits = 3;
 const MAX_FREE_VALIDATIONS = 3;
@@ -483,47 +501,107 @@ function animateCountup(element, newValue, options = {}) {
   requestAnimationFrame(update);
 }
 
-/* ── 2. Data Feeds ── */
+/* ── 2. Data Feeds — Central Scheduler ── */
+
+/**
+ * RyzmScheduler: central polling manager with visibility-pause,
+ * dedup (skip if running), and per-feed error backoff.
+ */
+const RyzmScheduler = (() => {
+  const _jobs = new Map();       // name → {fn, interval, handle, running, fails, paused}
+  let _visible = true;
+
+  function register(name, intervalMs, fn) {
+    _jobs.set(name, { fn, interval: intervalMs, handle: null, running: false, fails: 0, paused: false });
+  }
+
+  async function _exec(name) {
+    const job = _jobs.get(name);
+    if (!job || job.running) return;      // skip if still executing
+    if (!_visible && job.interval < 300000) return; // skip non-critical when hidden
+    job.running = true;
+    try {
+      await job.fn();
+      job.fails = 0;                       // reset backoff on success
+    } catch (e) {
+      job.fails = Math.min(job.fails + 1, 5);
+      console.warn(`[Scheduler] ${name} fail #${job.fails}:`, e.message || e);
+    } finally {
+      job.running = false;
+    }
+  }
+
+  function startAll() {
+    for (const [name, job] of _jobs) {
+      _exec(name);                          // initial fire
+      const id = setInterval(() => {
+        // backoff: multiply interval by 2^fails (capped at 5)
+        if (job.fails > 0) {
+          const backoffMs = job.interval * Math.pow(2, job.fails);
+          // Skip this tick if within backoff window
+          if (backoffMs > job.interval * 2) return;
+        }
+        _exec(name);
+      }, job.interval);
+      job.handle = id;
+      _intervals.push(id);
+    }
+  }
+
+  function pauseAll() {
+    _visible = false;
+    for (const [, job] of _jobs) {
+      if (job.handle !== null) { clearInterval(job.handle); job.handle = null; }
+    }
+  }
+
+  function resumeAll() {
+    _visible = true;
+    // Immediate refresh on resume, then restart intervals
+    for (const [name, job] of _jobs) {
+      _exec(name);
+      const id = setInterval(() => _exec(name), job.interval);
+      job.handle = id;
+      _intervals.push(id);
+    }
+  }
+
+  /** Trigger all jobs immediately (for manual refresh button). Returns a Promise. */
+  function triggerAll() {
+    return Promise.allSettled([..._jobs.keys()].map(n => _exec(n)));
+  }
+
+  return { register, startAll, pauseAll, resumeAll, triggerAll };
+})();
+
 function initDataFeeds() {
-  fetchMacroTicker();
-  fetchNews();
+  // Register all feeds: (name, intervalMs, fn)
+  RyzmScheduler.register('macroTicker',   10000,  fetchMacroTicker);
+  RyzmScheduler.register('news',          60000,  fetchNews);
+  RyzmScheduler.register('realtimePrices',10000,  fetchRealtimePrices);
+  RyzmScheduler.register('lsRatio',       60000,  fetchLongShortRatio);
+  RyzmScheduler.register('briefing',     120000,  fetchBriefing);
+  RyzmScheduler.register('fundingRate',   60000,  fetchFundingRate);
+  RyzmScheduler.register('whaleFeed',     30000,  fetchWhaleFeed);
+  RyzmScheduler.register('calendar',     300000,  fetchCalendar);
+  RyzmScheduler.register('riskGauge',     60000,  fetchRiskGauge);
+  RyzmScheduler.register('heatmap',       60000,  fetchHeatmap);
+  RyzmScheduler.register('healthCheck',   30000,  fetchHealthCheck);
+  RyzmScheduler.register('fearGreed',    300000,  fetchFearGreedChart);
+  RyzmScheduler.register('multiTF',      300000,  fetchMultiTimeframe);
+  RyzmScheduler.register('onChain',      300000,  fetchOnChainData);
+  RyzmScheduler.register('scanner',       60000,  fetchScanner);
+  RyzmScheduler.register('regime',       300000,  fetchRegime);
+  RyzmScheduler.register('correlation',  600000,  fetchCorrelation);
+  RyzmScheduler.register('whaleWallets', 120000,  fetchWhaleWallets);
+  RyzmScheduler.register('liqZones',     120000,  fetchLiqZones);
+  RyzmScheduler.register('kimchi',        60000,  fetchKimchi);
+
+  // Non-scheduler init
   buildPriceCards();
   initBinanceWebSocket();
-  fetchRealtimePrices();
-  fetchLongShortRatio();
-  fetchBriefing();
-  fetchFundingRate();
-  fetchWhaleFeed();
-  fetchCalendar();
-  fetchRiskGauge();
-  fetchMuseumOfScars();
-  fetchHeatmap();
-  fetchHealthCheck();
-  fetchFearGreedChart();
-  fetchMultiTimeframe();
-  fetchOnChainData();
-  fetchScanner();
-  fetchRegime();
-  fetchCorrelation();
-  fetchWhaleWallets();
-  fetchLiqZones();
-  _intervals.push(setInterval(fetchMacroTicker, 10000));
-  _intervals.push(setInterval(fetchNews, 60000));
-  _intervals.push(setInterval(fetchRealtimePrices, 10000));
-  _intervals.push(setInterval(fetchLongShortRatio, 60000));
-  _intervals.push(setInterval(fetchBriefing, 120000));
-  _intervals.push(setInterval(fetchFundingRate, 60000));
-  _intervals.push(setInterval(fetchWhaleFeed, 30000));
-  _intervals.push(setInterval(fetchCalendar, 300000));
-  _intervals.push(setInterval(fetchRiskGauge, 60000));
-  _intervals.push(setInterval(fetchHeatmap, 60000));
-  _intervals.push(setInterval(fetchHealthCheck, 30000));
-  _intervals.push(setInterval(fetchFearGreedChart, 300000));
-  _intervals.push(setInterval(fetchMultiTimeframe, 300000));
-  _intervals.push(setInterval(fetchOnChainData, 300000));
-  _intervals.push(setInterval(fetchScanner, 60000));
-  _intervals.push(setInterval(fetchRegime, 300000));
-  _intervals.push(setInterval(fetchCorrelation, 600000));
-  _intervals.push(setInterval(fetchWhaleWallets, 120000));
-  _intervals.push(setInterval(fetchLiqZones, 120000));
+  fetchMuseumOfScars(); // static data, no polling needed
+
+  // Start all intervals
+  RyzmScheduler.startAll();
 }

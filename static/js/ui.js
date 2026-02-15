@@ -28,43 +28,7 @@ function showToast(type, title, message) {
 }
 
 /* ─── Enhanced Kimchi Premium Display ─── */
-async function updateKimchiDisplay() {
-  try {
-    const res = await fetch('/api/kimchi');
-    const data = await res.json();
-
-    const kpValue = document.getElementById('kp-value');
-    const kpStatus = document.getElementById('kp-status');
-
-    if (kpValue && data.premium !== undefined) {
-      const p = data.premium;
-      kpValue.innerText = (p > 0 ? '+' : '') + p + '%';
-
-      // Apply color class
-      kpValue.classList.remove('kp-positive', 'kp-negative');
-      kpValue.classList.add(p > 0 ? 'kp-positive' : 'kp-negative');
-
-      // Update status text
-      if (kpStatus) {
-        if (Math.abs(p) > 3) {
-          kpStatus.innerText = t('arb_high');
-          kpStatus.style.color = 'var(--neon-cyan)';
-        } else if (Math.abs(p) > 1) {
-          kpStatus.innerText = t('arb_medium');
-          kpStatus.style.color = 'var(--text-muted)';
-        } else {
-          kpStatus.innerText = t('arb_low');
-          kpStatus.style.color = 'var(--text-muted)';
-        }
-      }
-    }
-  } catch (e) {
-    console.error('KP Update Error:', e);
-  }
-}
-
-// Update Kimchi Premium (removed duplicate — already called in fetchMacroTicker)
-updateKimchiDisplay();
+// Kimchi display is now unified in data.js fetchKimchi() — no duplicate needed.
 
 /* ═══════════════════════════════════════
    UI/UX ENHANCEMENTS v2.0
@@ -142,18 +106,18 @@ async function fetchScanner() {
           'PUMP_ALERT': t('scanner_pump'),
           'OVERSOLD_BOUNCE': t('scanner_bounce'),
           'VOL_SPIKE': t('scanner_vol')
-        }[a.type] || a.type;
+        }[a.type] || escapeHtml(a.type);
 
         const icon = a.type === 'PUMP_ALERT' ? '🚀' : a.type === 'OVERSOLD_BOUNCE' ? '🎯' : '💥';
 
-        return `<div class="scanner-alert" style="border-left-color:${a.color};">
+        return `<div class="scanner-alert" style="border-left-color:${safeColor(a.color)};">
           <div class="scanner-alert-left">
-            <span class="scanner-symbol">${icon} ${a.symbol}</span>
-            <span class="scanner-type" style="color:${a.color};">${typeLabel}</span>
+            <span class="scanner-symbol">${icon} ${escapeHtml(a.symbol)}</span>
+            <span class="scanner-type" style="color:${safeColor(a.color)};">${typeLabel}</span>
           </div>
           <div class="scanner-alert-right">
-            <span class="scanner-msg">${a.msg}</span>
-            <span class="scanner-change" style="color:${a.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}">${a.change >= 0 ? '+' : ''}${a.change}%</span>
+            <span class="scanner-msg">${escapeHtml(a.msg)}</span>
+            <span class="scanner-change" style="color:${a.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}">${a.change >= 0 ? '+' : ''}${escapeHtml(String(a.change))}%</span>
           </div>
         </div>`;
       }).join('');
@@ -390,8 +354,8 @@ async function fetchHeatmap() {
       else { bg = 'var(--border-dim)'; clr = 'var(--text-muted)'; }
 
       const size = c.market_cap_rank <= 5 ? 'heatmap-cell-lg' : c.market_cap_rank <= 10 ? 'heatmap-cell-md' : 'heatmap-cell-sm';
-      return `<div class="heatmap-cell ${size}" style="background:${bg}; color:${clr};" title="${c.name}: ${pct >= 0 ? '+':''}${pct.toFixed(2)}%">
-        <span class="hm-symbol">${c.symbol}</span>
+      return `<div class="heatmap-cell ${size}" style="background:${safeColor(bg)}; color:${safeColor(clr)};" title="${escapeHtml(c.name)}: ${pct >= 0 ? '+':''}${pct.toFixed(2)}%">
+        <span class="hm-symbol">${escapeHtml(c.symbol)}</span>
         <span class="hm-pct">${pct >= 0 ? '+':''}${pct.toFixed(1)}%</span>
       </div>`;
     }).join('');
@@ -419,7 +383,7 @@ async function fetchHealthCheck() {
     if (tooltip) {
       tooltip.innerHTML = data.sources.map(s => {
         const icon = s.status === 'ok' ? '🟢' : '🔴';
-        return `<div class="src-row">${icon} ${s.name}</div>`;
+        return `<div class="src-row">${icon} ${escapeHtml(s.name)}</div>`;
       }).join('');
     }
   } catch(e) {
@@ -436,28 +400,33 @@ async function refreshAllData() {
   setTimeout(() => { _refreshDebounce = false; }, 5000);
 
   try {
-    // Re-fetch all data feeds — each function both fetches and renders
-    await Promise.allSettled([
-      fetchMacroTicker(),
-      fetchNews(),
-      fetchRealtimePrices(),
-      fetchLongShortRatio(),
-      fetchFundingRate(),
-      fetchWhaleFeed(),
-      fetchCalendar(),
-      fetchRiskGauge(),
-      fetchHeatmap(),
-      fetchFearGreedChart(),
-      fetchMultiTimeframe(),
-      fetchOnChainData(),
-      fetchScanner(),
-      fetchRegime(),
-      fetchCorrelation(),
-      fetchWhaleWallets(),
-      fetchLiqZones(),
-      fetchKimchi(),
-      fetchHealthCheck()
-    ]);
+    // Delegate to central scheduler for dedup/backoff
+    if (typeof RyzmScheduler !== 'undefined') {
+      await RyzmScheduler.triggerAll();
+    } else {
+      // Fallback if scheduler not loaded yet
+      await Promise.allSettled([
+        fetchMacroTicker(),
+        fetchNews(),
+        fetchRealtimePrices(),
+        fetchLongShortRatio(),
+        fetchFundingRate(),
+        fetchWhaleFeed(),
+        fetchCalendar(),
+        fetchRiskGauge(),
+        fetchHeatmap(),
+        fetchFearGreedChart(),
+        fetchMultiTimeframe(),
+        fetchOnChainData(),
+        fetchScanner(),
+        fetchRegime(),
+        fetchCorrelation(),
+        fetchWhaleWallets(),
+        fetchLiqZones(),
+        fetchKimchi(),
+        fetchHealthCheck()
+      ]);
+    }
 
     // Trigger pulse indicators
     pulsePanels(['pulse-narratives', 'pulse-kimchi']);
@@ -917,15 +886,17 @@ function drawCouncilSparkline(records) {
 setTimeout(() => fetchCouncilHistory(), 3000);
 
 
-/* ─── Page Visibility API - Pause updates when tab inactive ─── */
+/* ─── Page Visibility API - Pause/Resume polling via RyzmScheduler ─── */
 let isPageVisible = true;
 document.addEventListener('visibilitychange', () => {
   isPageVisible = !document.hidden;
+  if (typeof RyzmScheduler === 'undefined') return;
   if (isPageVisible) {
-    console.log('Page visible - resuming updates');
-    refreshAllData();
+    console.log('[Visibility] Page visible — resuming scheduler');
+    RyzmScheduler.resumeAll();
   } else {
-    console.log('Page hidden - pausing intensive updates');
+    console.log('[Visibility] Page hidden — pausing scheduler');
+    RyzmScheduler.pauseAll();
   }
 });
 
@@ -1728,6 +1699,7 @@ function initPriceAlerts() {
       if (res.status === 403) {
         const err = await res.json().catch(() => ({}));
         showToast('warning', 'Limit Reached', err.detail || 'Free alert limit reached.');
+        if (typeof openUpgradeModal === 'function') openUpgradeModal('alerts_limit');
         return;
       }
       if (!res.ok) throw new Error('Failed');
@@ -1753,20 +1725,25 @@ async function refreshAlertList() {
     let html = '';
     if (data.triggered && data.triggered.length > 0) {
       data.triggered.slice(0, 3).forEach(a => {
-        html += `<div style="color:var(--neon-yellow); margin-bottom:3px;">🔔 ${a.symbol} hit $${a.target_price.toLocaleString()} (${a.direction})</div>`;
+        html += `<div style="color:var(--neon-yellow); margin-bottom:3px;">🔔 ${escapeHtml(a.symbol)} hit $${Number(a.target_price).toLocaleString()} (${escapeHtml(a.direction)})</div>`;
       });
     }
     if (data.alerts && data.alerts.length > 0) {
       data.alerts.forEach(a => {
+        const aid = parseInt(a.id, 10);
         html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
-          <span style="color:var(--text-secondary);">${a.symbol} ${a.direction} $${a.target_price.toLocaleString()}</span>
-          <button onclick="deleteAlert(${a.id})" style="background:none; border:none; color:var(--neon-red); cursor:pointer; font-size:0.7rem;">✕</button>
+          <span style="color:var(--text-secondary);">${escapeHtml(a.symbol)} ${escapeHtml(a.direction)} $${Number(a.target_price).toLocaleString()}</span>
+          <button data-delete-alert="${aid}" style="background:none; border:none; color:var(--neon-red); cursor:pointer; font-size:0.7rem;">✕</button>
         </div>`;
       });
     } else if (!data.triggered || data.triggered.length === 0) {
       html = '<div style="color:var(--text-tertiary); font-style:italic;">No active alerts</div>';
     }
     list.innerHTML = html;
+    // Event delegation for delete buttons (avoids inline onclick)
+    list.querySelectorAll('[data-delete-alert]').forEach(btn => {
+      btn.addEventListener('click', () => deleteAlert(parseInt(btn.dataset.deleteAlert, 10)));
+    });
   } catch {
     list.innerHTML = '<div style="color:var(--text-tertiary);">—</div>';
   }

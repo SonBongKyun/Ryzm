@@ -43,10 +43,10 @@ async function fetchFundingRate() {
     const data = await res.json();
     if (!data.rates || data.rates.length === 0) return;
     data.rates.forEach(r => {
-      const el = document.getElementById(`fr-${r.symbol.toLowerCase()}`);
+      const el = document.getElementById(`fr-${String(r.symbol).toLowerCase().replace(/[^a-z0-9]/g,'')}`);
       if (el) {
         const color = r.rate > 0 ? 'var(--neon-green)' : r.rate < 0 ? 'var(--neon-red)' : 'var(--text-muted)';
-        el.innerHTML = `${r.symbol} <span style="color:${color};font-weight:600;">${r.rate > 0 ? '+' : ''}${r.rate}%</span>`;
+        el.innerHTML = `${escapeHtml(r.symbol)} <span style="color:${safeColor(color)};font-weight:600;">${r.rate > 0 ? '+' : ''}${escapeHtml(String(r.rate))}%</span>`;
       }
     });
   } catch (e) {
@@ -71,10 +71,10 @@ async function fetchWhaleFeed() {
       const usd = tr.usd >= 1000000 ? `$${(tr.usd/1000000).toFixed(1)}M` : `$${(tr.usd/1000).toFixed(0)}K`;
       const time = new Date(tr.time).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
       return `<div class="whale-item">
-        <span style="color:${color};font-weight:700;">${icon} ${tr.side}</span>
-        <span style="font-weight:600;">${tr.symbol}</span>
-        <span style="color:${color};font-family:var(--font-mono);">${usd}</span>
-        <span style="color:var(--text-muted);">${time}</span>
+        <span style="color:${safeColor(color)};font-weight:700;">${icon} ${escapeHtml(tr.side)}</span>
+        <span style="font-weight:600;">${escapeHtml(tr.symbol)}</span>
+        <span style="color:${safeColor(color)};font-family:var(--font-mono);">${escapeHtml(usd)}</span>
+        <span style="color:var(--text-muted);">${escapeHtml(time)}</span>
       </div>`;
     }).join('');
   } catch (e) {
@@ -100,8 +100,8 @@ async function fetchCalendar() {
       const dateStr = e.date.slice(5); // MM-DD
       const impactDot = e.impact === 'HIGH' ? '🔴' : '🟡';
       return `<div class="cal-item ${isToday ? 'cal-today' : ''}">
-        <span class="cal-date">${dateStr}</span>
-        <span class="cal-event">${impactDot} ${e.event} <span class="cal-region">${e.region}</span></span>
+        <span class="cal-date">${escapeHtml(dateStr)}</span>
+        <span class="cal-event">${impactDot} ${escapeHtml(e.event)} <span class="cal-region">${escapeHtml(e.region)}</span></span>
         ${badge}
       </div>`;
     }).join('');
@@ -458,11 +458,11 @@ async function fetchMuseumOfScars() {
     container.innerHTML = data.scars.map(s => `
       <div class="scar-item">
         <div class="scar-header">
-          <span class="scar-date">${s.date}</span>
-          <span class="scar-event">${s.event.toUpperCase()}</span>
-          <span class="scar-drop">${s.drop}</span>
+          <span class="scar-date">${escapeHtml(s.date)}</span>
+          <span class="scar-event">${escapeHtml((s.event || '').toUpperCase())}</span>
+          <span class="scar-drop">${escapeHtml(s.drop)}</span>
         </div>
-        <div class="scar-desc">${s.desc}</div>
+        <div class="scar-desc">${escapeHtml(s.desc)}</div>
       </div>
     `).join('');
   } catch (e) {
@@ -600,12 +600,39 @@ async function fetchKimchi() {
   try {
     const res = await fetch('/api/kimchi');
     const data = await res.json();
-    const kpDiv = document.querySelector('.kp-value');
-    if (kpDiv && data.premium !== undefined) {
-      const p = data.premium;
-      kpDiv.innerText = (p > 0 ? '+' : '') + p + '%';
-      kpDiv.style.color = p > 3 ? 'var(--neon-red)' : 'var(--neon-green)';
+    const p = data.premium;
+    if (p === undefined) return;
+
+    // Update ALL kimchi displays (class .kp-value + id #kp-value)
+    const targets = [document.querySelector('.kp-value'), document.getElementById('kp-value')];
+    const valText = (p > 0 ? '+' : '') + p + '%';
+    const valColor = p > 3 ? 'var(--neon-red)' : p < -1 ? 'var(--neon-cyan)' : 'var(--neon-green)';
+    targets.forEach(el => {
+      if (!el) return;
+      el.innerText = valText;
+      el.style.color = valColor;
+      el.classList.remove('kp-positive', 'kp-negative');
+      el.classList.add(p > 0 ? 'kp-positive' : 'kp-negative');
+    });
+
+    // Status label (arbitrage opportunity level)
+    const kpStatus = document.getElementById('kp-status');
+    if (kpStatus) {
+      if (Math.abs(p) > 3) {
+        kpStatus.innerText = t('arb_high');
+        kpStatus.style.color = 'var(--neon-cyan)';
+      } else if (Math.abs(p) > 1) {
+        kpStatus.innerText = t('arb_medium');
+        kpStatus.style.color = 'var(--text-muted)';
+      } else {
+        kpStatus.innerText = t('arb_low');
+        kpStatus.style.color = 'var(--text-muted)';
+      }
     }
+
+    // Freshness timestamp
+    const kpTime = document.getElementById('kp-updated');
+    if (kpTime) kpTime.textContent = new Date().toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit' });
   } catch (e) { console.error("KP Error:", e); }
 }
 
@@ -871,7 +898,7 @@ async function fetchNews() {
                         <span class="news-meta-left"><span class="news-source-tag">${escapeHtml(n.source)}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
                         <span>${escapeHtml(n.time)}</span>
                     </div>
-                    <a href="${escapeHtml(n.link)}" target="_blank" rel="noopener noreferrer" class="news-link">${escapeHtml(n.title)}</a>
+                    <a href="${safeUrl(n.link)}" target="_blank" rel="noopener noreferrer" class="news-link">${escapeHtml(n.title)}</a>
                 </div>`;
       }).join('');
     }

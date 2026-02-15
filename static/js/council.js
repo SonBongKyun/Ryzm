@@ -25,6 +25,7 @@ function setupEventListeners() {
         if (res.status === 403) {
           const err = await res.json().catch(() => ({}));
           showToast('warning', '⚡ Limit Reached', err.detail || 'Daily free council uses exhausted. Upgrade to Pro!');
+          if (typeof openUpgradeModal === 'function') openUpgradeModal('council_limit');
           btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
           btnCouncil.disabled = false;
           lucide.createIcons();
@@ -392,6 +393,7 @@ function initValidator() {
       if (res.status === 403) {
         const err = await res.json().catch(() => ({}));
         showToast('warning', '⚡ Limit Reached', err.detail || 'Daily free validations used up. Upgrade to Pro!');
+        if (typeof openUpgradeModal === 'function') openUpgradeModal('validator_limit');
         loadValidatorCredits();
         return;
       }
@@ -550,6 +552,7 @@ function initChat() {
         const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
         if (thinkingEl) thinkingEl.remove();
         addChatMessage('ai', '⚡ ' + (err.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
+        if (typeof openUpgradeModal === 'function') openUpgradeModal('chat_limit');
         refreshAllQuotas();
         return;
       }

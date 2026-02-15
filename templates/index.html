@@ -97,6 +97,7 @@
       <i data-lucide="user" style="width:14px;height:14px;"></i>
       <span id="auth-label">Login</span>
     </button>
+    <span id="header-plan-badge" class="header-plan-badge" style="display:none;font-size:0.6rem;padding:2px 6px;border-radius:3px;cursor:pointer;" onclick="openUpgradeModal('general')">FREE</span>
 
     <!-- FX Rate -->
     <div class="header-fx" id="header-fx">
@@ -367,6 +368,7 @@
           <div class="kp-value" id="kp-value" style="font-size:1.5rem; font-family:var(--font-mono); color:var(--neon-green);">+3.42%
           </div>
           <div id="kp-status" style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Arb Opportunity: LOW</div>
+          <div style="font-size:0.6rem; color:var(--text-tertiary); margin-top:3px;">updated <span id="kp-updated">--:--</span></div>
         </div>
       </div>
 
@@ -858,6 +860,7 @@
     const loginForm = document.getElementById('auth-login-form');
     const regForm = document.getElementById('auth-register-form');
     const profile = document.getElementById('auth-profile');
+    const planBadge = document.getElementById('header-plan-badge');
     if (user && user.email) {
       label.textContent = user.display_name || user.email.split('@')[0];
       if (user.tier === 'pro' && badge) badge.style.display = 'inline-block';
@@ -869,6 +872,13 @@
       document.getElementById('profile-tier').className = 'auth-tier tier-' + user.tier;
       document.getElementById('btn-upgrade').style.display = user.tier === 'pro' ? 'none' : '';
       document.querySelectorAll('.auth-tab').forEach(t => t.style.display = 'none');
+      // Header plan badge
+      if (planBadge) {
+        planBadge.style.display = 'inline-block';
+        planBadge.textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
+        planBadge.style.background = user.tier === 'pro' ? 'rgba(6,182,212,0.3)' : 'rgba(255,255,255,0.08)';
+        planBadge.style.color = user.tier === 'pro' ? 'var(--neon-cyan)' : 'var(--text-muted)';
+      }
     } else {
       label.textContent = 'Login';
       if (badge) badge.style.display = 'none';
@@ -876,6 +886,7 @@
       regForm.style.display = 'none';
       profile.style.display = 'none';
       document.querySelectorAll('.auth-tab').forEach(t => t.style.display = '');
+      if (planBadge) planBadge.style.display = 'none';
     }
   }
   // Check auth on load
@@ -886,6 +897,69 @@
       else updateAuthUI(null);
     } catch { updateAuthUI(null); }
   })();
+  </script>
+
+  <!-- ═══════════════════════════════════════
+       UPGRADE MODAL (Plan Gate)
+       ═══════════════════════════════════════ -->
+  <div id="upgrade-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner">
+      <button class="upgrade-close" onclick="closeUpgradeModal()">&times;</button>
+      <div class="upgrade-logo">⚡ Ryzm Pro</div>
+      <p id="upgrade-context-msg" class="upgrade-context" style="color:var(--text-secondary);margin:8px 0 16px;font-size:0.82rem;"></p>
+      <table class="upgrade-compare">
+        <thead>
+          <tr><th></th><th>Free</th><th style="color:var(--neon-cyan);">Pro</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>AI Council</td><td>10/day</td><td>Unlimited</td></tr>
+          <tr><td>Trade Validator</td><td>3/day</td><td>Unlimited</td></tr>
+          <tr><td>Ask Ryzm Chat</td><td>20/day</td><td>Unlimited</td></tr>
+          <tr><td>Price Alerts</td><td>5</td><td>100</td></tr>
+          <tr><td>Council History</td><td>7 days</td><td>90 days + CSV</td></tr>
+          <tr><td>Accuracy Tracker</td><td>Basic</td><td>Multi-horizon</td></tr>
+        </tbody>
+      </table>
+      <button class="upgrade-cta" id="upgrade-cta-btn" onclick="handleUpgradeFromModal()">
+        🚀 Upgrade to Pro
+      </button>
+      <div style="font-size:0.65rem; color:var(--text-tertiary); margin-top:8px;">Cancel anytime · Stripe secure checkout</div>
+    </div>
+  </div>
+
+  <script>
+  /* ── Upgrade Modal logic ── */
+  const _upgradeMessages = {
+    council_limit:   'You\'ve used all free AI Council runs today.',
+    validator_limit: 'Daily free validation limit reached.',
+    chat_limit:      'Daily free chat messages exhausted.',
+    alerts_limit:    'Free plan alert limit reached.',
+    general:         'Unlock unlimited access to all Ryzm features.'
+  };
+  function openUpgradeModal(context) {
+    const modal = document.getElementById('upgrade-modal');
+    if (!modal) return;
+    const msg = document.getElementById('upgrade-context-msg');
+    if (msg) msg.textContent = _upgradeMessages[context] || _upgradeMessages.general;
+    modal.style.display = 'flex';
+  }
+  function closeUpgradeModal() {
+    const m = document.getElementById('upgrade-modal'); if (m) m.style.display = 'none';
+  }
+  async function handleUpgradeFromModal() {
+    try {
+      const r = await fetch('/api/auth/profile', { credentials: 'same-origin' });
+      if (!r.ok) { closeUpgradeModal(); toggleAuthModal(); return; } // not logged in → show login
+      const res = await fetch('/api/payments/create-checkout', { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.checkout_url) window.location.href = data.checkout_url;
+      else showToast('warning', 'Payment', data.detail || 'Stripe not configured.');
+    } catch { showToast('error', 'Error', 'Payment unavailable.'); }
+  }
+  // Close on backdrop click
+  document.getElementById('upgrade-modal')?.addEventListener('click', e => {
+    if (e.target.id === 'upgrade-modal') closeUpgradeModal();
+  });
   </script>
 
 </body>
