@@ -46,6 +46,19 @@ DAILY_FREE_LIMITS = {"validate": 3, "chat": 20, "council": 10}
 DAILY_PRO_LIMITS = {"validate": 9999, "chat": 9999, "council": 9999}
 MAX_FREE_ALERTS = 3
 MAX_PRO_ALERTS = 100
+MAX_FREE_JOURNAL = 5
+MAX_PRO_JOURNAL = 500
+
+# ── Email / SMTP Configuration ──
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "noreply@ryzmterminal.com")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+
+# ── ToS ──
+TOS_VERSION = "1.0"
 
 PRO_FEATURES = {
     "unlimited_validate",
@@ -140,6 +153,41 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=200)
     password: str = Field(..., max_length=200)
+
+class RegisterRequest2(BaseModel):
+    """Extended register with ToS acceptance."""
+    email: str = Field(..., max_length=200)
+    password: str = Field(..., min_length=8, max_length=200)
+    display_name: str = Field(default="", max_length=50)
+    accept_tos: bool = Field(default=False)
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., max_length=200)
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., max_length=200)
+    new_password: str = Field(..., min_length=8, max_length=200)
+
+class JournalCreateRequest(BaseModel):
+    council_id: int = Field(default=0)
+    snapshot: dict = Field(default_factory=dict)
+    position_type: str = Field(default="", pattern="^(LONG|SHORT|)$")
+    entry_price: float = Field(default=0, ge=0)
+    stop_loss: float = Field(default=0, ge=0)
+    take_profit: float = Field(default=0, ge=0)
+    user_note: str = Field(default="", max_length=2000)
+    tags: str = Field(default="", max_length=200)
+
+class JournalUpdateRequest(BaseModel):
+    position_type: Optional[str] = Field(default=None, pattern="^(LONG|SHORT|)$")
+    entry_price: Optional[float] = Field(default=None, ge=0)
+    stop_loss: Optional[float] = Field(default=None, ge=0)
+    take_profit: Optional[float] = Field(default=None, ge=0)
+    user_note: Optional[str] = Field(default=None, max_length=2000)
+    tags: Optional[str] = Field(default=None, max_length=200)
+    outcome: Optional[str] = Field(default=None, pattern="^(WIN|LOSS|BREAKEVEN|)$")
+    outcome_price: Optional[float] = Field(default=None, ge=0)
+    outcome_note: Optional[str] = Field(default=None, max_length=2000)
 
 
 # ───────────────────────────────────────

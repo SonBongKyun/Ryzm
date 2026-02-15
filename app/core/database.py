@@ -179,6 +179,39 @@ def init_council_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    # ── Signal Journal table ──
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS signal_journal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            council_id INTEGER,
+            snapshot_json TEXT NOT NULL,
+            position_type TEXT DEFAULT '',
+            entry_price REAL DEFAULT 0,
+            stop_loss REAL DEFAULT 0,
+            take_profit REAL DEFAULT 0,
+            user_note TEXT DEFAULT '',
+            tags TEXT DEFAULT '',
+            outcome TEXT DEFAULT '',
+            outcome_price REAL DEFAULT 0,
+            outcome_note TEXT DEFAULT '',
+            closed_at_utc TEXT DEFAULT NULL,
+            created_at_utc TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    # Migration: add new columns to existing users table if missing
+    for col_def in [
+        ("email_verified", "INTEGER DEFAULT 0"),
+        ("email_verify_token", "TEXT DEFAULT NULL"),
+        ("password_reset_token", "TEXT DEFAULT NULL"),
+        ("reset_token_expires", "TEXT DEFAULT NULL"),
+        ("tos_accepted_at", "TEXT DEFAULT NULL"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col_def[0]} {col_def[1]}")
+        except sqlite3.OperationalError:
+            pass
     # Migration: add new columns to existing council_history if missing
     for col_def in [
         ("timestamp_ms", "INTEGER DEFAULT 0"),
@@ -395,6 +428,280 @@ def update_subscription_status(stripe_sub_id: str, status: str, period_end: str 
             conn.close()
     except Exception as e:
         logger.error(f"[DB] Update subscription status error: {e}")
+
+
+# ───────────────────────────────────────
+# Signal Journal
+# ───────────────────────────────────────
+def create_journal_entry(user_id: int, council_id: int, snapshot_json: str,
+                         position_type: str = "", entry_price: float = 0,
+                         stop_loss: float = 0, take_profit: float = 0,
+                         user_note: str = "", tags: str = "") -> Optional[int]:
+    """Create a signal journal entry. Returns entry ID or None."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                """INSERT INTO signal_journal
+                   (user_id, council_id, snapshot_json, position_type, entry_price,
+                    stop_loss, take_profit, user_note, tags, created_at_utc)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, council_id, snapshot_json, position_type, entry_price,
+                 stop_loss, take_profit, user_note, tags, utc_now_str())
+            )
+            entry_id = c.lastrowid
+            conn.commit()
+            conn.close()
+        logger.info(f"[Journal] Entry #{entry_id} created for user {user_id}")
+        return entry_id
+    except Exception as e:
+        logger.error(f"[Journal] Create error: {e}")
+        return None
+
+
+def get_journal_entries(user_id: int, limit: int = 50, offset: int = 0) -> List[dict]:
+    """Get journal entries for a user, newest first."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                """SELECT id, council_id, snapshot_json, position_type, entry_price,
+                          stop_loss, take_profit, user_note, tags, outcome,
+                          outcome_price, outcome_note, closed_at_utc, created_at_utc
+                   FROM signal_journal
+                   WHERE user_id = ?
+                   ORDER BY id DESC LIMIT ? OFFSET ?""",
+                (user_id, limit, offset)
+            )
+            rows = [dict(r) for r in c.fetchall()]
+            conn.close()
+        return rows
+    except Exception as e:
+        logger.error(f"[Journal] List error: {e}")
+        return []
+
+
+def get_journal_entry(entry_id: int, user_id: int) -> Optional[dict]:
+    """Get a single journal entry owned by user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                "SELECT * FROM signal_journal WHERE id = ? AND user_id = ?",
+                (entry_id, user_id)
+            )
+            row = c.fetchone()
+            conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"[Journal] Get error: {e}")
+        return None
+
+
+def update_journal_entry(entry_id: int, user_id: int, **kwargs) -> bool:
+    """Update a journal entry. Supports: user_note, tags, outcome, outcome_price, outcome_note, closed_at_utc."""
+    allowed = {"user_note", "tags", "outcome", "outcome_price", "outcome_note", "closed_at_utc",
+               "position_type", "entry_price", "stop_loss", "take_profit"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return False
+    try:
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [entry_id, user_id]
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                f"UPDATE signal_journal SET {set_clause} WHERE id = ? AND user_id = ?",
+                values
+            )
+            changed = c.rowcount
+            conn.commit()
+            conn.close()
+        return changed > 0
+    except Exception as e:
+        logger.error(f"[Journal] Update error: {e}")
+        return False
+
+
+def delete_journal_entry(entry_id: int, user_id: int) -> bool:
+    """Delete a journal entry owned by user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("DELETE FROM signal_journal WHERE id = ? AND user_id = ?", (entry_id, user_id))
+            deleted = c.rowcount
+            conn.commit()
+            conn.close()
+        return deleted > 0
+    except Exception as e:
+        logger.error(f"[Journal] Delete error: {e}")
+        return False
+
+
+def get_journal_stats(user_id: int) -> dict:
+    """Get journal performance stats for a user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                """SELECT
+                     COUNT(*) AS total,
+                     SUM(CASE WHEN outcome = 'WIN' THEN 1 ELSE 0 END) AS wins,
+                     SUM(CASE WHEN outcome = 'LOSS' THEN 1 ELSE 0 END) AS losses,
+                     SUM(CASE WHEN outcome = 'BREAKEVEN' THEN 1 ELSE 0 END) AS breakeven,
+                     SUM(CASE WHEN outcome = '' OR outcome IS NULL THEN 1 ELSE 0 END) AS open
+                   FROM signal_journal WHERE user_id = ?""",
+                (user_id,)
+            )
+            row = c.fetchone()
+            conn.close()
+        if not row:
+            return {"total": 0, "wins": 0, "losses": 0, "breakeven": 0, "open": 0, "win_rate": None}
+        total = row["total"] or 0
+        wins = row["wins"] or 0
+        losses = row["losses"] or 0
+        closed = wins + losses + (row["breakeven"] or 0)
+        return {
+            "total": total,
+            "wins": wins,
+            "losses": losses,
+            "breakeven": row["breakeven"] or 0,
+            "open": row["open"] or 0,
+            "win_rate": round((wins / closed) * 100, 1) if closed > 0 else None,
+        }
+    except Exception as e:
+        logger.error(f"[Journal] Stats error: {e}")
+        return {"total": 0, "wins": 0, "losses": 0, "breakeven": 0, "open": 0, "win_rate": None}
+
+
+# ───────────────────────────────────────
+# Email Verification & Password Reset
+# ───────────────────────────────────────
+def set_email_verify_token(user_id: int, token: str):
+    """Store an email verification token."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("UPDATE users SET email_verify_token = ? WHERE id = ?", (token, user_id))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Set verify token error: {e}")
+
+
+def verify_email_token(token: str) -> Optional[int]:
+    """Verify email token → mark user as verified. Returns user_id or None."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT id FROM users WHERE email_verify_token = ?", (token,))
+            row = c.fetchone()
+            if row:
+                c.execute(
+                    "UPDATE users SET email_verified = 1, email_verify_token = NULL WHERE id = ?",
+                    (row["id"],)
+                )
+                conn.commit()
+            conn.close()
+        return row["id"] if row else None
+    except Exception as e:
+        logger.error(f"[DB] Verify email error: {e}")
+        return None
+
+
+def set_password_reset_token(email: str, token: str, expires: str):
+    """Store a password reset token for a user."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute(
+                "UPDATE users SET password_reset_token = ?, reset_token_expires = ? WHERE email = ?",
+                (token, expires, email)
+            )
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Set reset token error: {e}")
+
+
+def validate_reset_token(token: str) -> Optional[dict]:
+    """Check reset token validity. Returns user dict or None."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                "SELECT id, email, reset_token_expires FROM users WHERE password_reset_token = ?",
+                (token,)
+            )
+            row = c.fetchone()
+            conn.close()
+        if not row:
+            return None
+        # Check expiry
+        expires = datetime.strptime(row["reset_token_expires"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires:
+            return None
+        return {"id": row["id"], "email": row["email"]}
+    except Exception as e:
+        logger.error(f"[DB] Validate reset token error: {e}")
+        return None
+
+
+def reset_password(token: str, new_password_hash: str) -> bool:
+    """Reset password using valid token."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT id, reset_token_expires FROM users WHERE password_reset_token = ?", (token,))
+            row = c.fetchone()
+            if not row:
+                conn.close()
+                return False
+            expires = datetime.strptime(row["reset_token_expires"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires:
+                conn.close()
+                return False
+            c.execute(
+                "UPDATE users SET password_hash = ?, password_reset_token = NULL, reset_token_expires = NULL WHERE id = ?",
+                (new_password_hash, row["id"])
+            )
+            conn.commit()
+            conn.close()
+        logger.info(f"[DB] Password reset for user {row['id']}")
+        return True
+    except Exception as e:
+        logger.error(f"[DB] Reset password error: {e}")
+        return False
+
+
+def update_user_tos(user_id: int):
+    """Mark user as having accepted ToS."""
+    try:
+        with _db_lock:
+            conn = db_connect()
+            c = conn.cursor()
+            c.execute("UPDATE users SET tos_accepted_at = ? WHERE id = ?", (utc_now_str(), user_id))
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"[DB] Update ToS error: {e}")
 
 
 # ───────────────────────────────────────

@@ -443,6 +443,11 @@
         <i data-lucide="camera"></i> <span data-i18n-text="export_snapshot">EXPORT SNAPSHOT</span>
       </button>
 
+      <button id="btn-save-journal" class="ai-scan-btn secondary-btn"
+        style="display:none; margin-top:10px; background:var(--bg-panel); border:1px solid var(--neon-green); color:var(--neon-green);">
+        <i data-lucide="bookmark-plus"></i> SAVE TO JOURNAL
+      </button>
+
       <!-- Trade Validator (P0-1) -->
       <div class="glass-panel validator-panel" id="validator-panel" style="margin-top:12px;">
         <div class="panel-title" data-i18n="trade_validator">
@@ -738,15 +743,15 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v3.2</span>
+      <span>Ryzm Terminal v3.3</span>
     </div>
   </div>
 
-  <!-- JS Modules (v1.5) -->
-  <script src="/static/js/core.js?v=1.5"></script>
-  <script src="/static/js/data.js?v=1.5"></script>
-  <script src="/static/js/council.js?v=1.5"></script>
-  <script src="/static/js/ui.js?v=1.5"></script>
+  <!-- JS Modules (v1.6) -->
+  <script src="/static/js/core.js?v=1.6"></script>
+  <script src="/static/js/data.js?v=1.6"></script>
+  <script src="/static/js/council.js?v=1.6"></script>
+  <script src="/static/js/ui.js?v=1.6"></script>
 
   <!-- ═══ Auth Modal ═══ -->
   <div id="auth-modal" class="auth-modal" style="display:none;">
@@ -763,23 +768,48 @@
         <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password" />
         <button type="submit" class="auth-submit">Sign In</button>
         <div id="login-error" class="auth-error"></div>
+        <div style="text-align:center;margin-top:8px;">
+          <a href="#" onclick="showForgotPassword(event)" style="color:var(--neon-cyan);font-size:0.72rem;text-decoration:none;">Forgot password?</a>
+        </div>
+      </form>
+      <!-- Forgot Password Form -->
+      <form id="auth-forgot-form" class="auth-form" style="display:none;" onsubmit="handleForgotPassword(event)">
+        <p style="color:var(--text-secondary);font-size:0.78rem;margin:0 0 12px;">Enter your email to receive a password reset link.</p>
+        <input type="email" id="forgot-email" placeholder="Email" required autocomplete="email" />
+        <button type="submit" class="auth-submit">Send Reset Link</button>
+        <div id="forgot-error" class="auth-error"></div>
+        <div id="forgot-success" style="color:var(--neon-green);font-size:0.75rem;display:none;margin-top:6px;"></div>
+        <div style="text-align:center;margin-top:8px;">
+          <a href="#" onclick="backToLogin(event)" style="color:var(--neon-cyan);font-size:0.72rem;text-decoration:none;">← Back to login</a>
+        </div>
       </form>
       <!-- Register Form -->
       <form id="auth-register-form" class="auth-form" style="display:none;" onsubmit="handleRegister(event)">
         <input type="text" id="reg-name" placeholder="Display Name (optional)" maxlength="50" autocomplete="name" />
         <input type="email" id="reg-email" placeholder="Email" required autocomplete="email" />
         <input type="password" id="reg-password" placeholder="Password (8+ chars)" required minlength="8" autocomplete="new-password" />
+        <label class="tos-checkbox" style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;font-size:0.72rem;color:var(--text-secondary);cursor:pointer;">
+          <input type="checkbox" id="reg-tos" required style="margin-top:2px;accent-color:var(--neon-cyan);" />
+          <span>I agree to the <a href="#" onclick="openTosModal(event)" style="color:var(--neon-cyan);text-decoration:underline;">Terms of Service</a> and understand that Ryzm Terminal is for informational purposes only, not financial advice.</span>
+        </label>
         <button type="submit" class="auth-submit">Create Account</button>
         <div id="reg-error" class="auth-error"></div>
       </form>
       <!-- Logged-in state -->
       <div id="auth-profile" class="auth-profile" style="display:none;">
+        <div id="email-verify-banner" style="display:none;background:rgba(244,63,94,0.15);border:1px solid rgba(244,63,94,0.3);border-radius:4px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;">
+          <span style="color:var(--neon-red);">⚠ Email not verified.</span>
+          <a href="#" onclick="resendVerification(event)" style="color:var(--neon-cyan);text-decoration:underline;margin-left:4px;">Resend</a>
+        </div>
         <div class="auth-profile-info">
           <div class="auth-email" id="profile-email"></div>
           <div class="auth-tier" id="profile-tier"></div>
         </div>
         <button class="auth-submit" id="btn-upgrade" style="display:none;" onclick="handleUpgrade()">
           <i data-lucide="crown" style="width:14px;height:14px;"></i> Upgrade to PRO
+        </button>
+        <button class="auth-submit" id="btn-open-journal" onclick="openJournalModal()" style="margin-top:6px;background:transparent;border:1px solid var(--neon-green);color:var(--neon-green);font-size:0.75rem;">
+          <i data-lucide="book-open" style="width:14px;height:14px;"></i> Signal Journal
         </button>
         <button class="auth-logout" onclick="handleLogout()">Logout</button>
       </div>
@@ -797,8 +827,44 @@
     document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('auth-login-form').style.display = tab === 'login' ? '' : 'none';
     document.getElementById('auth-register-form').style.display = tab === 'register' ? '' : 'none';
+    document.getElementById('auth-forgot-form').style.display = 'none';
     document.getElementById('auth-profile').style.display = 'none';
     event.target.classList.add('active');
+  }
+  function showForgotPassword(e) {
+    e.preventDefault();
+    document.getElementById('auth-login-form').style.display = 'none';
+    document.getElementById('auth-forgot-form').style.display = '';
+    document.querySelectorAll('.auth-tab').forEach(t => t.style.display = 'none');
+  }
+  function backToLogin(e) {
+    e.preventDefault();
+    document.getElementById('auth-forgot-form').style.display = 'none';
+    document.getElementById('auth-login-form').style.display = '';
+    document.querySelectorAll('.auth-tab').forEach(t => t.style.display = '');
+  }
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('forgot-error');
+    const sucEl = document.getElementById('forgot-success');
+    errEl.textContent = ''; sucEl.style.display = 'none';
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email: document.getElementById('forgot-email').value }),
+      });
+      const data = await res.json();
+      sucEl.textContent = data.message || 'Reset link sent.';
+      sucEl.style.display = 'block';
+    } catch { errEl.textContent = 'Connection error'; }
+  }
+  async function resendVerification(e) {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/auth/resend-verification', { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json();
+      showToast('info', 'Email', data.message || 'Verification email resent.');
+    } catch { showToast('error', 'Error', 'Failed to resend verification.'); }
   }
   async function handleLogin(e) {
     e.preventDefault();
@@ -821,6 +887,8 @@
     e.preventDefault();
     const errEl = document.getElementById('reg-error');
     errEl.textContent = '';
+    const tosChecked = document.getElementById('reg-tos').checked;
+    if (!tosChecked) { errEl.textContent = 'You must accept the Terms of Service.'; return; }
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
@@ -835,7 +903,7 @@
       localStorage.setItem('ryzm_token', data.token);
       _authUser = data;
       updateAuthUI(data);
-      showToast('success', 'Account Created', 'Welcome to Ryzm Terminal!');
+      showToast('success', 'Account Created', data.message || 'Welcome to Ryzm Terminal!');
     } catch (err) { errEl.textContent = 'Connection error'; }
   }
   async function handleLogout() {
@@ -859,19 +927,26 @@
     const badge = document.querySelector('.pro-badge');
     const loginForm = document.getElementById('auth-login-form');
     const regForm = document.getElementById('auth-register-form');
+    const forgotForm = document.getElementById('auth-forgot-form');
     const profile = document.getElementById('auth-profile');
     const planBadge = document.getElementById('header-plan-badge');
+    const verifyBanner = document.getElementById('email-verify-banner');
     if (user && user.email) {
       label.textContent = user.display_name || user.email.split('@')[0];
       if (user.tier === 'pro' && badge) badge.style.display = 'inline-block';
       loginForm.style.display = 'none';
       regForm.style.display = 'none';
+      forgotForm.style.display = 'none';
       profile.style.display = '';
       document.getElementById('profile-email').textContent = user.email;
       document.getElementById('profile-tier').textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
       document.getElementById('profile-tier').className = 'auth-tier tier-' + user.tier;
       document.getElementById('btn-upgrade').style.display = user.tier === 'pro' ? 'none' : '';
       document.querySelectorAll('.auth-tab').forEach(t => t.style.display = 'none');
+      // Email verification banner
+      if (verifyBanner) {
+        verifyBanner.style.display = user.email_verified === false ? 'block' : 'none';
+      }
       // Header plan badge
       if (planBadge) {
         planBadge.style.display = 'inline-block';
@@ -884,9 +959,11 @@
       if (badge) badge.style.display = 'none';
       loginForm.style.display = '';
       regForm.style.display = 'none';
+      forgotForm.style.display = 'none';
       profile.style.display = 'none';
       document.querySelectorAll('.auth-tab').forEach(t => t.style.display = '');
       if (planBadge) planBadge.style.display = 'none';
+      if (verifyBanner) verifyBanner.style.display = 'none';
     }
   }
   // Check auth on load
@@ -896,6 +973,31 @@
       if (r.ok) { _authUser = await r.json(); updateAuthUI(_authUser); }
       else updateAuthUI(null);
     } catch { updateAuthUI(null); }
+  })();
+  // Handle email verification from URL params
+  (function checkVerifyParam() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('verify_token') || params.get('token');
+    const path = window.location.pathname;
+    if (path === '/verify-email' && token) {
+      fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'verified') {
+            showToast('success', '✓ Verified', 'Email verified successfully!');
+            if (_authUser) { _authUser.email_verified = true; updateAuthUI(_authUser); }
+          } else {
+            showToast('error', 'Error', data.detail || 'Verification failed.');
+          }
+          window.history.replaceState({}, '', '/');
+        })
+        .catch(() => showToast('error', 'Error', 'Verification failed.'));
+    }
+    // Handle password reset from URL
+    if (path === '/reset-password' && token) {
+      openResetPasswordModal(token);
+      window.history.replaceState({}, '', '/');
+    }
   })();
   </script>
 
@@ -961,6 +1063,321 @@
     if (e.target.id === 'upgrade-modal') closeUpgradeModal();
   });
   </script>
+
+  <!-- ═══════════════════════════════════════
+       SIGNAL JOURNAL MODAL
+       ═══════════════════════════════════════ -->
+  <div id="journal-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner" style="max-width:700px;max-height:85vh;overflow-y:auto;">
+      <button class="upgrade-close" onclick="closeJournalModal()">&times;</button>
+      <div class="upgrade-logo">📔 Signal Journal</div>
+      <!-- Journal Stats -->
+      <div id="journal-stats" style="display:flex;gap:12px;margin:10px 0;font-size:0.72rem;color:var(--text-secondary);justify-content:center;flex-wrap:wrap;">
+        <span>Total: <strong id="j-stat-total">0</strong></span>
+        <span style="color:var(--neon-green);">W: <strong id="j-stat-wins">0</strong></span>
+        <span style="color:var(--neon-red);">L: <strong id="j-stat-losses">0</strong></span>
+        <span>WR: <strong id="j-stat-wr">—</strong></span>
+        <span>Open: <strong id="j-stat-open">0</strong></span>
+      </div>
+      <!-- Journal Entry List -->
+      <div id="journal-entries" style="margin-top:12px;"></div>
+      <div id="journal-empty" style="text-align:center;color:var(--text-muted);font-size:0.78rem;padding:30px 0;">
+        No journal entries yet. Run an AI Council analysis and click "Save to Journal".
+      </div>
+    </div>
+  </div>
+
+  <!-- Journal Save Form (overlay when saving from council) -->
+  <div id="journal-save-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner" style="max-width:480px;">
+      <button class="upgrade-close" onclick="closeJournalSaveModal()">&times;</button>
+      <div class="upgrade-logo">📝 Save to Journal</div>
+      <form id="journal-save-form" onsubmit="submitJournalEntry(event)" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+        <div style="display:flex;gap:8px;">
+          <select id="j-position" class="val-input" style="flex:1;">
+            <option value="">— Position —</option>
+            <option value="LONG">LONG</option>
+            <option value="SHORT">SHORT</option>
+          </select>
+          <input type="number" id="j-entry-price" class="val-input" placeholder="Entry $" step="0.01" min="0" style="flex:1;" />
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="j-stop-loss" class="val-input" placeholder="Stop Loss $" step="0.01" min="0" style="flex:1;" />
+          <input type="number" id="j-take-profit" class="val-input" placeholder="Take Profit $" step="0.01" min="0" style="flex:1;" />
+        </div>
+        <textarea id="j-note" placeholder="Your notes & thesis..." maxlength="2000"
+          style="width:100%;height:80px;background:var(--bg-dark);color:var(--text-primary);border:1px solid var(--border-dim);border-radius:4px;padding:8px;font-size:0.78rem;resize:vertical;font-family:inherit;"></textarea>
+        <input type="text" id="j-tags" class="val-input" placeholder="Tags (comma-separated)" maxlength="200" />
+        <button type="submit" class="auth-submit" style="background:var(--neon-green);color:#000;">
+          <i data-lucide="save" style="width:14px;height:14px;"></i> Save Entry
+        </button>
+        <div id="j-save-error" class="auth-error"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Journal Outcome Update Modal -->
+  <div id="journal-outcome-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner" style="max-width:400px;">
+      <button class="upgrade-close" onclick="closeJournalOutcomeModal()">&times;</button>
+      <div class="upgrade-logo">📊 Record Outcome</div>
+      <form id="journal-outcome-form" onsubmit="submitJournalOutcome(event)" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+        <input type="hidden" id="jo-entry-id" />
+        <select id="jo-outcome" class="val-input" required>
+          <option value="">— Outcome —</option>
+          <option value="WIN">✅ WIN</option>
+          <option value="LOSS">❌ LOSS</option>
+          <option value="BREAKEVEN">➖ BREAKEVEN</option>
+        </select>
+        <input type="number" id="jo-price" class="val-input" placeholder="Exit Price $" step="0.01" min="0" />
+        <textarea id="jo-note" placeholder="Outcome notes / lessons learned..." maxlength="2000"
+          style="width:100%;height:60px;background:var(--bg-dark);color:var(--text-primary);border:1px solid var(--border-dim);border-radius:4px;padding:8px;font-size:0.78rem;resize:vertical;font-family:inherit;"></textarea>
+        <button type="submit" class="auth-submit" style="background:var(--neon-cyan);color:#000;">Record Outcome</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       PASSWORD RESET MODAL
+       ═══════════════════════════════════════ -->
+  <div id="reset-password-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner" style="max-width:400px;">
+      <button class="upgrade-close" onclick="closeResetPasswordModal()">&times;</button>
+      <div class="upgrade-logo">🔐 Reset Password</div>
+      <form id="reset-pw-form" onsubmit="handleResetPassword(event)" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+        <input type="hidden" id="reset-token" />
+        <input type="password" id="reset-new-pw" placeholder="New Password (8+ chars)" required minlength="8"
+          class="val-input" autocomplete="new-password" />
+        <input type="password" id="reset-confirm-pw" placeholder="Confirm Password" required minlength="8"
+          class="val-input" autocomplete="new-password" />
+        <button type="submit" class="auth-submit">Set New Password</button>
+        <div id="reset-error" class="auth-error"></div>
+        <div id="reset-success" style="color:var(--neon-green);font-size:0.75rem;display:none;"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       TERMS OF SERVICE MODAL
+       ═══════════════════════════════════════ -->
+  <div id="tos-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner" style="max-width:600px;max-height:80vh;overflow-y:auto;">
+      <button class="upgrade-close" onclick="closeTosModal()">&times;</button>
+      <div class="upgrade-logo">📜 Terms of Service</div>
+      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.7;margin-top:12px;text-align:left;">
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">1. Information Only</h3>
+        <p>Ryzm Terminal provides AI-generated market analysis for <strong>informational and educational purposes only</strong>. Nothing on this platform constitutes financial, investment, trading, or any other kind of professional advice.</p>
+
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">2. No Investment Advice</h3>
+        <p>All AI council opinions, trade validations, risk scores, and chat responses are generated by machine learning models. They may be <strong>inaccurate, outdated, or misleading</strong>. You should not rely on them to make investment decisions.</p>
+
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">3. Risk Disclosure</h3>
+        <p>Cryptocurrency trading involves <strong>substantial risk of loss</strong> and is not suitable for every investor. Past performance, including AI prediction accuracy, is not indicative of future results. You could lose some or all of your capital.</p>
+
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">4. No Liability</h3>
+        <p>Ryzm Terminal, its creators, and affiliates shall not be held liable for any losses, damages, or claims arising from your use of this platform or reliance on its AI-generated content.</p>
+
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">5. User Responsibilities</h3>
+        <p>You are solely responsible for your trading decisions. Always conduct your own research (DYOR) and consult with a qualified financial advisor before making investment decisions.</p>
+
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">6. Data & Privacy</h3>
+        <p>We collect minimal personal data (email, usage analytics). Your journal entries and trading data are stored securely and never shared with third parties. You can request data deletion at any time.</p>
+
+        <h3 style="color:var(--neon-cyan);font-size:0.85rem;">7. Service Changes</h3>
+        <p>We reserve the right to modify, suspend, or discontinue the service at any time. Pro subscription terms are governed by our payment processor (Stripe).</p>
+
+        <p style="margin-top:16px;font-style:italic;color:var(--text-muted);">Version 1.0 — Last updated: 2025</p>
+      </div>
+      <button onclick="closeTosModal()" class="auth-submit" style="margin-top:12px;">Close</button>
+    </div>
+  </div>
+
+  <script>
+  /* ── Journal Logic ── */
+  function openJournalModal() {
+    document.getElementById('journal-modal').style.display = 'flex';
+    loadJournalEntries();
+  }
+  function closeJournalModal() { document.getElementById('journal-modal').style.display = 'none'; }
+  function openJournalSaveModal() {
+    if (!_authUser) { toggleAuthModal(); return; }
+    document.getElementById('journal-save-modal').style.display = 'flex';
+    lucide.createIcons();
+  }
+  function closeJournalSaveModal() { document.getElementById('journal-save-modal').style.display = 'none'; }
+  function closeJournalOutcomeModal() { document.getElementById('journal-outcome-modal').style.display = 'none'; }
+
+  // Save to Journal button
+  document.getElementById('btn-save-journal')?.addEventListener('click', () => {
+    playSound('click');
+    openJournalSaveModal();
+  });
+
+  async function submitJournalEntry(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('j-save-error');
+    errEl.textContent = '';
+    const data = window._lastCouncilData || {};
+    try {
+      const res = await fetch('/api/journal', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({
+          council_id: 0,
+          snapshot: data,
+          position_type: document.getElementById('j-position').value,
+          entry_price: parseFloat(document.getElementById('j-entry-price').value) || 0,
+          stop_loss: parseFloat(document.getElementById('j-stop-loss').value) || 0,
+          take_profit: parseFloat(document.getElementById('j-take-profit').value) || 0,
+          user_note: document.getElementById('j-note').value,
+          tags: document.getElementById('j-tags').value,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        if (res.status === 403 && typeof openUpgradeModal === 'function') openUpgradeModal('general');
+        errEl.textContent = result.detail || 'Save failed';
+        return;
+      }
+      showToast('success', '📔 Saved', 'Entry saved to Signal Journal.');
+      closeJournalSaveModal();
+      document.getElementById('journal-save-form').reset();
+    } catch { errEl.textContent = 'Connection error'; }
+  }
+
+  async function loadJournalEntries() {
+    try {
+      const res = await fetch('/api/journal?limit=50', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const container = document.getElementById('journal-entries');
+      const empty = document.getElementById('journal-empty');
+      // Stats
+      const s = data.stats || {};
+      document.getElementById('j-stat-total').textContent = s.total || 0;
+      document.getElementById('j-stat-wins').textContent = s.wins || 0;
+      document.getElementById('j-stat-losses').textContent = s.losses || 0;
+      document.getElementById('j-stat-wr').textContent = s.win_rate != null ? s.win_rate + '%' : '—';
+      document.getElementById('j-stat-open').textContent = s.open || 0;
+
+      if (!data.entries || data.entries.length === 0) {
+        container.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      container.innerHTML = data.entries.map(e => {
+        const snap = e.snapshot || {};
+        const vibe = snap.vibe?.status || '—';
+        const score = snap.consensus_score ?? '—';
+        const pred = snap.prediction || '—';
+        const outcomeColor = e.outcome === 'WIN' ? 'var(--neon-green)' : e.outcome === 'LOSS' ? 'var(--neon-red)' : 'var(--text-muted)';
+        const outcomeLabel = e.outcome || 'OPEN';
+        const posLabel = e.position_type ? `${e.position_type} @ $${e.entry_price.toLocaleString()}` : '';
+        const slTp = (e.stop_loss || e.take_profit) ? `SL: $${(e.stop_loss||0).toLocaleString()} / TP: $${(e.take_profit||0).toLocaleString()}` : '';
+        return `
+          <div class="journal-entry" style="background:var(--bg-panel);border:1px solid var(--border-dim);border-radius:6px;padding:12px;margin-bottom:8px;font-size:0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="color:var(--text-muted);">${escapeHtml(e.created_at_utc || '')}</span>
+              <span style="color:${outcomeColor};font-weight:700;font-size:0.8rem;">${escapeHtml(outcomeLabel)}</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+              <span style="color:var(--neon-cyan);">Score: ${escapeHtml(String(score))}</span>
+              <span>Pred: ${escapeHtml(pred)}</span>
+              <span>Vibe: ${escapeHtml(vibe)}</span>
+              ${posLabel ? `<span style="color:var(--neon-magenta);">${escapeHtml(posLabel)}</span>` : ''}
+            </div>
+            ${slTp ? `<div style="color:var(--text-muted);font-size:0.7rem;">${escapeHtml(slTp)}</div>` : ''}
+            ${e.user_note ? `<div style="margin-top:4px;color:var(--text-secondary);font-style:italic;">"${escapeHtml(e.user_note)}"</div>` : ''}
+            ${e.tags ? `<div style="margin-top:4px;">${e.tags.split(',').map(t => `<span style="background:rgba(6,182,212,0.15);color:var(--neon-cyan);padding:1px 6px;border-radius:3px;font-size:0.65rem;margin-right:4px;">${escapeHtml(t.trim())}</span>`).join('')}</div>` : ''}
+            <div style="margin-top:6px;display:flex;gap:6px;">
+              ${!e.outcome ? `<button onclick="openOutcomeModal(${e.id})" style="background:var(--neon-cyan);color:#000;border:none;padding:3px 10px;border-radius:3px;font-size:0.68rem;cursor:pointer;">Record Outcome</button>` : ''}
+              ${e.outcome_note ? `<span style="color:var(--text-muted);font-size:0.68rem;">📝 ${escapeHtml(e.outcome_note)}</span>` : ''}
+              <button onclick="deleteJournalEntry(${e.id})" style="background:transparent;color:var(--neon-red);border:1px solid rgba(244,63,94,0.3);padding:3px 8px;border-radius:3px;font-size:0.65rem;cursor:pointer;margin-left:auto;">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch { /* silent */ }
+  }
+
+  function openOutcomeModal(entryId) {
+    document.getElementById('jo-entry-id').value = entryId;
+    document.getElementById('journal-outcome-modal').style.display = 'flex';
+  }
+
+  async function submitJournalOutcome(e) {
+    e.preventDefault();
+    const entryId = document.getElementById('jo-entry-id').value;
+    try {
+      const res = await fetch(`/api/journal/${entryId}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({
+          outcome: document.getElementById('jo-outcome').value,
+          outcome_price: parseFloat(document.getElementById('jo-price').value) || 0,
+          outcome_note: document.getElementById('jo-note').value,
+        }),
+      });
+      if (!res.ok) { showToast('error', 'Error', 'Failed to update.'); return; }
+      showToast('success', '📊 Updated', 'Outcome recorded.');
+      closeJournalOutcomeModal();
+      document.getElementById('journal-outcome-form').reset();
+      loadJournalEntries();
+    } catch { showToast('error', 'Error', 'Connection error.'); }
+  }
+
+  async function deleteJournalEntry(entryId) {
+    if (!confirm('Delete this journal entry?')) return;
+    try {
+      const res = await fetch(`/api/journal/${entryId}`, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) { showToast('info', 'Deleted', 'Entry removed.'); loadJournalEntries(); }
+    } catch { /* silent */ }
+  }
+
+  /* ── Reset Password Modal ── */
+  function openResetPasswordModal(token) {
+    document.getElementById('reset-token').value = token;
+    document.getElementById('reset-password-modal').style.display = 'flex';
+  }
+  function closeResetPasswordModal() { document.getElementById('reset-password-modal').style.display = 'none'; }
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('reset-error');
+    const sucEl = document.getElementById('reset-success');
+    errEl.textContent = ''; sucEl.style.display = 'none';
+    const pw = document.getElementById('reset-new-pw').value;
+    const confirm = document.getElementById('reset-confirm-pw').value;
+    if (pw !== confirm) { errEl.textContent = 'Passwords do not match.'; return; }
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ token: document.getElementById('reset-token').value, new_password: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.detail || 'Reset failed.'; return; }
+      sucEl.textContent = data.message || 'Password reset! You can now login.';
+      sucEl.style.display = 'block';
+      setTimeout(() => { closeResetPasswordModal(); toggleAuthModal(); }, 2000);
+    } catch { errEl.textContent = 'Connection error.'; }
+  }
+
+  /* ── ToS Modal ── */
+  function openTosModal(e) { if (e) e.preventDefault(); document.getElementById('tos-modal').style.display = 'flex'; }
+  function closeTosModal() { document.getElementById('tos-modal').style.display = 'none'; }
+
+  /* ── Modal backdrop close ── */
+  ['journal-modal','journal-save-modal','journal-outcome-modal','reset-password-modal','tos-modal'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', e => {
+      if (e.target.id === id) e.target.style.display = 'none';
+    });
+  });
+  </script>
+
+  <!-- ═══════════════════════════════════════
+       DISCLAIMER FOOTER
+       ═══════════════════════════════════════ -->
+  <div class="disclaimer-bar" style="position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(10,10,15,0.95);border-top:1px solid rgba(244,63,94,0.3);padding:4px 16px;font-size:0.6rem;color:var(--text-muted);text-align:center;pointer-events:none;">
+    ⚠️ Ryzm Terminal provides AI-generated analysis for informational purposes only. Not financial advice. Trading crypto involves substantial risk of loss. DYOR.
+  </div>
 
 </body>
 

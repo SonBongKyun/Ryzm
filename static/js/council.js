@@ -33,11 +33,15 @@ function setupEventListeners() {
           return;
         }
         const data = await res.json();
+        window._lastCouncilData = data; // Store for journal
         renderCouncil(data);
         playSound('alert');
 
         btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
         if (btnCopy) btnCopy.style.display = 'flex';
+        // Show save-to-journal button
+        const btnJournal = document.getElementById('btn-save-journal');
+        if (btnJournal) btnJournal.style.display = 'flex';
 
         // Refresh council prediction history after each analysis
         setTimeout(() => fetchCouncilHistory(), 1500);

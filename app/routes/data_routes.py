@@ -35,6 +35,16 @@ templates = Jinja2Templates(directory="templates")
 async def read_index(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
+@router.get("/verify-email")
+async def verify_email_page(request: Request):
+    """Serve index.html — frontend JS handles email verification via URL params."""
+    return templates.TemplateResponse(request=request, name="index.html")
+
+@router.get("/reset-password")
+async def reset_password_page(request: Request):
+    """Serve index.html — frontend JS handles password reset via URL params."""
+    return templates.TemplateResponse(request=request, name="index.html")
+
 @router.get("/manifest.json")
 async def get_manifest():
     return FileResponse("manifest.json", media_type="application/manifest+json")

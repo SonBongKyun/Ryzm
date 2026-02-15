@@ -1,8 +1,8 @@
 /* ─────────────────────────────────────────────
    Ryzm Terminal – Service Worker v3.0
    ───────────────────────────────────────────── */
-const CACHE_NAME = 'ryzm-v3.0';
-const API_CACHE_NAME = 'ryzm-api-v2';
+const CACHE_NAME = 'ryzm-v3.1';
+const API_CACHE_NAME = 'ryzm-api-v3';
 
 // ── Precache: actual files loaded by index.html ──
 const STATIC_ASSETS = [
@@ -44,7 +44,7 @@ const API_CACHE_RULES = {
 const API_NEVER_CACHE = [
   '/api/me', '/api/layout', '/api/alerts', '/api/council',
   '/api/validate', '/api/chat', '/api/auth/', '/api/payments/',
-  '/api/export/'
+  '/api/export/', '/api/journal'
 ];
 
 // ── Install: precache static assets ──

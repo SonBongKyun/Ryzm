@@ -1,6 +1,7 @@
 """
 Ryzm Terminal — Auth API Routes
-Registration, login, profile, logout.
+Registration (with ToS + email verification), login, profile, logout,
+forgot‑password, reset‑password.
 """
 import re
 
@@ -8,14 +9,18 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.logger import logger
-from app.core.config import RegisterRequest, LoginRequest
+from app.core.config import RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, BASE_URL
 from app.core.auth import (
     hash_password, verify_password, create_token, get_current_user,
+    generate_verification_token, generate_reset_token, get_reset_expiry,
 )
 from app.core.database import (
     create_user, get_user_by_email, get_user_by_id,
-    link_uid_to_user, update_user_login,
+    link_uid_to_user, update_user_login, update_user_tos,
+    set_email_verify_token, verify_email_token,
+    set_password_reset_token, validate_reset_token, reset_password,
 )
+from app.core.email import send_verification_email, send_password_reset_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -24,7 +29,7 @@ _EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
 @router.post("/register")
 def register(body: RegisterRequest, request: Request):
-    """Register a new account with email + password."""
+    """Register a new account with email + password. Sends verification email."""
     if not _EMAIL_RE.match(body.email):
         raise HTTPException(400, "Invalid email format")
     if len(body.password) < 8:
@@ -44,9 +49,17 @@ def register(body: RegisterRequest, request: Request):
     if not user_id:
         raise HTTPException(500, "Registration failed")
 
+    # Mark ToS acceptance
+    update_user_tos(user_id)
+
     # Link anonymous usage data to new account
     if anonymous_uid:
         link_uid_to_user(anonymous_uid, user_id)
+
+    # Send verification email
+    verify_token = generate_verification_token()
+    set_email_verify_token(user_id, verify_token)
+    send_verification_email(body.email, verify_token)
 
     token = create_token(user_id, body.email, "free")
     resp = JSONResponse(content={
@@ -55,6 +68,8 @@ def register(body: RegisterRequest, request: Request):
         "email": body.email,
         "tier": "free",
         "token": token,
+        "email_verified": False,
+        "message": "Verification email sent. Please check your inbox.",
     })
     resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax")
     logger.info(f"[Auth] User registered: {body.email}")
@@ -99,6 +114,8 @@ def get_profile(request: Request):
         "email": user["email"],
         "display_name": user["display_name"],
         "tier": user["tier"],
+        "email_verified": bool(user.get("email_verified", 0)),
+        "tos_accepted": bool(user.get("tos_accepted_at")),
         "created_at": user["created_at_utc"],
     }
 
@@ -108,4 +125,68 @@ def logout():
     """Clear auth cookie."""
     resp = JSONResponse(content={"status": "logged_out"})
     resp.delete_cookie("ryzm_token")
+    return resp
+
+
+@router.get("/verify-email")
+def verify_email(token: str):
+    """Verify email using the token from verification email."""
+    if not token:
+        raise HTTPException(400, "Token required")
+    user_id = verify_email_token(token)
+    if not user_id:
+        raise HTTPException(400, "Invalid or expired verification token")
+    logger.info(f"[Auth] Email verified for user {user_id}")
+    return {"status": "verified", "message": "Email verified successfully!"}
+
+
+@router.post("/resend-verification")
+def resend_verification(request: Request):
+    """Resend email verification for the current user."""
+    user_data = get_current_user(request)
+    if not user_data:
+        raise HTTPException(401, "Not authenticated")
+    user = get_user_by_id(int(user_data["sub"]))
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.get("email_verified"):
+        return {"status": "already_verified"}
+
+    verify_token = generate_verification_token()
+    set_email_verify_token(user["id"], verify_token)
+    send_verification_email(user["email"], verify_token)
+    return {"status": "sent", "message": "Verification email resent."}
+
+
+@router.post("/forgot-password")
+def forgot_password(body: ForgotPasswordRequest):
+    """Send password reset email. Always returns 200 to avoid email enumeration."""
+    user = get_user_by_email(body.email)
+    if user:
+        reset_token = generate_reset_token()
+        expires = get_reset_expiry(hours=1)
+        set_password_reset_token(body.email, reset_token, expires)
+        send_password_reset_email(body.email, reset_token)
+        logger.info(f"[Auth] Password reset requested: {body.email}")
+    # Always return success to prevent email enumeration
+    return {"status": "ok", "message": "If this email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+def do_reset_password(body: ResetPasswordRequest):
+    """Reset password using token from email."""
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+
+    user_info = validate_reset_token(body.token)
+    if not user_info:
+        raise HTTPException(400, "Invalid or expired reset token")
+
+    new_hash = hash_password(body.new_password)
+    success = reset_password(body.token, new_hash)
+    if not success:
+        raise HTTPException(500, "Failed to reset password")
+
+    logger.info(f"[Auth] Password reset completed for {user_info['email']}")
+    return {"status": "ok", "message": "Password reset successfully. You can now login."}
     return resp

@@ -3,6 +3,7 @@ Ryzm Terminal — Authentication
 JWT token management + password hashing for email-based auth.
 """
 import os
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -64,3 +65,18 @@ def get_current_user(request: Request) -> Optional[dict]:
     if token:
         return decode_token(token)
     return None
+
+
+def generate_verification_token() -> str:
+    """Generate a secure random token for email verification."""
+    return secrets.token_urlsafe(32)
+
+
+def generate_reset_token() -> str:
+    """Generate a secure random token for password reset."""
+    return secrets.token_urlsafe(32)
+
+
+def get_reset_expiry(hours: int = 1) -> str:
+    """Return UTC expiry timestamp string for reset tokens."""
+    return (datetime.now(timezone.utc) + timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
