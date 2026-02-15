@@ -1108,7 +1108,8 @@ function initBinanceWebSocket() {
         prevPrice: prev ? prev.price : newPrice,
         high: high,
         low: low,
-        vol: vol
+        vol: vol,
+        _wsTime: Date.now()
       };
       renderPriceCard(key);
     } catch (e) { /* ignore parse errors */ }
@@ -1260,6 +1261,7 @@ function buildPriceCards() {
 }
 
 // Fetch macro/FX from backend (VIX, DXY, USD/KRW, USD/JPY) for price panel
+// Also updates BTC/ETH/SOL as fallback when Binance WS is unavailable
 async function fetchRealtimePrices() {
   try {
     const res = await fetch('/api/market');
@@ -1267,17 +1269,25 @@ async function fetchRealtimePrices() {
     const market = data.market;
     if (!market) return;
 
-    const macroKeys = ['VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
-    macroKeys.forEach(key => {
+    const allKeys = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
+    allKeys.forEach(key => {
       if (!market[key]) return;
       const item = market[key];
       const cardKey = key.replace('/', '');
       const prev = _livePrices[key];
+
+      // For crypto: skip if WS already provided a recent update (within 15s)
+      const isCrypto = ['BTC', 'ETH', 'SOL'].includes(key);
+      if (isCrypto && prev && prev._wsTime && (Date.now() - prev._wsTime < 15000)) return;
+
       _livePrices[key] = {
         price: item.price,
         change: item.change,
         prevPrice: prev ? prev.price : item.price,
-        high: 0, low: 0, vol: 0
+        high: prev ? prev.high : 0,
+        low: prev ? prev.low : 0,
+        vol: prev ? prev.vol : 0,
+        _wsTime: prev ? prev._wsTime : 0
       };
 
       const card = document.getElementById(`price-card-${cardKey}`);
@@ -1291,9 +1301,9 @@ async function fetchRealtimePrices() {
       const dir = prev && item.price > prev.price ? 'up' : prev && item.price < prev.price ? 'down' : null;
 
       const isFx = key.startsWith('USD/');
-      valEl.textContent = isFx
-        ? Number(item.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const decimals = isCrypto ? (item.price >= 100 ? 2 : item.price >= 1 ? 4 : 6) : 2;
+      const prefix = isFx ? '' : '$';
+      valEl.textContent = prefix + Number(item.price).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
       if (dir) {
         card.classList.remove('price-flash-up', 'price-flash-down');
@@ -1309,6 +1319,9 @@ async function fetchRealtimePrices() {
         chgEl.className = `price-change ${item.change >= 0 ? 'up' : 'down'}`;
       }
       if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+      // Update mini sparkline for this key too
+      updateMiniChart(key, item.price, item.change);
     });
   } catch (e) {
     console.error('Realtime Price Error:', e);
