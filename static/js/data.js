@@ -22,11 +22,13 @@ async function fetchBriefing() {
     timeEl.innerText = data.time;
     panel.style.display = 'flex';
 
-    // Close handler (only bind once)
+    // Close handler — always update dismissedKey via data attribute
+    closeBtn.dataset.dismissKey = dismissedKey;
     if (!closeBtn.dataset.bound) {
       closeBtn.addEventListener('click', () => {
         panel.style.display = 'none';
-        sessionStorage.setItem(dismissedKey, '1');
+        const key = closeBtn.dataset.dismissKey;
+        if (key) sessionStorage.setItem(key, '1');
         playSound('click');
       });
       closeBtn.dataset.bound = 'true';
@@ -1055,6 +1057,50 @@ async function fetchKimchi() {
   } catch (e) { console.error("KP Error:", e); }
 }
 
+/* ── Connection Status Banner ── */
+let _connBanner = null;
+let _connBannerTimeout = null;
+
+function _updateConnectionBanner(status) {
+  // status: 'connected' | 'reconnecting' | 'disconnected'
+  if (!_connBanner) {
+    _connBanner = document.createElement('div');
+    _connBanner.className = 'connection-toast hidden';
+    document.body.appendChild(_connBanner);
+  }
+  clearTimeout(_connBannerTimeout);
+
+  if (status === 'connected') {
+    // Only show "connected" if it was previously disconnected/reconnecting
+    if (_connBanner.classList.contains('disconnected') || _connBanner.classList.contains('reconnecting')) {
+      _connBanner.className = 'connection-toast connected';
+      _connBanner.innerHTML = '<span class="conn-dot" style="animation:none;background:#fff;"></span> LIVE FEED RESTORED';
+      _connBannerTimeout = setTimeout(() => {
+        _connBanner.className = 'connection-toast hidden';
+      }, 3000);
+    }
+  } else if (status === 'reconnecting') {
+    _connBanner.className = 'connection-toast reconnecting';
+    _connBanner.innerHTML = '<span class="conn-dot"></span> RECONNECTING TO LIVE FEED...';
+  } else {
+    _connBanner.className = 'connection-toast disconnected';
+    _connBanner.innerHTML = '<span class="conn-dot"></span> LIVE FEED DISCONNECTED';
+  }
+}
+
+/* ── Skeleton → Data Fade Transition Helper ── */
+function replaceSkeleton(container) {
+  if (!container) return;
+  const skeleton = container.querySelector('.skeleton-loader');
+  if (skeleton) {
+    skeleton.classList.add('fade-out');
+    setTimeout(() => skeleton.remove(), 150);
+  }
+  container.classList.add('data-loaded');
+  // Remove animation class after it completes to avoid re-triggering
+  container.addEventListener('animationend', () => container.classList.remove('data-loaded'), { once: true });
+}
+
 /* ── Real-time Price Panel (Binance WebSocket + Backend Macro) ── */
 const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol}, ... }
 const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 30 pts)
@@ -1079,7 +1125,12 @@ function initBinanceWebSocket() {
     if (_priceWs && _priceWs.readyState !== 1) { _priceWs.close(); }
   }, 8000);
 
-  _priceWs.onopen = () => { clearTimeout(connectTimeout); _priceWsRetry = 0; console.log('[WS] Binance connected via ' + host); };
+  _priceWs.onopen = () => {
+    clearTimeout(connectTimeout);
+    _priceWsRetry = 0;
+    console.log('[WS] Binance connected via ' + host);
+    _updateConnectionBanner('connected');
+  };
 
   _priceWs.onmessage = (evt) => {
     try {
@@ -1115,9 +1166,10 @@ function initBinanceWebSocket() {
     clearTimeout(connectTimeout);
     console.log('[WS] Binance disconnected, trying next host...');
     _wsHostIdx++;
+    _updateConnectionBanner('reconnecting');
     scheduleWsReconnect();
   };
-  _priceWs.onerror = () => { clearTimeout(connectTimeout); _priceWs.close(); };
+  _priceWs.onerror = () => { clearTimeout(connectTimeout); _updateConnectionBanner('disconnected'); _priceWs.close(); };
 }
 
 function scheduleWsReconnect() {
@@ -1331,27 +1383,208 @@ async function fetchRealtimePrices() {
   }
 }
 
+/* ═══════════════════════════════════════
+   Live Wire — News Feed (Upgraded v3)
+   ═══════════════════════════════════════ */
+let _newsCache = [];           // full article list from last fetch
+let _newsFilter = 'all';      // active source filter
+let _prevNewsLinks = new Set();// track known titles for flash effect
+let _newsFilterInited = false;
+
 async function fetchNews() {
   try {
     const data = await apiFetch('/api/news', { silent: true });
-    const feed = document.getElementById('news-feed');
-
     if (!data.news || data.news.length === 0) return;
 
-    if (feed) {
-      feed.innerHTML = data.news.map(n => {
-        const sClass = n.sentiment === 'BULLISH' ? 'sentiment-bullish' : n.sentiment === 'BEARISH' ? 'sentiment-bearish' : 'sentiment-neutral';
-        const sLabel = escapeHtml(n.sentiment || 'NEUTRAL');
-        return `
-                <div class="news-item-v2">
-                    <div class="news-meta">
-                        <span class="news-meta-left"><span class="news-source-tag">${escapeHtml(n.source)}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
-                        <span>${escapeHtml(n.time)}</span>
-                    </div>
-                    <a href="${safeUrl(n.link)}" target="_blank" rel="noopener noreferrer" class="news-link">${escapeHtml(n.title)}</a>
-                </div>`;
-      }).join('');
-    }
+    _newsCache = data.news;
+    _updateNewsSentimentBar(data.news);
+    _updateBreakingBanner(data.news);
+    _buildSourceFilterTabs(data.news);
+    _renderNewsItems();
+    _updateNewsCount(data.news.length);
   } catch (e) { console.error("News Error:", e); }
 }
 
+/* --- Sentiment summary bar --- */
+function _updateNewsSentimentBar(articles) {
+  const total = articles.length || 1;
+  const bull = articles.filter(a => a.sentiment === 'BULLISH').length;
+  const bear = articles.filter(a => a.sentiment === 'BEARISH').length;
+  const neut = total - bull - bear;
+
+  const bullPct = Math.round(bull / total * 100);
+  const bearPct = Math.round(bear / total * 100);
+  const neutPct = 100 - bullPct - bearPct;
+
+  const elBull = document.getElementById('ns-bull');
+  const elNeut = document.getElementById('ns-neutral');
+  const elBear = document.getElementById('ns-bear');
+  if (elBull) elBull.style.width = bullPct + '%';
+  if (elNeut) elNeut.style.width = neutPct + '%';
+  if (elBear) elBear.style.width = bearPct + '%';
+
+  const pBull = document.getElementById('ns-bull-pct');
+  const pNeut = document.getElementById('ns-neutral-pct');
+  const pBear = document.getElementById('ns-bear-pct');
+  if (pBull) pBull.textContent = bullPct + '%';
+  if (pNeut) pNeut.textContent = neutPct + '%';
+  if (pBear) pBear.textContent = bearPct + '%';
+}
+
+/* --- Breaking news banner (most recent non-neutral article) --- */
+function _updateBreakingBanner(articles) {
+  const banner = document.getElementById('news-breaking');
+  const link = document.getElementById('news-breaking-link');
+  if (!banner || !link) return;
+  // Find the most recent article with a strong sentiment
+  const breaking = articles.find(a => a.sentiment === 'BULLISH' || a.sentiment === 'BEARISH');
+  if (breaking) {
+    banner.style.display = 'flex';
+    const badge = banner.querySelector('.news-breaking-badge');
+    if (breaking.sentiment === 'BULLISH') {
+      banner.style.background = 'linear-gradient(90deg, rgba(5,150,105,0.12), rgba(5,150,105,0.04))';
+      banner.style.borderColor = 'rgba(5,150,105,0.3)';
+      if (badge) { badge.style.background = '#059669'; badge.textContent = '🟢 BULLISH'; }
+    } else {
+      banner.style.background = 'linear-gradient(90deg, rgba(220,38,38,0.12), rgba(220,38,38,0.04))';
+      banner.style.borderColor = 'rgba(220,38,38,0.3)';
+      if (badge) { badge.style.background = '#dc2626'; badge.textContent = '🔴 BEARISH'; }
+    }
+    link.href = safeUrl(breaking.link);
+    link.textContent = breaking.title;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+/* --- Source filter tabs (dynamic) --- */
+function _buildSourceFilterTabs(articles) {
+  const container = document.getElementById('news-filter-tabs');
+  if (!container) return;
+  const sources = [...new Set(articles.map(a => a.source))];
+  const tabs = [{ key: 'all', label: 'All' }, ...sources.map(s => ({ key: s, label: s }))];
+
+  // Only rebuild if sources changed
+  const currentKeys = Array.from(container.querySelectorAll('.news-filter-btn')).map(b => b.dataset.source).join(',');
+  const newKeys = tabs.map(t => t.key).join(',');
+  if (currentKeys === newKeys) return;
+
+  container.innerHTML = tabs.map(t =>
+    `<button class="news-filter-btn${t.key === _newsFilter ? ' active' : ''}" data-source="${escapeHtml(t.key)}">${escapeHtml(t.label)}</button>`
+  ).join('');
+
+  if (!_newsFilterInited) {
+    _newsFilterInited = true;
+    container.addEventListener('click', e => {
+      const btn = e.target.closest('.news-filter-btn');
+      if (!btn) return;
+      container.querySelectorAll('.news-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _newsFilter = btn.dataset.source;
+      _renderNewsItems();
+    });
+  }
+}
+
+/* --- Coin keyword highlighting --- */
+const _COIN_MAP = {
+  'Bitcoin': 'btc', 'BTC': 'btc',
+  'Ethereum': 'eth', 'ETH': 'eth', 'Ether': 'eth',
+  'Solana': 'sol', 'SOL': 'sol',
+  'XRP': 'xrp', 'Ripple': 'xrp',
+  'BNB': 'bnb', 'Binance': 'bnb',
+  'Dogecoin': 'doge', 'DOGE': 'doge',
+  'Cardano': 'ada', 'ADA': 'ada',
+  'Polygon': 'default', 'MATIC': 'default',
+  'Avalanche': 'default', 'AVAX': 'default',
+  'Chainlink': 'default', 'LINK': 'default',
+};
+const _COIN_REGEX = new RegExp(`\\b(${Object.keys(_COIN_MAP).join('|')})\\b`, 'g');
+
+function _highlightCoins(text) {
+  return escapeHtml(text).replace(
+    _COIN_REGEX,
+    (match) => {
+      const cls = _COIN_MAP[match] || 'default';
+      return `<span class="coin-hl coin-hl-${cls}">${match}</span>`;
+    }
+  );
+}
+
+/* --- Relative time display --- */
+function _relativeTime(isoStr) {
+  if (!isoStr) return '';
+  try {
+    const then = new Date(isoStr);
+    const now = new Date();
+    const diffSec = Math.floor((now - then) / 1000);
+    if (diffSec < 60) return 'just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return `${Math.floor(diffSec / 86400)}d ago`;
+  } catch { return ''; }
+}
+
+/* --- Render filtered news items --- */
+function _renderNewsItems() {
+  const feed = document.getElementById('news-feed');
+  if (!feed) return;
+
+  const filtered = _newsFilter === 'all'
+    ? _newsCache
+    : _newsCache.filter(n => n.source === _newsFilter);
+
+  const newLinks = new Set(filtered.map(n => n.link));
+
+  feed.innerHTML = filtered.map(n => {
+    const sClass = n.sentiment === 'BULLISH' ? 'sentiment-bullish' : n.sentiment === 'BEARISH' ? 'sentiment-bearish' : 'sentiment-neutral';
+    const sLabel = escapeHtml(n.sentiment || 'NEUTRAL');
+    const isNew = !_prevNewsLinks.has(n.link) && _prevNewsLinks.size > 0;
+    const flashClass = isNew ? ' news-flash' : '';
+    const timeStr = _relativeTime(n.published_at_utc);
+    return `<div class="news-item-v2${flashClass}">
+      <div class="news-meta">
+        <span class="news-meta-left"><span class="news-source-tag">${escapeHtml(n.source)}</span><span class="sentiment-tag ${sClass}">${sLabel}</span></span>
+        <span class="news-time-relative">${escapeHtml(timeStr)}</span>
+      </div>
+      <a href="${safeUrl(n.link)}" target="_blank" rel="noopener noreferrer" class="news-link">${_highlightCoins(n.title)}</a>
+    </div>`;
+  }).join('');
+
+  _prevNewsLinks = newLinks;
+}
+
+/* --- Article count badge --- */
+function _updateNewsCount(count) {
+  const el = document.getElementById('news-count');
+  if (el) el.textContent = count;
+}
+
+/* ── Auto Skeleton→Data Fade-in via MutationObserver ── */
+(function initSkeletonFadeObserver() {
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const removed of m.removedNodes) {
+        if (removed.nodeType === 1 && removed.classList && removed.classList.contains('skeleton-loader')) {
+          // Skeleton was removed — apply fade-in to parent
+          const parent = m.target;
+          if (parent && parent.nodeType === 1) {
+            parent.classList.add('data-loaded');
+            parent.addEventListener('animationend', () => parent.classList.remove('data-loaded'), { once: true });
+          }
+        }
+      }
+      // Also catch innerHTML replacement (skeleton in childList removals)
+      if (m.type === 'childList' && m.target && m.target.nodeType === 1) {
+        const hadSkeleton = Array.from(m.removedNodes).some(
+          n => n.nodeType === 1 && n.querySelector && (n.classList.contains('skeleton-loader') || n.querySelector('.skeleton-loader'))
+        );
+        if (hadSkeleton && m.addedNodes.length > 0) {
+          m.target.classList.add('data-loaded');
+          m.target.addEventListener('animationend', () => m.target.classList.remove('data-loaded'), { once: true });
+        }
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+})();

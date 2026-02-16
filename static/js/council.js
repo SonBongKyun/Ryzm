@@ -1,4 +1,114 @@
-/* ── 3. AI Council ── */
+/* ═══ 3. AI Council (Neural Command Center v5.5) ═══ */
+
+/* ── Agent Avatar SVGs ── */
+const _AGENT_AVATARS = {
+  grok: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  gpt: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3 1.5 5.5 4 7v3h8v-3c2.5-1.5 4-4 4-7a8 8 0 0 0-8-8z"/><line x1="10" y1="22" x2="14" y2="22"/></svg>',
+  vision: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  claude: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M3 12l4-4v8l-4-4z"/><path d="M21 12l-4-4v8l4-4z"/><circle cx="12" cy="3" r="1" fill="currentColor"/></svg>'
+};
+function _agentClass(name) {
+  const n = name.toLowerCase();
+  if (n.includes('grok')) return 'grok';
+  if (n.includes('gpt')) return 'gpt';
+  if (n.includes('vision')) return 'vision';
+  if (n.includes('claude')) return 'claude';
+  return 'sys';
+}
+
+/* ── Loading Steps Controller ── */
+let _councilLoadTimers = [];
+function showLoadingSteps() {
+  const div = document.getElementById('council-steps');
+  if (!div) return;
+  div.style.display = 'flex';
+  const steps = div.querySelectorAll('.cs-step');
+  steps.forEach(s => { s.className = 'cs-step'; });
+  _councilLoadTimers.forEach(t => clearTimeout(t));
+  _councilLoadTimers = [];
+  steps[0] && steps[0].classList.add('active');
+  _councilLoadTimers.push(setTimeout(() => { steps[0] && steps[0].classList.replace('active', 'done'); steps[1] && steps[1].classList.add('active'); }, 1200));
+  _councilLoadTimers.push(setTimeout(() => { steps[1] && steps[1].classList.replace('active', 'done'); steps[2] && steps[2].classList.add('active'); }, 2800));
+  _councilLoadTimers.push(setTimeout(() => { steps[2] && steps[2].classList.replace('active', 'done'); steps[3] && steps[3].classList.add('active'); }, 4500));
+}
+function completeLoadingSteps() {
+  _councilLoadTimers.forEach(t => clearTimeout(t));
+  _councilLoadTimers = [];
+  const div = document.getElementById('council-steps');
+  if (!div) return;
+  div.querySelectorAll('.cs-step').forEach(s => { s.className = 'cs-step done'; });
+  setTimeout(() => { div.style.display = 'none'; }, 1500);
+}
+function hideLoadingSteps() {
+  _councilLoadTimers.forEach(t => clearTimeout(t));
+  _councilLoadTimers = [];
+  const div = document.getElementById('council-steps');
+  if (div) div.style.display = 'none';
+}
+
+/* ── Consensus Gauge ── */
+function updateConsensusGauge(score) {
+  const arc = document.getElementById('cg-value');
+  const txt = document.getElementById('cg-score');
+  const lbl = document.getElementById('cg-label');
+  if (!arc || !txt) return;
+  const pct = Math.max(0, Math.min(100, score));
+  const arcLen = (pct / 100) * 157;
+  arc.setAttribute('stroke-dasharray', `${arcLen} 157`);
+  txt.textContent = score;
+  if (lbl) {
+    if (score > 60) { lbl.textContent = 'BULLISH'; lbl.setAttribute('fill', '#059669'); }
+    else if (score < 40) { lbl.textContent = 'BEARISH'; lbl.setAttribute('fill', '#dc2626'); }
+    else { lbl.textContent = 'NEUTRAL'; lbl.setAttribute('fill', 'var(--text-muted)'); }
+  }
+}
+
+/* ── Auto Analysis Status Bar ── */
+let _autoBarInterval = null;
+function startAutoBar() {
+  updateAutoBar();
+  if (_autoBarInterval) clearInterval(_autoBarInterval);
+  _autoBarInterval = setInterval(updateAutoBar, 60000);
+}
+function updateAutoBar() {
+  apiFetch('/api/council/history?limit=10', { silent: true })
+    .then(data => {
+      if (!data || !data.records || !data.records.length) return;
+      const lastRec = data.records[0];
+      const lastEl = document.getElementById('cab-last');
+      const nextEl = document.getElementById('cab-next');
+      if (lastRec.timestamp && lastEl) {
+        const ts = new Date(lastRec.timestamp.replace(' ', 'T') + 'Z');
+        const ago = Math.floor((Date.now() - ts.getTime()) / 60000);
+        lastEl.textContent = ago < 60 ? `Last: ${ago}m ago` : `Last: ${Math.floor(ago / 60)}h${ago % 60}m`;
+        if (nextEl) {
+          const nxt = Math.max(0, 60 - (ago % 60));
+          nextEl.textContent = `Next: ~${nxt}m`;
+        }
+      }
+      // Mini sparkline
+      drawAutoSparkline(data.records.map(r => r.consensus_score || 50).reverse());
+    })
+    .catch(() => {});
+}
+function drawAutoSparkline(scores) {
+  const c = document.getElementById('cab-spark');
+  if (!c || !scores || scores.length < 2) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.beginPath();
+  scores.forEach((s, i) => {
+    const x = (i / (scores.length - 1)) * W;
+    const y = H - (s / 100) * H;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = 'rgba(2,132,199,0.5)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/* ═══ setupEventListeners ═══ */
 function setupEventListeners() {
   const btnCouncil = document.getElementById('btn-council-start');
   const btnCopy = document.getElementById('btn-copy-report');
@@ -6,38 +116,54 @@ function setupEventListeners() {
   if (btnCouncil) {
     btnCouncil.addEventListener('click', async () => {
       playSound('click');
+      const startTime = Date.now();
+
+      // Show loading sequence
+      showLoadingSteps();
       btnCouncil.innerHTML = '<i data-lucide="loader-2" class="spin"></i> ' + t('accessing');
       btnCouncil.disabled = true;
 
       const agentsGrid = document.getElementById('agents-grid');
       if (agentsGrid) {
         agentsGrid.innerHTML = `
-                    <div style="grid-column: span 5; text-align:center; padding:40px; color:var(--text-muted);">
-                        <i data-lucide="radio-tower" style="width:32px; height:32px; margin-bottom:10px; animation:pulse 1s infinite;"></i><br>
-                        ${t('summoning')}
-                    </div>
-                `;
+          <div style="grid-column: span 4; text-align:center; padding:32px; color:var(--text-muted);">
+            <i data-lucide="radio-tower" style="width:28px; height:28px; margin-bottom:8px; animation:pulse 1s infinite;"></i><br>
+            ${t('summoning')}
+          </div>`;
         lucide.createIcons();
       }
 
       try {
         const data = await apiFetch('/api/council');
-        window._lastCouncilData = data; // Store for journal
+        window._lastCouncilData = data;
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        completeLoadingSteps();
         renderCouncil(data);
         playSound('alert');
 
         btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
         if (btnCopy) btnCopy.style.display = 'flex';
-        // Show save-to-journal button
         const btnJournal = document.getElementById('btn-save-journal');
         if (btnJournal) btnJournal.style.display = 'flex';
 
-        // Refresh council prediction history after each analysis
+        // Show last run info
+        const lrDiv = document.getElementById('council-last-run');
+        const lrTime = document.getElementById('clr-time');
+        const lrDur = document.getElementById('clr-duration');
+        if (lrDiv && lrTime && lrDur) {
+          lrTime.textContent = new Date().toLocaleTimeString();
+          lrDur.textContent = `${elapsed}s`;
+          lrDiv.style.display = 'block';
+        }
+
         setTimeout(() => fetchCouncilHistory(), 1500);
+        setTimeout(() => updateAutoBar(), 2000);
 
       } catch (e) {
+        hideLoadingSteps();
         if (e.status === 403) {
-          showToast('warning', '⚡ Limit Reached', e.data?.detail || 'Daily free council uses exhausted. Upgrade to Pro!');
+          showToast('warning', '\u26A1 Limit Reached', e.data?.detail || 'Daily free council uses exhausted. Upgrade to Pro!');
           btnCouncil.innerHTML = '<i data-lucide="zap"></i> ' + t('re_run');
           btnCouncil.disabled = false;
           lucide.createIcons();
@@ -45,7 +171,7 @@ function setupEventListeners() {
           return;
         }
         console.error(e);
-        if (agentsGrid) agentsGrid.innerHTML = '<div style="color:var(--neon-red); grid-column:span 5; text-align:center;">' + t('connection_failed') + '</div>';
+        if (agentsGrid) agentsGrid.innerHTML = '<div style="color:var(--neon-red); grid-column:span 4; text-align:center;">' + t('connection_failed') + '</div>';
         btnCouncil.innerHTML = '<i data-lucide="alert-triangle"></i> RETRY';
       } finally {
         btnCouncil.disabled = false;
@@ -57,32 +183,32 @@ function setupEventListeners() {
   if (btnCopy) {
     btnCopy.addEventListener('click', () => {
       playSound('click');
-      const scoreEl = document.getElementById('consensus-score');
+      const scoreTxt = document.getElementById('cg-score');
       const vibeEl = document.getElementById('vibe-status');
 
-      const score = scoreEl ? scoreEl.innerText.replace('SCORE: ', '') : 'N/A';
+      const score = scoreTxt ? scoreTxt.textContent : 'N/A';
       const vibe = vibeEl ? vibeEl.innerText : 'N/A';
 
       let debateLog = "";
       document.querySelectorAll('.agent-card').forEach(card => {
-        const nameEl = card.querySelector('.agent-name');
+        const nameEl = card.querySelector('.ac-name');
         if (nameEl) {
           const name = nameEl.innerText;
           if (name !== 'SYSTEM') {
-            const msg = card.querySelector('.agent-msg').innerText.replace(/"/g, '');
-            let icon = '🤖';
-            if (name.includes('Grok')) icon = '🚀';
-            if (name.includes('GPT')) icon = '📉';
-            if (name.includes('Vision')) icon = '👁️';
-            if (name.includes('Claude')) icon = '⚖️';
+            const msg = card.querySelector('.ac-msg')?.innerText.replace(/"/g, '') || '';
+            let icon = '\uD83E\uDD16';
+            if (name.includes('Grok')) icon = '\uD83D\uDE80';
+            if (name.includes('GPT')) icon = '\uD83D\uDCC9';
+            if (name.includes('Vision')) icon = '\uD83D\uDC41\uFE0F';
+            if (name.includes('Claude')) icon = '\u2696\uFE0F';
             debateLog += `${icon} **${name}**: ${msg}\n`;
           }
         }
       });
 
-      const text = `🚨 **Ryzm Terminal Alert**\n\n` +
-        `🧠 Vibe: ${vibe}\n` +
-        `🎯 Score: ${score}/100\n\n` +
+      const text = `\uD83D\uDEA8 **Ryzm Terminal Alert**\n\n` +
+        `\uD83E\uDDE0 Vibe: ${vibe}\n` +
+        `\uD83C\uDFAF Score: ${score}/100\n\n` +
         `**[Council Debate]**\n${debateLog}\n` +
         `#Bitcoin #Crypto #Ryzm`;
 
@@ -93,12 +219,16 @@ function setupEventListeners() {
       });
     });
   }
+
+  // Start auto bar on init
+  startAutoBar();
 }
 
+/* ═══ renderCouncil ═══ */
 function renderCouncil(data) {
   // Vibe
   if (data.vibe) {
-    _vibeFromCouncil = true; // Council vibe takes priority over auto-vibe
+    _vibeFromCouncil = true;
     const vStat = document.getElementById('vibe-status');
     const vMsg = document.getElementById('vibe-message');
     if (vStat) {
@@ -109,75 +239,95 @@ function renderCouncil(data) {
     if (vMsg) vMsg.innerText = `/// SYSTEM: ${data.vibe.message}`;
   }
 
-  // Score
-  const sDisplay = document.getElementById('consensus-score');
-  if (sDisplay) {
-    sDisplay.innerText = `SCORE: ${data.consensus_score}`;
-    sDisplay.style.color = data.consensus_score > 50 ? 'var(--neon-green)' : 'var(--neon-red)';
-  }
+  // Consensus Gauge (arc + score)
+  const cscore = data.consensus_score || 50;
+  updateConsensusGauge(cscore);
+  // Backward compat hidden element
+  const sHidden = document.getElementById('consensus-score');
+  if (sHidden) sHidden.innerText = `SCORE: ${cscore}`;
 
-  // Edge Summary + Prediction/Confidence
-  const edgeContainer = document.getElementById('edge-summary');
-  const edgeBadge = document.getElementById('edge-badge');
-  const edgeAgreement = document.getElementById('edge-agreement');
-  if (edgeContainer && data.edge) {
+  // Edge Panel
+  const edgePanel = document.getElementById('edge-panel');
+  if (edgePanel && data.edge) {
     const e = data.edge;
-    const sign = e.value > 0 ? '+' : '';
-    const confLabel = data.confidence || '';
+    // Bull/Bear bias bar
+    const totalVotes = (e.bulls || 0) + (e.bears || 0);
+    const bullPct = totalVotes > 0 ? ((e.bulls || 0) / totalVotes) * 100 : 50;
+    const bearPct = 100 - bullPct;
+    const bullFill = document.getElementById('ep-bull-fill');
+    const bearFill = document.getElementById('ep-bear-fill');
+    if (bullFill) bullFill.style.width = bullPct + '%';
+    if (bearFill) bearFill.style.width = bearPct + '%';
+    const bullCt = document.getElementById('ep-bull-ct');
+    const bearCt = document.getElementById('ep-bear-ct');
+    if (bullCt) bullCt.textContent = `${e.bulls || 0} BULL`;
+    if (bearCt) bearCt.textContent = `${e.bears || 0} BEAR`;
+
+    // Agreement ring
+    const agreeArc = document.getElementById('ep-agree-arc');
+    const agreeVal = document.getElementById('ep-agree-val');
+    const agreement = e.agreement || 0;
+    if (agreeArc) {
+      const circumf = 2 * Math.PI * 16; // ~100.5
+      agreeArc.setAttribute('stroke-dasharray', `${(agreement / 100) * circumf} ${circumf}`);
+    }
+    if (agreeVal) agreeVal.textContent = agreement + '%';
+
+    // Prediction + Confidence badges
+    const predBadge = document.getElementById('ep-pred');
+    const confBadge = document.getElementById('ep-conf');
     const predLabel = data.prediction || '';
-    const confColor = confLabel === 'HIGH' ? 'var(--neon-green)' : confLabel === 'MED' ? 'var(--neon-cyan)' : 'var(--text-muted)';
-    edgeBadge.textContent = `EDGE: ${sign}${e.value.toFixed(2)} (${e.bias})`;
-    edgeBadge.className = 'edge-badge ' + (e.bias === 'Bull Bias' ? 'bull' : e.bias === 'Bear Bias' ? 'bear' : 'neutral');
-    edgeAgreement.innerHTML = `AGREEMENT: ${e.agreement}% │ ↑${e.bulls} ↓${e.bears}` +
-      (confLabel ? ` │ <span style="color:${confColor};font-weight:700;">${escapeHtml(predLabel)} [${escapeHtml(confLabel)}]</span>` : '');
-    edgeContainer.style.display = 'flex';
+    const confLabel = data.confidence || '';
+    if (predBadge) {
+      predBadge.textContent = predLabel || '--';
+      predBadge.className = 'ep-badge pred' + (predLabel === 'LONG' ? ' long' : predLabel === 'SHORT' ? ' short' : '');
+    }
+    if (confBadge) {
+      confBadge.textContent = confLabel || '--';
+      confBadge.className = 'ep-badge conf' + (confLabel === 'HIGH' ? ' high' : confLabel === 'MED' ? ' med' : ' low');
+    }
+
+    // Edge value
+    const edgeNum = document.getElementById('ep-edge-num');
+    if (edgeNum) {
+      const sign = e.value > 0 ? '+' : '';
+      edgeNum.textContent = `EDGE: ${sign}${e.value.toFixed(2)}`;
+    }
+    edgePanel.style.display = 'block';
   }
 
-  // Long/Short Ratio
-  // We use real data from /api/long-short now, so we don't overwrite it with AI score anymore
-  // But if real data failed, we could use AI score as fallback? 
-  // For now, let's DISABLE AI override for L/S to keep it real.
-  /*
-  const lsLong = document.getElementById('ls-long');
-  const lsShort = document.getElementById('ls-short');
-  if (lsLong && lsShort) {
-    const score = data.consensus_score || 50;
-    const longRatio = score;
-    const shortRatio = 100 - score;
-
-    lsLong.style.width = `${longRatio}%`;
-    lsLong.innerText = `${longRatio}%`;
-    lsShort.style.width = `${shortRatio}%`;
-    lsShort.innerText = `${shortRatio}%`;
-  }
-  */
-
-  // Render Bubble Chart (NEW)
-  if (data.narratives && data.narratives.length > 0) {
-    renderBubbleChart(data.narratives);
+  // Narrative Radar Chart
+  if (data.narratives && data.narratives.length >= 3) {
+    renderRadarChart(data.narratives);
   }
 
-  // Agents
+  // Agent Cards (premium redesign)
   const grid = document.getElementById('agents-grid');
   if (grid) {
     grid.innerHTML = '';
     data.agents.forEach((agent, i) => {
-      let color = agent.status.includes('BULL') ? 'var(--neon-green)' :
-        agent.status.includes('BEAR') ? 'var(--neon-red)' : 'var(--text-muted)';
+      const isBull = agent.status.includes('BULL');
+      const isBear = agent.status.includes('BEAR');
+      const stanceClass = isBull ? 'bull' : isBear ? 'bear' : 'neutral';
+      const agentKey = _agentClass(agent.name);
+      const avatarSvg = _AGENT_AVATARS[agentKey] || _AGENT_AVATARS.grok;
 
       setTimeout(() => {
         const div = document.createElement('div');
-        div.className = 'agent-card speaking';
+        div.className = `agent-card speaking ${stanceClass}-card`;
         div.innerHTML = `
-                    <div class="agent-icon" style="border-color:${color}; color:${color};">${escapeHtml(agent.name[0])}</div>
-                    <div class="agent-name">${escapeHtml(agent.name)}</div>
-                    <div class="agent-status" style="color:${color}; border-color:${color};">${escapeHtml(agent.status)}</div>
-                    <div class="agent-msg">"${escapeHtml(agent.message)}"</div>
-                `;
+          <div class="ac-top">
+            <div class="ac-avatar ${escapeHtml(agentKey)}">${avatarSvg}</div>
+            <span class="ac-led ${stanceClass}"></span>
+          </div>
+          <div class="ac-name">${escapeHtml(agent.name)}</div>
+          <div class="ac-stance ${stanceClass}">${escapeHtml(agent.status)}</div>
+          <div class="ac-msg">"${escapeHtml(agent.message)}"</div>
+        `;
         grid.appendChild(div);
         playSound('hover');
         setTimeout(() => div.classList.remove('speaking'), 600);
-      }, i * 250);
+      }, i * 300);
     });
   }
 
@@ -185,14 +335,14 @@ function renderCouncil(data) {
   const sList = document.getElementById('strategy-list');
   if (sList && data.strategies) {
     sList.innerHTML = data.strategies.map(s => `
-            <div class="strategy-card" style="border-left-color:${s.name.includes('Bull') ? 'var(--neon-green)' : 'var(--neon-red)'}">
-                <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.7rem; margin-bottom:4px;">
-                    <span>${escapeHtml(s.name)}</span>
-                    <span style="color:var(--neon-cyan); font-family:'Share Tech Mono'">${escapeHtml(s.prob)}</span>
-                </div>
-                <div style="font-size:0.8rem; line-height:1.3;">${escapeHtml(s.action)}</div>
-            </div>
-        `).join('');
+      <div class="strategy-card" style="border-left-color:${s.name.includes('Bull') ? 'var(--neon-green)' : 'var(--neon-red)'}">
+        <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.7rem; margin-bottom:4px;">
+          <span>${escapeHtml(s.name)}</span>
+          <span style="color:var(--neon-cyan); font-family:'Share Tech Mono'">${escapeHtml(s.prob)}</span>
+        </div>
+        <div style="font-size:0.8rem; line-height:1.3;">${escapeHtml(s.action)}</div>
+      </div>
+    `).join('');
   }
 
   // Strategic Narrative
@@ -201,129 +351,107 @@ function renderCouncil(data) {
   }
 }
 
-/* ─── Bubble Chart Renderer ─── */
-function renderBubbleChart(narratives) {
-  const svg = document.getElementById('bubble-svg');
-  const container = document.getElementById('bubble-chart');
+/* ═══ Narrative Radar Chart ═══ */
+function renderRadarChart(narratives) {
+  const canvas = document.getElementById('radar-canvas');
+  const wrap = document.getElementById('narrative-radar');
+  if (!canvas || !wrap || !narratives || narratives.length < 3) return;
 
-  if (!svg || !container) return;
+  wrap.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = 260 * dpr;
+  canvas.height = 180 * dpr;
+  ctx.scale(dpr, dpr);
 
-  const width = container.clientWidth || 250;
-  const height = container.clientHeight || 250;
+  const W = 260, H = 180;
+  const cx = W / 2, cy = H / 2 + 8;
+  const R = Math.min(cx, cy) - 28;
+  const n = narratives.length;
 
-  svg.setAttribute('width', width);
-  svg.setAttribute('height', height);
-  svg.innerHTML = ''; // Clear existing
+  ctx.clearRect(0, 0, W, H);
 
-  // Calculate bubble positions (simple grid layout with some randomness)
-  const cols = Math.ceil(Math.sqrt(narratives.length));
-  const cellWidth = width / cols;
-  const cellHeight = height / cols;
-
-  narratives.forEach((n, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-
-    // Add some randomness to position
-    const x = col * cellWidth + cellWidth / 2 + (Math.random() - 0.5) * 20;
-    const y = row * cellHeight + cellHeight / 2 + (Math.random() - 0.5) * 20 + 40;
-
-    // Scale bubble size based on score (min 15, max 40)
-    const radius = 15 + (n.score / 100) * 25;
-
-    // Color based on trend
-    const color = n.trend === 'UP' ? '#ec4899' : n.trend === 'DOWN' ? '#64748b' : '#06b6d4';
-
-    // Create bubble group
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.classList.add('bubble');
-    g.setAttribute('data-name', n.name);
-    g.setAttribute('data-score', n.score);
-
-    // Circle
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', x);
-    circle.setAttribute('cy', y);
-    circle.setAttribute('r', radius);
-    circle.setAttribute('fill', color);
-    circle.setAttribute('opacity', '0.6');
-    circle.setAttribute('stroke', color);
-    circle.setAttribute('stroke-width', '2');
-
-    // Animate entrance
-    circle.style.animation = `bubblePop 0.5s ease-out ${i * 0.1}s backwards`;
-
-    // Name text
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.classList.add('bubble-text');
-    text.setAttribute('x', x);
-    text.setAttribute('y', y - 3);
-    text.textContent = n.name;
-
-    // Score text
-    const scoreText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    scoreText.classList.add('bubble-score');
-    scoreText.setAttribute('x', x);
-    scoreText.setAttribute('y', y + 8);
-    scoreText.textContent = n.score;
-
-    g.appendChild(circle);
-    g.appendChild(text);
-    g.appendChild(scoreText);
-    svg.appendChild(g);
-
-    // Text appearance
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('fill', '#ffffff');
-    text.setAttribute('font-size', Math.max(9, Math.floor(radius / 2)));
-
-    scoreText.setAttribute('text-anchor', 'middle');
-    scoreText.setAttribute('fill', 'rgba(255,255,255,0.9)');
-    scoreText.setAttribute('font-size', Math.max(8, Math.floor(radius / 2.5)));
-
-    // Floating animation parameters (randomized per bubble)
-    const floatDur = 4 + Math.random() * 6; // 4s ~ 10s
-    const floatDelay = Math.random() * 3; // stagger start
-    // ensure transform origin works for SVG
-    g.style.transformBox = 'fill-box';
-    g.style.transformOrigin = 'center';
-    g.style.animation = `float ${floatDur}s ease-in-out ${floatDelay}s infinite`;
-
-    // Hover tooltip effect
-    g.addEventListener('mouseenter', () => {
-      circle.setAttribute('opacity', '0.95');
-      circle.setAttribute('r', radius * 1.25);
-      g.style.animationPlayState = 'paused';
-    });
-
-    g.addEventListener('mouseleave', () => {
-      circle.setAttribute('opacity', '0.6');
-      circle.setAttribute('r', radius);
-      g.style.animationPlayState = 'running';
-    });
-  });
-}
-
-// Add bubble animation to CSS dynamically
-if (!document.getElementById('bubble-animation-style')) {
-  const style = document.createElement('style');
-  style.id = 'bubble-animation-style';
-  style.textContent = `
-    @keyframes bubblePop {
-      0% {
-        opacity: 0;
-        transform: scale(0);
-      }
-      50% {
-        transform: scale(1.2);
-      }
-      100% {
-        opacity: 0.6;
-        transform: scale(1);
-      }
+  // Grid rings
+  for (let ring = 1; ring <= 4; ring++) {
+    const r = (ring / 4) * R;
+    ctx.beginPath();
+    for (let j = 0; j <= n; j++) {
+      const a = (Math.PI * 2 * j / n) - Math.PI / 2;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      j === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
-  `;
-  document.head.appendChild(style);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(100,116,139,0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Axis lines
+  for (let i = 0; i < n; i++) {
+    const a = (Math.PI * 2 * i / n) - Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + R * Math.cos(a), cy + R * Math.sin(a));
+    ctx.strokeStyle = 'rgba(100,116,139,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Data polygon
+  ctx.beginPath();
+  narratives.forEach((nd, i) => {
+    const a = (Math.PI * 2 * i / n) - Math.PI / 2;
+    const r = (nd.score / 100) * R;
+    const x = cx + r * Math.cos(a);
+    const y = cy + r * Math.sin(a);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  // Gradient fill
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  grd.addColorStop(0, 'rgba(2,132,199,0.2)');
+  grd.addColorStop(1, 'rgba(219,39,119,0.08)');
+  ctx.fillStyle = grd;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(2,132,199,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Points + Labels
+  narratives.forEach((nd, i) => {
+    const a = (Math.PI * 2 * i / n) - Math.PI / 2;
+    const r = (nd.score / 100) * R;
+    const x = cx + r * Math.cos(a);
+    const y = cy + r * Math.sin(a);
+
+    // Glow
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    const ptColor = nd.trend === 'UP' ? '#059669' : nd.trend === 'DOWN' ? '#dc2626' : '#0284c7';
+    ctx.fillStyle = ptColor + '30';
+    ctx.fill();
+    // Dot
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = ptColor;
+    ctx.fill();
+
+    // Label
+    const lx = cx + (R + 18) * Math.cos(a);
+    const ly = cy + (R + 18) * Math.sin(a);
+    ctx.fillStyle = 'rgba(100,116,139,0.7)';
+    ctx.font = '8px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = nd.name.length > 9 ? nd.name.substring(0, 8) + '\u2026' : nd.name;
+    ctx.fillText(label, lx, ly);
+
+    // Score near point
+    ctx.fillStyle = ptColor;
+    ctx.font = 'bold 7px monospace';
+    ctx.fillText(nd.score, x, y - 8);
+  });
 }
 
 /* ─── Matrix Rain Effect (disabled — canvas hidden, saves CPU/battery) ─── */
@@ -359,12 +487,6 @@ function initValidator() {
   if (!btnValidate) return;
 
   btnValidate.addEventListener('click', async () => {
-    // Check credits
-    if (validatorCredits <= 0) {
-      showToast('error', '⚠ No Credits Left', 'Upgrade to Premium for unlimited validations!');
-      return;
-    }
-
     const symbol = document.getElementById('val-symbol').value.toUpperCase().trim();
     const price = parseFloat(document.getElementById('val-price').value);
     const position = document.getElementById('val-position').value;
@@ -417,33 +539,30 @@ function initValidator() {
 }
 
 function loadValidatorCredits() {
-  // Try server-side credit counting first, fall back to localStorage
+  // Server is the single source of truth for credits
   apiFetch('/api/me', { silent: true })
     .then(data => {
       if (data && data.usage && data.usage.validate) {
         const vu = data.usage.validate;
         validatorCredits = vu.remaining;
-        MAX_FREE_VALIDATIONS_SERVER = vu.limit;
+        _serverCreditLimit = vu.limit;
       }
       updateCreditsDisplay();
     })
     .catch(() => {
-      const saved = localStorage.getItem('validatorCredits');
-      if (saved !== null) {
-        validatorCredits = parseInt(saved);
-      }
+      // Server unreachable — display stale value, don't block
       updateCreditsDisplay();
     });
 }
 
-let MAX_FREE_VALIDATIONS_SERVER = MAX_FREE_VALIDATIONS;
+let _serverCreditLimit = 3;
 
 // saveValidatorCredits removed — server is the source of truth (PR-4)
 
 function updateCreditsDisplay() {
   const creditsEl = document.getElementById('val-credits');
   if (creditsEl) {
-    const limit = MAX_FREE_VALIDATIONS_SERVER || MAX_FREE_VALIDATIONS;
+    const limit = _serverCreditLimit;
     creditsEl.innerText = `${validatorCredits}/${limit} Free`;
 
     if (validatorCredits <= 0) {
@@ -596,7 +715,8 @@ function refreshAllQuotas() {
       // Update validator credits
       if (data.usage.validate) {
         validatorCredits = data.usage.validate.remaining;
-        MAX_FREE_VALIDATIONS_SERVER = data.usage.validate.limit;
+        // server limit (informational only)
+        window.MAX_FREE_VALIDATIONS_SERVER = data.usage.validate.limit;
       }
       updateCreditsDisplay();
     })

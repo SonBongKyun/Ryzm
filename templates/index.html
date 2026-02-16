@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ryzm Terminal — Cyberpunk Bloomberg</title>
+  <title>Ryzm Terminal ??Cyberpunk Bloomberg</title>
   <meta name="description"
     content="Ryzm Terminal: Professional cryptocurrency trading dashboard with cyberpunk Bloomberg aesthetics" />
 
@@ -23,20 +23,59 @@
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=4.1" />
+  <link rel="stylesheet" href="/static/styles.css?v=5.5" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#06b6d4" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- Force nuke all old SW + caches once, then reload cleanly -->
+  <script>
+  (function(){
+    var TARGET_VER = '4.9';
+    if(localStorage.getItem('ryzm_sw_nuke') === TARGET_VER) return;
+    var promises = [];
+    // 1) Unregister ALL service workers
+    if('serviceWorker' in navigator){
+      promises.push(
+        navigator.serviceWorker.getRegistrations().then(function(regs){
+          regs.forEach(function(r){ r.unregister(); });
+        })
+      );
+    }
+    // 2) Delete ALL caches
+    if('caches' in window){
+      promises.push(
+        caches.keys().then(function(keys){
+          keys.forEach(function(k){ caches.delete(k); });
+        })
+      );
+    }
+    // 3) Clear stale panel order from localStorage (forces fresh layout)
+    Object.keys(localStorage).forEach(function(k){
+      if(k.startsWith('ryzm_panel_order')) localStorage.removeItem(k);
+    });
+    // 4) Also reset server-side layout
+    Promise.all(promises).then(function(){
+      localStorage.setItem('ryzm_sw_nuke', TARGET_VER);
+      // Reset server layout to empty
+      fetch('/api/layout', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({panels: {}})
+      }).catch(function(){});
+      location.reload(true);
+    });
+  })();
+  </script>
 </head>
 
 <body>
   <canvas id="matrix-bg"></canvas>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        HEADER
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <header class="header">
     <!-- Logo -->
     <div class="logo">
@@ -90,7 +129,7 @@
     </button>
 
     <!-- Language Toggle (i18n) -->
-    <button id="lang-toggle" class="lang-toggle" title="한국어/English" aria-label="Switch language">
+    <button id="lang-toggle" class="lang-toggle" title="?쒓뎅??English" aria-label="Switch language">
       <span id="lang-label">EN</span>
     </button>
 
@@ -104,11 +143,11 @@
     <!-- FX Rate -->
     <div class="header-fx" id="header-fx">
       <span class="fx-label">USD/KRW</span>
-      <span class="fx-value" id="fx-usdkrw">—</span>
+      <span class="fx-value" id="fx-usdkrw">??</span>
       <span class="fx-change" id="fx-usdkrw-chg"></span>
       <span class="fx-divider">|</span>
       <span class="fx-label">USD/JPY</span>
-      <span class="fx-value" id="fx-usdjpy">—</span>
+      <span class="fx-value" id="fx-usdjpy">??</span>
       <span class="fx-change" id="fx-usdjpy-chg"></span>
     </div>
 
@@ -122,12 +161,12 @@
 
     <div class="dual-clock">
       <div class="clock-item">
-        <div class="clock-label">Seoul · KST</div>
+        <div class="clock-label">Seoul 쨌 KST</div>
         <div class="clock-time" id="clock-kst">--:--:--</div>
       </div>
       <div class="clock-divider"></div>
       <div class="clock-item">
-        <div class="clock-label">New York · EST</div>
+        <div class="clock-label">New York 쨌 EST</div>
         <div class="clock-time" id="clock-est">--:--:--</div>
       </div>
     </div>
@@ -195,14 +234,14 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        MAIN 3-COLUMN GRID
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <main class="main-grid" id="main-grid">
 
     <div class="panel" id="panel-left" data-panel-id="left">
       <!-- Systemic Risk Gauge v2.0 -->
-      <div class="glass-panel risk-gauge-panel" id="risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
+      <div class="glass-panel risk-gauge-panel" id="risk-gauge-panel" style="position: relative; overflow: hidden;">
         <div class="panel-title" data-i18n="risk_gauge">
           <i data-lucide="shield-alert"></i> Systemic Risk Gauge
           <button class="rg-alert-btn" id="rg-alert-btn" title="Set Alert Threshold"><i data-lucide="bell" style="width:12px;height:12px;"></i></button>
@@ -215,7 +254,7 @@
           <button class="rg-alert-save" id="rg-alert-save">SET</button>
         </div>
         <div class="risk-gauge-body">
-          <!-- 270° Arc Gauge SVG -->
+          <!-- 270째 Arc Gauge SVG -->
           <div class="gauge-container">
             <svg viewBox="0 0 200 200" class="gauge-svg">
               <defs>
@@ -253,7 +292,7 @@
               <path d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" fill="none" stroke="url(#gaugeGrad270)" stroke-width="12" stroke-linecap="round" opacity="0.2"/>
               <!-- Active arc (filled by JS) -->
               <path id="gauge-arc" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" fill="none" stroke="url(#gaugeGrad270)" stroke-width="12" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="188" filter="url(#gaugeGlow270)" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);"/>
-              <!-- Tick marks (7 ticks for 270°) -->
+              <!-- Tick marks (7 ticks for 270째) -->
               <g stroke="var(--text-muted)" stroke-width="1" opacity="0.35">
                 <line x1="43" y1="157" x2="51" y2="151"/>
                 <line x1="24" y1="100" x2="34" y2="100"/>
@@ -297,7 +336,7 @@
           <div class="rg-tabs" id="rg-tabs">
             <button class="rg-tab active" data-rgtab="components"><i data-lucide="bar-chart-3" style="width:10px;height:10px;"></i> Comp</button>
             <button class="rg-tab" data-rgtab="radar"><i data-lucide="radar" style="width:10px;height:10px;"></i> Radar</button>
-            <button class="rg-tab" data-rgtab="heatmap"><i data-lucide="grid-3x3" style="width:10px;height:10px;"></i> Δ Map</button>
+            <button class="rg-tab" data-rgtab="heatmap"><i data-lucide="grid-3x3" style="width:10px;height:10px;"></i> ? Map</button>
             <button class="rg-tab" data-rgtab="corr"><i data-lucide="link" style="width:10px;height:10px;"></i> Corr</button>
             <button class="rg-tab" data-rgtab="sim"><i data-lucide="sliders-horizontal" style="width:10px;height:10px;"></i> Sim</button>
           </div>
@@ -305,13 +344,13 @@
           <!-- Tab: Components with sparklines -->
           <div class="rg-tab-content active" id="rg-tab-components">
             <div class="risk-components-v2" id="risk-components">
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_sentiment">SENTIMENT</span><canvas class="rc-spark" id="rc-spark-fg" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fg-bar"></div></div><span class="rc-value" id="rc-fg">—</span></div>
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_volatility">VOLATILITY</span><canvas class="rc-spark" id="rc-spark-vix" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-vix-bar"></div></div><span class="rc-value" id="rc-vix">—</span></div>
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_leverage">LEVERAGE</span><canvas class="rc-spark" id="rc-spark-ls" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-ls-bar"></div></div><span class="rc-value" id="rc-ls">—</span></div>
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_funding">FUNDING</span><canvas class="rc-spark" id="rc-spark-fr" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fr-bar"></div></div><span class="rc-value" id="rc-fr">—</span></div>
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_kimchi">KIMCHI P.</span><canvas class="rc-spark" id="rc-spark-kp" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-kp-bar"></div></div><span class="rc-value" id="rc-kp">—</span></div>
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_oi">OI</span><canvas class="rc-spark" id="rc-spark-oi" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-oi-bar"></div></div><span class="rc-value" id="rc-oi">—</span></div>
-              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_stablecoin">USDT DOM</span><canvas class="rc-spark" id="rc-spark-sc" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-sc-bar"></div></div><span class="rc-value" id="rc-sc">—</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_sentiment">SENTIMENT</span><canvas class="rc-spark" id="rc-spark-fg" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fg-bar"></div></div><span class="rc-value" id="rc-fg">??</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_volatility">VOLATILITY</span><canvas class="rc-spark" id="rc-spark-vix" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-vix-bar"></div></div><span class="rc-value" id="rc-vix">??</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_leverage">LEVERAGE</span><canvas class="rc-spark" id="rc-spark-ls" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-ls-bar"></div></div><span class="rc-value" id="rc-ls">??</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_funding">FUNDING</span><canvas class="rc-spark" id="rc-spark-fr" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fr-bar"></div></div><span class="rc-value" id="rc-fr">??</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_kimchi">KIMCHI P.</span><canvas class="rc-spark" id="rc-spark-kp" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-kp-bar"></div></div><span class="rc-value" id="rc-kp">??</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_oi">OI</span><canvas class="rc-spark" id="rc-spark-oi" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-oi-bar"></div></div><span class="rc-value" id="rc-oi">??</span></div>
+              <div class="rc-row"><span class="rc-label" data-i18n-text="rc_stablecoin">USDT DOM</span><canvas class="rc-spark" id="rc-spark-sc" width="40" height="16"></canvas><div class="rc-bar-track"><div class="rc-bar-fill" id="rc-sc-bar"></div></div><span class="rc-value" id="rc-sc">??</span></div>
             </div>
           </div>
 
@@ -358,7 +397,7 @@
         <div class="risk-history-chart" id="risk-history-section">
           <div class="risk-history-header">
             <span class="risk-history-title"><i data-lucide="trending-up" style="width:12px;height:12px;"></i> RISK INDEX (30D)</span>
-            <span class="risk-history-range" id="risk-history-range">—</span>
+            <span class="risk-history-range" id="risk-history-range">??</span>
             <button class="rg-overlay-btn" id="rg-price-overlay-btn" title="Toggle BTC Price Overlay"><i data-lucide="layers" style="width:11px;height:11px;"></i></button>
           </div>
           <canvas id="risk-history-canvas" width="320" height="100" style="width:100%;height:100px;cursor:crosshair;"></canvas>
@@ -368,7 +407,7 @@
       </div>
 
       <!-- Museum of Scars -->
-      <div class="glass-panel" style="flex: 1; min-height: 140px; position: relative;">
+      <div class="glass-panel" style="min-height: 140px; position: relative;">
         <div class="panel-title" data-i18n="museum_scars"><i data-lucide="skull"></i> Museum of Scars <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
         <div class="panel-body">
         <div id="scars-feed" style="overflow-y:auto; max-height: 200px; font-size:0.72rem;">
@@ -377,15 +416,45 @@
         </div>
       </div>
 
-      <!-- Fear & Greed 30-Day Chart -->
-      <div class="glass-panel fg-chart-panel" id="fg-panel" style="min-height:160px;">
-        <div class="panel-title" data-i18n="fg_chart"><i data-lucide="thermometer"></i> Fear & Greed (30D) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+      <!-- Fear & Greed Index (Upgraded v2) -->
+      <div class="glass-panel fg-chart-panel" id="fg-panel" style="min-height:200px;">
+        <div class="panel-title" data-i18n="fg_chart"><i data-lucide="thermometer"></i> Fear & Greed Index <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
         <div class="panel-body">
-          <div class="fg-header">
-            <span class="fg-score-big" id="fg-score-big">—</span>
-            <span class="fg-label-big" id="fg-label-big">Loading...</span>
+          <!-- Top: Gauge + Score -->
+          <div class="fg-top-row">
+            <div class="fg-gauge-wrap">
+              <canvas id="fg-gauge-canvas" width="180" height="110"></canvas>
+              <div class="fg-gauge-center">
+                <span class="fg-score-big" id="fg-score-big">??</span>
+                <span class="fg-label-big" id="fg-label-big">Loading...</span>
+              </div>
+            </div>
+            <div class="fg-info-col">
+              <div class="fg-emoji" id="fg-emoji">🔄</div>
+              <div class="fg-delta" id="fg-delta">
+                <span class="fg-delta-arrow" id="fg-delta-arrow"></span>
+                <span class="fg-delta-val" id="fg-delta-val">--</span>
+                <span class="fg-delta-label">vs yesterday</span>
+              </div>
+              <div class="fg-comment" id="fg-comment">Analyzing market sentiment...</div>
+            </div>
           </div>
-          <canvas id="fg-canvas" width="320" height="90" style="width:100%;height:90px;"></canvas>
+          <!-- Stats bar -->
+          <div class="fg-stats-bar">
+            <div class="fg-stat"><span class="fg-stat-label">7D avg</span><span class="fg-stat-val" id="fg-avg-7d">--</span></div>
+            <div class="fg-stat"><span class="fg-stat-label">14D avg</span><span class="fg-stat-val" id="fg-avg-14d">--</span></div>
+            <div class="fg-stat"><span class="fg-stat-label">30D avg</span><span class="fg-stat-val" id="fg-avg-30d">--</span></div>
+            <div class="fg-stat"><span class="fg-stat-label">30D range</span><span class="fg-stat-val" id="fg-range-30d">--</span></div>
+          </div>
+          <!-- Period toggle + Chart -->
+          <div class="fg-chart-header">
+            <div class="fg-period-tabs">
+              <button class="fg-period-btn active" data-period="7">7D</button>
+              <button class="fg-period-btn" data-period="14">14D</button>
+              <button class="fg-period-btn" data-period="30">30D</button>
+            </div>
+          </div>
+          <canvas id="fg-canvas" width="320" height="100" style="width:100%;height:100px;"></canvas>
         </div>
       </div>
 
@@ -429,30 +498,69 @@
     <div class="center-panel" id="panel-center" data-panel-id="center">
 
       <div class="council-container" id="council-section">
-        <div class="council-header">
-          <span class="council-label">/// NEURAL_COUNCIL</span>
-          <span id="consensus-score" class="council-score">SCORE: --</span>
+        <!-- Auto Analysis Status Bar -->
+        <div class="council-auto-bar" id="council-auto-bar">
+          <div class="cab-left"><span class="cab-pulse"></span><span class="cab-label">AUTO ANALYSIS</span></div>
+          <span class="cab-last" id="cab-last">Last: --</span>
+          <span class="cab-sep">|</span>
+          <span class="cab-next" id="cab-next">Next: --</span>
+          <canvas class="cab-spark" id="cab-spark" width="72" height="18"></canvas>
         </div>
-        <!-- Edge Summary -->
-        <div class="edge-summary" id="edge-summary" style="display:none;">
-          <span class="edge-badge" id="edge-badge">EDGE: —</span>
-          <span class="edge-agreement" id="edge-agreement"></span>
-        </div>
-        <div class="agents-grid" id="agents-grid">
-          <div class="agent-card">
-            <div class="agent-icon">R</div>
-            <div class="agent-name">SYSTEM</div>
-            <div class="agent-msg">Standby...</div>
+        <!-- Header + Consensus Gauge -->
+        <div class="council-header-row">
+          <div class="council-title-col">
+            <span class="council-label">/// NEURAL_COUNCIL</span>
+          </div>
+          <div class="consensus-gauge" id="consensus-gauge">
+            <svg viewBox="0 0 120 72" class="cg-svg">
+              <defs>
+                <linearGradient id="cg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#dc2626"/><stop offset="40%" stop-color="#f97316"/>
+                  <stop offset="60%" stop-color="#eab308"/><stop offset="100%" stop-color="#059669"/>
+                </linearGradient>
+              </defs>
+              <path class="cg-track" d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="rgba(100,116,139,0.12)" stroke-width="7" stroke-linecap="round"/>
+              <path class="cg-value" id="cg-value" d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="url(#cg-grad)" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 157"/>
+              <text x="60" y="46" text-anchor="middle" class="cg-score" id="cg-score">--</text>
+              <text x="60" y="60" text-anchor="middle" class="cg-label" id="cg-label">SCORE</text>
+            </svg>
           </div>
         </div>
-        <!-- Bubble Chart (C-3 fix: required by council.js renderBubbleChart) -->
-        <div id="bubble-chart" style="width:100%;max-width:300px;height:250px;margin:8px auto;">
-          <svg id="bubble-svg" style="width:100%;height:100%;"></svg>
+        <!-- Hidden data holder for backward compat -->
+        <span id="consensus-score" style="display:none;">SCORE: --</span>
+        <!-- Edge Panel -->
+        <div class="edge-panel" id="edge-panel" style="display:none;">
+          <div class="ep-bias-row">
+            <span class="ep-bias-lbl bull" id="ep-bull-ct">0 BULL</span>
+            <div class="ep-bias-bar"><div class="ep-bull-fill" id="ep-bull-fill"></div><div class="ep-bear-fill" id="ep-bear-fill"></div></div>
+            <span class="ep-bias-lbl bear" id="ep-bear-ct">0 BEAR</span>
+          </div>
+          <div class="ep-info-row">
+            <div class="ep-agree-ring">
+              <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="rgba(100,116,139,0.12)" stroke-width="3"/><circle id="ep-agree-arc" cx="20" cy="20" r="16" fill="none" stroke="var(--neon-cyan)" stroke-width="3" stroke-dasharray="0 100.5" stroke-linecap="round" transform="rotate(-90 20 20)"/></svg>
+              <span class="ep-agree-val" id="ep-agree-val">--%</span>
+            </div>
+            <span class="ep-badge pred" id="ep-pred">--</span>
+            <span class="ep-badge conf" id="ep-conf">--</span>
+            <span class="ep-edge-num" id="ep-edge-num">EDGE: --</span>
+          </div>
+        </div>
+        <!-- Agent Cards -->
+        <div class="agents-grid" id="agents-grid">
+          <div class="agent-card">
+            <div class="ac-top"><div class="ac-avatar sys"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><span class="ac-led"></span></div>
+            <div class="ac-name">SYSTEM</div>
+            <div class="ac-msg">Standby...</div>
+          </div>
+        </div>
+        <!-- Narrative Radar Chart -->
+        <div class="narrative-radar" id="narrative-radar" style="display:none;">
+          <canvas id="radar-canvas" width="260" height="180"></canvas>
         </div>
       </div>
 
       <div class="glass-panel chart-container" id="chart-panel"
-        style="height:500px; padding:0; border:1px solid var(--border-bright); overflow:hidden;">
+        style="height:calc(100vh - 180px); min-height:400px; max-height:700px; padding:0; border:1px solid var(--border-bright); overflow:hidden;">
         <!-- Symbol Tabs + Intervals -->
         <div class="chart-header">
           <div class="chart-tabs" id="chart-tabs">
@@ -460,6 +568,7 @@
             <button class="chart-tab" data-binance="ETHUSDT" data-name="ETH/USDT"><span class="tab-label">ETH</span><span class="tab-price"></span></button>
             <button class="chart-tab" data-binance="SOLUSDT" data-name="SOL/USDT"><span class="tab-label">SOL</span><span class="tab-price"></span></button>
             <button class="chart-tab" data-binance="XRPUSDT" data-name="XRP/USDT"><span class="tab-label">XRP</span><span class="tab-price"></span></button>
+            <button class="chart-tab-add" id="chart-tab-add" title="Add Symbol">+</button>
           </div>
           <div class="chart-intervals" id="chart-intervals">
             <button class="interval-btn" data-interval="1m">1m</button>
@@ -471,39 +580,59 @@
             <button class="interval-btn" data-interval="1W">1W</button>
           </div>
         </div>
+        <!-- Info Bar: Price / 24h Change / 24h Range / Volume -->
+        <div class="chart-info-bar" id="chart-info-bar">
+          <div class="cib-price" id="cib-price">&mdash;</div>
+          <div class="cib-change" id="cib-change">&mdash;</div>
+          <div class="cib-stat"><span class="cib-label">24h H</span><span class="cib-val" id="cib-high">&mdash;</span></div>
+          <div class="cib-stat"><span class="cib-label">24h L</span><span class="cib-val" id="cib-low">&mdash;</span></div>
+          <div class="cib-stat"><span class="cib-label">Vol</span><span class="cib-val" id="cib-vol">&mdash;</span></div>
+          <div class="cib-range-wrap">
+            <span class="cib-range-lo" id="cib-range-lo">&mdash;</span>
+            <div class="cib-range-bar"><div class="cib-range-fill" id="cib-range-fill"></div><div class="cib-range-dot" id="cib-range-dot"></div></div>
+            <span class="cib-range-hi" id="cib-range-hi">&mdash;</span>
+          </div>
+        </div>
         <!-- Chart Toolbar -->
         <div class="chart-toolbar" id="chart-toolbar">
+          <!-- Chart Type -->
+          <div class="toolbar-group">
+            <button class="ctype-btn active" data-ctype="candle" title="Candlestick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="4" width="6" height="16" rx="1"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/></svg></button>
+            <button class="ctype-btn" data-ctype="line" title="Line"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,17 9,11 13,15 21,7"/></svg></button>
+            <button class="ctype-btn" data-ctype="area" title="Area"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3,17 L9,11 L13,15 L21,7 L21,21 L3,21 Z" fill="currentColor" opacity="0.15"/><polyline points="3,17 9,11 13,15 21,7"/></svg></button>
+          </div>
+          <div class="toolbar-divider"></div>
           <!-- Indicators -->
           <div class="toolbar-group">
-            <button class="ind-toggle active" data-ind="ema" title="EMA 7/25/99">EMA</button>
-            <button class="ind-toggle" data-ind="bb" title="Bollinger Bands (20,2)">BB</button>
-            <button class="ind-toggle" data-ind="rsi" title="RSI (14)">RSI</button>
-            <button class="ind-toggle" data-ind="macd" title="MACD (12,26,9)">MACD</button>
-            <button class="ind-toggle active" data-ind="vol" title="Volume">Vol</button>
-            <button class="ind-toggle" data-ind="funding" title="Funding Rate">Fund</button>
-            <button class="ind-toggle" data-ind="liqmap" title="Liquidation Map">Liq</button>
-            <button class="ind-toggle" data-ind="depth" title="Order Book Depth">Depth</button>
+            <button class="ind-toggle active" data-ind="ema" title="EMA 7/25/99"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3,18 Q8,6 12,12 T21,6"/></svg> EMA</button>
+            <button class="ind-toggle" data-ind="bb" title="Bollinger Bands (20,2)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="6"/></svg> BB</button>
+            <button class="ind-toggle" data-ind="rsi" title="RSI (14)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,18 6,6 10,14 14,4 18,12 22,8"/></svg> RSI</button>
+            <button class="ind-toggle" data-ind="macd" title="MACD (12,26,9)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="3" height="8"/><rect x="8" y="6" width="3" height="12"/><rect x="13" y="8" width="3" height="10"/><rect x="18" y="4" width="3" height="14"/></svg> MACD</button>
+            <button class="ind-toggle active" data-ind="vol" title="Volume"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="14" width="4" height="6"/><rect x="8" y="8" width="4" height="12"/><rect x="14" y="11" width="4" height="9"/><rect x="20" y="5" width="4" height="15"/></svg> Vol</button>
+            <button class="ind-toggle" data-ind="funding" title="Funding Rate"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12,7 v10 M9,10 h6 M9,14 h4"/></svg> Fund</button>
+            <button class="ind-toggle" data-ind="liqmap" title="Liquidation Map"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12,2 L15,10 L22,12 L15,14 L12,22 L9,14 L2,12 L9,10 Z"/></svg> Liq</button>
+            <button class="ind-toggle" data-ind="depth" title="Order Book Depth"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2,20 L8,16 L12,17 L18,10 L22,4"/><path d="M2,4 L6,8 L12,7 L16,14 L22,20"/></svg> Depth</button>
           </div>
           <div class="toolbar-divider"></div>
           <!-- Drawing Tools -->
           <div class="toolbar-group">
-            <button class="draw-tool-btn" data-tool="hline" title="Horizontal Line">─</button>
-            <button class="draw-tool-btn" data-tool="trendline" title="Trend Line">╱</button>
-            <button class="draw-tool-btn" data-tool="fib" title="Fibonacci">Fib</button>
-            <button class="draw-tool-btn draw-clear" data-tool="clear" title="Clear Drawings">✕</button>
+            <button class="draw-tool-btn" data-tool="hline" title="Horizontal Line"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="12" x2="22" y2="12"/></svg></button>
+            <button class="draw-tool-btn" data-tool="trendline" title="Trend Line"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="20" x2="21" y2="4"/></svg></button>
+            <button class="draw-tool-btn" data-tool="fib" title="Fibonacci"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="4" x2="22" y2="4"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="2" y1="15" x2="22" y2="15"/><line x1="2" y1="20" x2="22" y2="20"/></svg></button>
+            <button class="draw-tool-btn draw-clear" data-tool="clear" title="Clear Drawings"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6 L18,20a2,2 0 0 1-2,2H8a2,2 0 0 1-2-2L5,6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
           </div>
           <div class="toolbar-divider"></div>
-          <!-- Layout -->
+          <!-- Layout + Actions -->
           <div class="toolbar-group">
-            <button class="layout-btn active" data-layout="1x1" title="Single Chart">☐</button>
-            <button class="layout-btn" data-layout="2x2" title="4-Chart Grid">⊞</button>
+            <button class="layout-btn active" data-layout="1x1" title="Single Chart"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
+            <button class="layout-btn" data-layout="2x2" title="4-Chart Grid"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
           </div>
           <div class="toolbar-divider"></div>
-          <!-- Actions -->
           <div class="toolbar-group">
-            <button class="toolbar-action-btn" id="btn-chart-signals" title="AI Signal Markers">🤖</button>
-            <button class="toolbar-action-btn" id="btn-chart-journal" title="Journal on Chart">📓</button>
-            <button class="toolbar-action-btn" id="btn-chart-snapshot" title="Snapshot">📸</button>
+            <button class="toolbar-action-btn" id="btn-chart-signals" title="AI Signal Markers"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12,20 v-8"/><circle cx="12" cy="8" r="3"/><path d="M5,5 Q12,0 19,5"/><path d="M7,8 Q12,4 17,8"/></svg></button>
+            <button class="toolbar-action-btn" id="btn-chart-journal" title="Journal on Chart"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4,4 h16a1,1 0 0 1 1,1v14a1,1 0 0 1-1,1H4a1,1 0 0 1-1-1V5a1,1 0 0 1 1-1z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg></button>
+            <button class="toolbar-action-btn" id="btn-chart-snapshot" title="Snapshot"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23,19 a2,2 0 0 1-2,2H3a2,2 0 0 1-2-2V8a2,2 0 0 1 2-2h4l2-3h6l2,3h4a2,2 0 0 1 2,2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+            <button class="toolbar-action-btn" id="btn-chart-fullscreen" title="Fullscreen"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,3 21,3 21,9"/><polyline points="9,21 3,21 3,15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
             <select class="comp-select" id="comp-select" title="Compare Symbol">
               <option value="">Compare</option>
               <option value="ETHUSDT">ETH</option>
@@ -528,11 +657,28 @@
           <!-- Depth Sub-chart Container -->
           <div id="ryzm-depth-container" class="chart-sub"></div>
         </div>
+        <!-- Symbol Search Popup (hidden) -->
+        <div class="chart-symbol-search" id="chart-symbol-search" style="display:none;">
+          <input type="text" class="css-input" id="css-input" placeholder="Search symbol... (e.g. DOGE)" autocomplete="off" />
+          <div class="css-results" id="css-results"></div>
+        </div>
+      </div>
+
+      <!-- Loading Steps -->
+      <div class="council-steps" id="council-steps" style="display:none;">
+        <div class="cs-step" data-step="1"><span class="cs-dot"></span><span class="cs-text">CONNECTING</span></div>
+        <div class="cs-step" data-step="2"><span class="cs-dot"></span><span class="cs-text">ANALYZING</span></div>
+        <div class="cs-step" data-step="3"><span class="cs-dot"></span><span class="cs-text">DEBATING</span></div>
+        <div class="cs-step" data-step="4"><span class="cs-dot"></span><span class="cs-text">CONSENSUS</span></div>
       </div>
 
       <button class="ai-scan-btn" id="btn-council-start">
         <i data-lucide="zap"></i> <span data-i18n-text="execute_analysis">EXECUTE ANALYSIS PROTOCOL</span>
       </button>
+
+      <div class="council-last-run" id="council-last-run" style="display:none;">
+        <span id="clr-time"></span> &middot; <span id="clr-duration"></span>
+      </div>
 
       <button id="btn-copy-report" class="ai-scan-btn secondary-btn"
         style="display:none; margin-top:10px; background:var(--bg-panel); border:1px solid var(--neon-magenta); color:var(--neon-magenta);">
@@ -560,7 +706,7 @@
       <div class="glass-panel validator-panel" id="validator-panel" style="margin-top:12px;">
         <div class="panel-title" data-i18n="trade_validator">
           <i data-lucide="shield-check"></i> Trade Validator
-          <span class="val-credits" id="val-credits">3/3 Free</span>
+          <span class="val-credits" id="val-credits">–/– Free</span>
         </div>
         <div class="panel-body">
           <div class="validator-form">
@@ -587,24 +733,24 @@
         <div class="panel-body">
           <div class="ch-stats" id="ch-stats">
             <div class="ch-stat-box">
-              <div class="ch-stat-value" id="ch-total">—</div>
+              <div class="ch-stat-value" id="ch-total">??</div>
               <div class="ch-stat-label">SESSIONS</div>
             </div>
             <div class="ch-stat-box ch-accuracy">
-              <div class="ch-stat-value" id="ch-accuracy">—</div>
+              <div class="ch-stat-value" id="ch-accuracy">??</div>
               <div class="ch-stat-label">HIT RATE</div>
             </div>
             <div class="ch-stat-box">
-              <div class="ch-stat-value" id="ch-hits">—</div>
+              <div class="ch-stat-value" id="ch-hits">??</div>
               <div class="ch-stat-label">HITS</div>
             </div>
           </div>
           <!-- Multi-Horizon Accuracy Breakdown -->
           <div class="ch-horizons" id="ch-horizons" style="display:flex;gap:4px;margin:6px 0;font-size:0.65rem;">
-            <div class="ch-hz-pill" data-hz="15min"><span class="ch-hz-label">15m</span><span class="ch-hz-val" id="ch-hz-15">—</span></div>
-            <div class="ch-hz-pill" data-hz="60min"><span class="ch-hz-label">1h</span><span class="ch-hz-val" id="ch-hz-60">—</span></div>
-            <div class="ch-hz-pill" data-hz="240min"><span class="ch-hz-label">4h</span><span class="ch-hz-val" id="ch-hz-240">—</span></div>
-            <div class="ch-hz-pill" data-hz="1440min"><span class="ch-hz-label">1d</span><span class="ch-hz-val" id="ch-hz-1440">—</span></div>
+            <div class="ch-hz-pill" data-hz="15min"><span class="ch-hz-label">15m</span><span class="ch-hz-val" id="ch-hz-15">??</span></div>
+            <div class="ch-hz-pill" data-hz="60min"><span class="ch-hz-label">1h</span><span class="ch-hz-val" id="ch-hz-60">??</span></div>
+            <div class="ch-hz-pill" data-hz="240min"><span class="ch-hz-label">4h</span><span class="ch-hz-val" id="ch-hz-240">??</span></div>
+            <div class="ch-hz-pill" data-hz="1440min"><span class="ch-hz-label">1d</span><span class="ch-hz-val" id="ch-hz-1440">??</span></div>
           </div>
           <div class="ch-chart" id="ch-chart">
             <canvas id="ch-canvas" width="400" height="80"></canvas>
@@ -617,12 +763,12 @@
             <canvas id="ch-overlay-canvas" width="400" height="100" style="width:100%;height:100px;"></canvas>
             <div class="ch-overlay-stats" id="ch-overlay-stats">
               <div class="ch-zone-stat bull">
-                <span class="ch-zone-label">BULL ZONE (≥70)</span>
-                <span class="ch-zone-value" id="ch-bull-avg">—</span>
+                <span class="ch-zone-label">BULL ZONE (??0)</span>
+                <span class="ch-zone-value" id="ch-bull-avg">??</span>
               </div>
               <div class="ch-zone-stat bear">
-                <span class="ch-zone-label">BEAR ZONE (≤30)</span>
-                <span class="ch-zone-value" id="ch-bear-avg">—</span>
+                <span class="ch-zone-label">BEAR ZONE (??0)</span>
+                <span class="ch-zone-value" id="ch-bear-avg">??</span>
               </div>
             </div>
           </div>
@@ -649,10 +795,44 @@
 
       <!-- Mini Heatmap -->
       <div class="glass-panel heatmap-panel" id="heatmap-section" style="margin-top:12px;">
-        <div class="panel-title" data-i18n="market_heatmap"><i data-lucide="grid-3x3"></i> Market Heatmap (24h)</div>
-        <div id="heatmap-grid" class="heatmap-grid">
-          <div style="text-align:center; padding:15px; color:var(--text-muted); font-size:0.75rem;">Loading heatmap...</div>
+        <div class="panel-title" style="justify-content:space-between;">
+          <span data-i18n="market_heatmap"><i data-lucide="grid-3x3"></i> Market Heatmap</span>
+          <div class="hm-period-toggle" id="hm-period-toggle">
+            <button class="hm-period-btn active" data-period="24h">24H</button>
+            <button class="hm-period-btn" data-period="7d">7D</button>
+          </div>
         </div>
+        <!-- BTC Dominance + Total Mcap -->
+        <div class="hm-dominance-row" id="hm-dominance-row">
+          <div class="hm-dom-item">
+            <span class="hm-dom-label">BTC Dom</span>
+            <div class="hm-dom-bar-wrap">
+              <div class="hm-dom-bar-fill" id="hm-btc-dom-fill" style="width:0%"></div>
+            </div>
+            <span class="hm-dom-val" id="hm-btc-dom-val">—</span>
+          </div>
+          <div class="hm-dom-item">
+            <span class="hm-dom-label" data-i18n="hm_total_mcap">Total MCap</span>
+            <span class="hm-dom-val mono" id="hm-total-mcap">—</span>
+          </div>
+        </div>
+        <!-- Top Gainers / Losers Bar -->
+        <div class="hm-movers-row" id="hm-movers-row">
+          <div class="hm-movers-col hm-gainers">
+            <span class="hm-movers-label gain">▲ <span data-i18n="hm_top_gainers">Top Gainers</span></span>
+            <div class="hm-movers-list" id="hm-gainers-list"></div>
+          </div>
+          <div class="hm-movers-col hm-losers">
+            <span class="hm-movers-label loss">▼ <span data-i18n="hm_top_losers">Top Losers</span></span>
+            <div class="hm-movers-list" id="hm-losers-list"></div>
+          </div>
+        </div>
+        <!-- Treemap Grid -->
+        <div id="heatmap-grid" class="heatmap-grid">
+          <div style="text-align:center; padding:15px; color:var(--text-muted); font-size:0.75rem;" data-i18n="heatmap_loading">Loading heatmap...</div>
+        </div>
+        <!-- Tooltip (hidden) -->
+        <div class="hm-tooltip" id="hm-tooltip"></div>
       </div>
 
       <!-- Liquidation Kill Zone -->
@@ -722,9 +902,9 @@
           <!-- Funding Rate -->
           <div id="funding-rates" class="funding-rates">
             <span class="fr-label">FUNDING:</span>
-            <span id="fr-btc" class="fr-item">BTC —</span>
-            <span id="fr-eth" class="fr-item">ETH —</span>
-            <span id="fr-sol" class="fr-item">SOL —</span>
+            <span id="fr-btc" class="fr-item">BTC ??</span>
+            <span id="fr-eth" class="fr-item">ETH ??</span>
+            <span id="fr-sol" class="fr-item">SOL ??</span>
           </div>
         </div>
       </div>
@@ -767,38 +947,115 @@
         </div>
       </div>
 
-      <!-- On-Chain Radar -->
-      <div class="glass-panel onchain-panel" id="onchain-section" style="min-height:180px;">
+      <!-- On-Chain Radar (Upgraded v2) -->
+      <div class="glass-panel onchain-panel" id="onchain-section" style="min-height:200px;">
         <div class="panel-title" data-i18n="onchain_radar"><i data-lucide="link"></i> On-Chain Radar <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
         <div class="panel-body">
-          <div class="oc-section">
-            <div class="oc-subtitle">Open Interest</div>
-            <div id="oc-oi" class="oc-oi-grid">
-              <div class="skeleton-loader"><div class="skeleton skeleton-line"></div></div>
+
+          <!-- 1. Open Interest -->
+          <div class="oc-section" data-oc-section="oi">
+            <div class="oc-section-hdr" data-oc-toggle="oi">
+              <span class="oc-subtitle">Open Interest</span>
+              <i data-lucide="chevron-down" class="oc-toggle-icon" style="width:12px;height:12px;"></i>
+            </div>
+            <div class="oc-section-body" id="oc-oi-body">
+              <div id="oc-oi" class="oc-oi-grid">
+                <div class="skeleton-loader"><div class="skeleton skeleton-line"></div></div>
+              </div>
             </div>
           </div>
-          <div class="oc-section">
-            <div class="oc-subtitle">BTC Mempool Fees (sat/vB)</div>
-            <div id="oc-mempool" class="oc-fees-row">
-              <span class="oc-fee-item"><span class="oc-fee-label">⚡</span><span class="oc-fee-val" id="oc-fee-fast">—</span></span>
-              <span class="oc-fee-item"><span class="oc-fee-label">30m</span><span class="oc-fee-val" id="oc-fee-30m">—</span></span>
-              <span class="oc-fee-item"><span class="oc-fee-label">1h</span><span class="oc-fee-val" id="oc-fee-1h">—</span></span>
-              <span class="oc-fee-item"><span class="oc-fee-label">🐢</span><span class="oc-fee-val" id="oc-fee-eco">—</span></span>
+
+          <!-- 2. Funding Rates -->
+          <div class="oc-section" data-oc-section="funding">
+            <div class="oc-section-hdr" data-oc-toggle="funding">
+              <span class="oc-subtitle">Funding Rates</span>
+              <i data-lucide="chevron-down" class="oc-toggle-icon" style="width:12px;height:12px;"></i>
+            </div>
+            <div class="oc-section-body" id="oc-funding-body">
+              <div id="oc-funding" class="oc-funding-grid">
+                <div class="skeleton-loader"><div class="skeleton skeleton-line"></div></div>
+              </div>
             </div>
           </div>
-          <div class="oc-section">
-            <div class="oc-subtitle">Network Hashrate</div>
-            <div id="oc-hashrate" class="oc-hashrate" style="font-family:var(--font-mono);font-size:1.1rem;font-weight:700;color:var(--neon-cyan);">—</div>
+
+          <!-- 3. BTC Mempool Fees -->
+          <div class="oc-section" data-oc-section="mempool">
+            <div class="oc-section-hdr" data-oc-toggle="mempool">
+              <span class="oc-subtitle">BTC Mempool Fees (sat/vB)</span>
+              <i data-lucide="chevron-down" class="oc-toggle-icon" style="width:12px;height:12px;"></i>
+            </div>
+            <div class="oc-section-body" id="oc-mempool-body">
+              <div class="oc-congestion-bar" id="oc-congestion">
+                <div class="oc-congestion-fill" id="oc-congestion-fill"></div>
+                <span class="oc-congestion-label" id="oc-congestion-label">--</span>
+              </div>
+              <div id="oc-mempool" class="oc-fees-row">
+                <span class="oc-fee-item"><span class="oc-fee-label">⚡</span><span class="oc-fee-val" id="oc-fee-fast">??</span></span>
+                <span class="oc-fee-item"><span class="oc-fee-label">30m</span><span class="oc-fee-val" id="oc-fee-30m">??</span></span>
+                <span class="oc-fee-item"><span class="oc-fee-label">1h</span><span class="oc-fee-val" id="oc-fee-1h">??</span></span>
+                <span class="oc-fee-item"><span class="oc-fee-label">🐢</span><span class="oc-fee-val" id="oc-fee-eco">??</span></span>
+              </div>
+            </div>
           </div>
+
+          <!-- 4. Network Hashrate -->
+          <div class="oc-section" data-oc-section="hashrate">
+            <div class="oc-section-hdr" data-oc-toggle="hashrate">
+              <span class="oc-subtitle">Network Hashrate</span>
+              <i data-lucide="chevron-down" class="oc-toggle-icon" style="width:12px;height:12px;"></i>
+            </div>
+            <div class="oc-section-body" id="oc-hashrate-body">
+              <div class="oc-hashrate-row">
+                <span id="oc-hashrate" class="oc-hashrate-val">??</span>
+                <canvas id="oc-hashrate-spark" width="120" height="32" style="width:120px;height:32px;"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Liquidation Zones -->
+          <div class="oc-section" data-oc-section="liq">
+            <div class="oc-section-hdr" data-oc-toggle="liq">
+              <span class="oc-subtitle">Liquidation Zones</span>
+              <i data-lucide="chevron-down" class="oc-toggle-icon" style="width:12px;height:12px;"></i>
+            </div>
+            <div class="oc-section-body" id="oc-liq-body">
+              <div id="oc-liq-summary" class="oc-liq-summary">
+                <div class="skeleton-loader"><div class="skeleton skeleton-line"></div></div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <div class="glass-panel" id="news-section" style="flex: 1; min-height: 200px;">
-        <div class="panel-title" data-i18n="live_wire"><i data-lucide="rss"></i> Live Wire <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+      <!-- Live Wire (Upgraded v2) -->
+      <div class="glass-panel news-panel-v3" id="news-section" style="flex: 1; min-height: 200px;">
+        <div class="panel-title" data-i18n="live_wire"><i data-lucide="rss"></i> Live Wire <span class="news-count-badge" id="news-count">0</span> <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
         <div class="panel-body">
-        <div id="news-feed" style="overflow-y:auto; max-height:400px; font-size:0.8rem;">
-          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line"></div></div>
-        </div>
+          <!-- Sentiment summary bar -->
+          <div class="news-sentiment-bar" id="news-sentiment-bar">
+            <div class="news-sbar-fill bull" id="ns-bull" style="width:33%"></div>
+            <div class="news-sbar-fill neutral" id="ns-neutral" style="width:34%"></div>
+            <div class="news-sbar-fill bear" id="ns-bear" style="width:33%"></div>
+          </div>
+          <div class="news-sbar-legend" id="news-sbar-legend">
+            <span class="ns-leg bull"><span class="ns-dot bull"></span>Bullish <span id="ns-bull-pct">0%</span></span>
+            <span class="ns-leg neutral"><span class="ns-dot neutral"></span>Neutral <span id="ns-neutral-pct">0%</span></span>
+            <span class="ns-leg bear"><span class="ns-dot bear"></span>Bearish <span id="ns-bear-pct">0%</span></span>
+          </div>
+          <!-- Breaking news banner -->
+          <div class="news-breaking" id="news-breaking" style="display:none;">
+            <span class="news-breaking-badge">BREAKING</span>
+            <a class="news-breaking-link" id="news-breaking-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+          </div>
+          <!-- Source filter tabs -->
+          <div class="news-filter-tabs" id="news-filter-tabs">
+            <button class="news-filter-btn active" data-source="all">All</button>
+          </div>
+          <!-- News feed -->
+          <div id="news-feed" style="overflow-y:auto; max-height:380px; font-size:0.8rem;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line"></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -809,7 +1066,7 @@
   <div id="briefing-panel" class="briefing-panel" style="display:none;">
     <div class="briefing-header">
       <div class="briefing-badge">BRIEFING</div>
-      <span id="briefing-title" class="briefing-title">—</span>
+      <span id="briefing-title" class="briefing-title">??</span>
       <span id="briefing-time" class="briefing-time"></span>
       <button id="briefing-close" class="briefing-close"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
     </div>
@@ -866,19 +1123,19 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v4.1</span>
+      <span>Ryzm Terminal v4.3</span>
     </div>
   </div>
 
-  <!-- JS Modules (v4.1 — unified entry) -->
-  <script src="/static/js/api.js?v=4.1"></script>
-  <script src="/static/js/chart.js?v=4.1"></script>
-  <script src="/static/js/core.js?v=4.1"></script>
-  <script src="/static/js/data.js?v=4.1"></script>
-  <script src="/static/js/council.js?v=4.1"></script>
-  <script src="/static/js/ui.js?v=4.1"></script>
+  <!-- JS Modules (v4.7 ??unified entry) -->
+  <script src="/static/js/api.js?v=5.5"></script>
+  <script src="/static/js/chart.js?v=5.5"></script>
+  <script src="/static/js/core.js?v=5.5"></script>
+  <script src="/static/js/data.js?v=5.5"></script>
+  <script src="/static/js/council.js?v=5.5"></script>
+  <script src="/static/js/ui.js?v=5.5"></script>
 
-  <!-- ═══ Auth Modal ═══ -->
+  <!-- ?먥븧??Auth Modal ?먥븧??-->
   <div id="auth-modal" class="auth-modal" style="display:none;">
     <div class="auth-modal-inner">
       <button class="auth-close" onclick="toggleAuthModal()">&times;</button>
@@ -905,7 +1162,7 @@
         <div id="forgot-error" class="auth-error"></div>
         <div id="forgot-success" style="color:var(--neon-green);font-size:0.75rem;display:none;margin-top:6px;"></div>
         <div style="text-align:center;margin-top:8px;">
-          <a href="#" onclick="backToLogin(event)" style="color:var(--neon-cyan);font-size:0.72rem;text-decoration:none;">← Back to login</a>
+          <a href="#" onclick="backToLogin(event)" style="color:var(--neon-cyan);font-size:0.72rem;text-decoration:none;">??Back to login</a>
         </div>
       </form>
       <!-- Register Form -->
@@ -923,7 +1180,7 @@
       <!-- Logged-in state -->
       <div id="auth-profile" class="auth-profile" style="display:none;">
         <div id="email-verify-banner" style="display:none;background:rgba(244,63,94,0.15);border:1px solid rgba(244,63,94,0.3);border-radius:4px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;">
-          <span style="color:var(--neon-red);">⚠ Email not verified.</span>
+          <span style="color:var(--neon-red);">??Email not verified.</span>
           <a href="#" onclick="resendVerification(event)" style="color:var(--neon-cyan);text-decoration:underline;margin-left:4px;">Resend</a>
         </div>
         <div class="auth-profile-info">
@@ -942,7 +1199,7 @@
   </div>
 
   <script>
-  /* ── Auth UI Logic ── */
+  /* ?? Auth UI Logic ?? */
   let _authUser = null;
   function toggleAuthModal() {
     const m = document.getElementById('auth-modal');
@@ -1057,7 +1314,7 @@
       forgotForm.style.display = 'none';
       profile.style.display = '';
       document.getElementById('profile-email').textContent = user.email;
-      document.getElementById('profile-tier').textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
+      document.getElementById('profile-tier').textContent = user.tier === 'pro' ? '狩?PRO' : 'FREE';
       document.getElementById('profile-tier').className = 'auth-tier tier-' + user.tier;
       document.getElementById('btn-upgrade').style.display = user.tier === 'pro' ? 'none' : '';
       document.querySelectorAll('.auth-tab').forEach(t => t.style.display = 'none');
@@ -1068,7 +1325,7 @@
       // Header plan badge
       if (planBadge) {
         planBadge.style.display = 'inline-block';
-        planBadge.textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
+        planBadge.textContent = user.tier === 'pro' ? '狩?PRO' : 'FREE';
         planBadge.style.background = user.tier === 'pro' ? 'rgba(6,182,212,0.3)' : 'rgba(255,255,255,0.08)';
         planBadge.style.color = user.tier === 'pro' ? 'var(--neon-cyan)' : 'var(--text-muted)';
       }
@@ -1100,7 +1357,7 @@
       apiFetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`, { silent: true })
         .then(data => {
           if (data.status === 'verified') {
-            showToast('success', '✓ Verified', 'Email verified successfully!');
+            showToast('success', '??Verified', 'Email verified successfully!');
             if (_authUser) { _authUser.email_verified = true; updateAuthUI(_authUser); }
           } else {
             showToast('error', 'Error', data.detail || 'Verification failed.');
@@ -1117,13 +1374,13 @@
   })();
   </script>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        UPGRADE MODAL (Plan Gate)
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <div id="upgrade-modal" class="upgrade-modal" style="display:none;">
     <div class="upgrade-modal-inner">
       <button class="upgrade-close" onclick="closeUpgradeModal()">&times;</button>
-      <div class="upgrade-logo">⚡ Ryzm Pro</div>
+      <div class="upgrade-logo">??Ryzm Pro</div>
       <p id="upgrade-context-msg" class="upgrade-context" style="color:var(--text-secondary);margin:8px 0 16px;font-size:0.82rem;"></p>
       <table class="upgrade-compare">
         <thead>
@@ -1139,14 +1396,14 @@
         </tbody>
       </table>
       <button class="upgrade-cta" id="upgrade-cta-btn" onclick="handleUpgradeFromModal()">
-        🚀 Upgrade to Pro
+        ?? Upgrade to Pro
       </button>
-      <div style="font-size:0.65rem; color:var(--text-tertiary); margin-top:8px;">Cancel anytime · Stripe secure checkout</div>
+      <div style="font-size:0.65rem; color:var(--text-tertiary); margin-top:8px;">Cancel anytime 쨌 Stripe secure checkout</div>
     </div>
   </div>
 
   <script>
-  /* ── Upgrade Modal logic ── */
+  /* ?? Upgrade Modal logic ?? */
   const _upgradeMessages = {
     council_limit:   'You\'ve used all free AI Council runs today.',
     validator_limit: 'Daily free validation limit reached.',
@@ -1181,19 +1438,19 @@
   });
   </script>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        SIGNAL JOURNAL MODAL
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <div id="journal-modal" class="upgrade-modal" style="display:none;">
     <div class="upgrade-modal-inner" style="max-width:700px;max-height:85vh;overflow-y:auto;">
       <button class="upgrade-close" onclick="closeJournalModal()">&times;</button>
-      <div class="upgrade-logo">📔 Signal Journal</div>
+      <div class="upgrade-logo">?뱮 Signal Journal</div>
       <!-- Journal Stats -->
       <div id="journal-stats" style="display:flex;gap:12px;margin:10px 0;font-size:0.72rem;color:var(--text-secondary);justify-content:center;flex-wrap:wrap;">
         <span>Total: <strong id="j-stat-total">0</strong></span>
         <span style="color:var(--neon-green);">W: <strong id="j-stat-wins">0</strong></span>
         <span style="color:var(--neon-red);">L: <strong id="j-stat-losses">0</strong></span>
-        <span>WR: <strong id="j-stat-wr">—</strong></span>
+        <span>WR: <strong id="j-stat-wr">??</strong></span>
         <span>Open: <strong id="j-stat-open">0</strong></span>
       </div>
       <!-- Journal Entry List -->
@@ -1208,11 +1465,11 @@
   <div id="journal-save-modal" class="upgrade-modal" style="display:none;">
     <div class="upgrade-modal-inner" style="max-width:480px;">
       <button class="upgrade-close" onclick="closeJournalSaveModal()">&times;</button>
-      <div class="upgrade-logo">📝 Save to Journal</div>
+      <div class="upgrade-logo">?뱷 Save to Journal</div>
       <form id="journal-save-form" onsubmit="submitJournalEntry(event)" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
         <div style="display:flex;gap:8px;">
           <select id="j-position" class="val-input" style="flex:1;">
-            <option value="">— Position —</option>
+            <option value="">??Position ??</option>
             <option value="LONG">LONG</option>
             <option value="SHORT">SHORT</option>
           </select>
@@ -1237,14 +1494,14 @@
   <div id="journal-outcome-modal" class="upgrade-modal" style="display:none;">
     <div class="upgrade-modal-inner" style="max-width:400px;">
       <button class="upgrade-close" onclick="closeJournalOutcomeModal()">&times;</button>
-      <div class="upgrade-logo">📊 Record Outcome</div>
+      <div class="upgrade-logo">?뱤 Record Outcome</div>
       <form id="journal-outcome-form" onsubmit="submitJournalOutcome(event)" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
         <input type="hidden" id="jo-entry-id" />
         <select id="jo-outcome" class="val-input" required>
-          <option value="">— Outcome —</option>
-          <option value="WIN">✅ WIN</option>
-          <option value="LOSS">❌ LOSS</option>
-          <option value="BREAKEVEN">➖ BREAKEVEN</option>
+          <option value="">??Outcome ??</option>
+          <option value="WIN">??WIN</option>
+          <option value="LOSS">??LOSS</option>
+          <option value="BREAKEVEN">??BREAKEVEN</option>
         </select>
         <input type="number" id="jo-price" class="val-input" placeholder="Exit Price $" step="0.01" min="0" />
         <textarea id="jo-note" placeholder="Outcome notes / lessons learned..." maxlength="2000"
@@ -1254,13 +1511,13 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        PASSWORD RESET MODAL
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <div id="reset-password-modal" class="upgrade-modal" style="display:none;">
     <div class="upgrade-modal-inner" style="max-width:400px;">
       <button class="upgrade-close" onclick="closeResetPasswordModal()">&times;</button>
-      <div class="upgrade-logo">🔐 Reset Password</div>
+      <div class="upgrade-logo">?뵍 Reset Password</div>
       <form id="reset-pw-form" onsubmit="handleResetPassword(event)" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
         <input type="hidden" id="reset-token" />
         <input type="password" id="reset-new-pw" placeholder="New Password (8+ chars)" required minlength="8"
@@ -1274,13 +1531,13 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        TERMS OF SERVICE MODAL
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <div id="tos-modal" class="upgrade-modal" style="display:none;">
     <div class="upgrade-modal-inner" style="max-width:600px;max-height:80vh;overflow-y:auto;">
       <button class="upgrade-close" onclick="closeTosModal()">&times;</button>
-      <div class="upgrade-logo">📜 Terms of Service</div>
+      <div class="upgrade-logo">?뱶 Terms of Service</div>
       <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.7;margin-top:12px;text-align:left;">
         <h3 style="color:var(--neon-cyan);font-size:0.85rem;">1. Information Only</h3>
         <p>Ryzm Terminal provides AI-generated market analysis for <strong>informational and educational purposes only</strong>. Nothing on this platform constitutes financial, investment, trading, or any other kind of professional advice.</p>
@@ -1303,14 +1560,14 @@
         <h3 style="color:var(--neon-cyan);font-size:0.85rem;">7. Service Changes</h3>
         <p>We reserve the right to modify, suspend, or discontinue the service at any time. Pro subscription terms are governed by our payment processor (Stripe).</p>
 
-        <p style="margin-top:16px;font-style:italic;color:var(--text-muted);">Version 1.0 — Last updated: 2025</p>
+        <p style="margin-top:16px;font-style:italic;color:var(--text-muted);">Version 1.0 ??Last updated: 2025</p>
       </div>
       <button onclick="closeTosModal()" class="auth-submit" style="margin-top:12px;">Close</button>
     </div>
   </div>
 
   <script>
-  /* ── Journal Logic ── */
+  /* ?? Journal Logic ?? */
   function openJournalModal() {
     document.getElementById('journal-modal').style.display = 'flex';
     loadJournalEntries();
@@ -1349,7 +1606,7 @@
           tags: document.getElementById('j-tags').value,
         }),
       });
-      showToast('success', '📔 Saved', 'Entry saved to Signal Journal.');
+      showToast('success', '?뱮 Saved', 'Entry saved to Signal Journal.');
       closeJournalSaveModal();
       document.getElementById('journal-save-form').reset();
     } catch (e) {
@@ -1367,7 +1624,7 @@
       document.getElementById('j-stat-total').textContent = s.total || 0;
       document.getElementById('j-stat-wins').textContent = s.wins || 0;
       document.getElementById('j-stat-losses').textContent = s.losses || 0;
-      document.getElementById('j-stat-wr').textContent = s.win_rate != null ? s.win_rate + '%' : '—';
+      document.getElementById('j-stat-wr').textContent = s.win_rate != null ? s.win_rate + '%' : '??;
       document.getElementById('j-stat-open').textContent = s.open || 0;
 
       if (!data.entries || data.entries.length === 0) {
@@ -1378,9 +1635,9 @@
       empty.style.display = 'none';
       container.innerHTML = data.entries.map(e => {
         const snap = e.snapshot || {};
-        const vibe = snap.vibe?.status || '—';
-        const score = snap.consensus_score ?? '—';
-        const pred = snap.prediction || '—';
+        const vibe = snap.vibe?.status || '??;
+        const score = snap.consensus_score ?? '??;
+        const pred = snap.prediction || '??;
         const outcomeColor = e.outcome === 'WIN' ? 'var(--neon-green)' : e.outcome === 'LOSS' ? 'var(--neon-red)' : 'var(--text-muted)';
         const outcomeLabel = e.outcome || 'OPEN';
         const posLabel = e.position_type ? `${e.position_type} @ $${e.entry_price.toLocaleString()}` : '';
@@ -1402,7 +1659,7 @@
             ${e.tags ? `<div style="margin-top:4px;">${e.tags.split(',').map(t => `<span style="background:rgba(6,182,212,0.15);color:var(--neon-cyan);padding:1px 6px;border-radius:3px;font-size:0.65rem;margin-right:4px;">${escapeHtml(t.trim())}</span>`).join('')}</div>` : ''}
             <div style="margin-top:6px;display:flex;gap:6px;">
               ${!e.outcome ? `<button onclick="openOutcomeModal(${e.id})" style="background:var(--neon-cyan);color:#000;border:none;padding:3px 10px;border-radius:3px;font-size:0.68rem;cursor:pointer;">Record Outcome</button>` : ''}
-              ${e.outcome_note ? `<span style="color:var(--text-muted);font-size:0.68rem;">📝 ${escapeHtml(e.outcome_note)}</span>` : ''}
+              ${e.outcome_note ? `<span style="color:var(--text-muted);font-size:0.68rem;">?뱷 ${escapeHtml(e.outcome_note)}</span>` : ''}
               <button onclick="deleteJournalEntry(${e.id})" style="background:transparent;color:var(--neon-red);border:1px solid rgba(244,63,94,0.3);padding:3px 8px;border-radius:3px;font-size:0.65rem;cursor:pointer;margin-left:auto;">Delete</button>
             </div>
           </div>
@@ -1428,7 +1685,7 @@
           outcome_note: document.getElementById('jo-note').value,
         }),
       });
-      showToast('success', '📊 Updated', 'Outcome recorded.');
+      showToast('success', '?뱤 Updated', 'Outcome recorded.');
       closeJournalOutcomeModal();
       document.getElementById('journal-outcome-form').reset();
       loadJournalEntries();
@@ -1443,7 +1700,7 @@
     } catch { /* silent */ }
   }
 
-  /* ── Reset Password Modal ── */
+  /* ?? Reset Password Modal ?? */
   function openResetPasswordModal(token) {
     document.getElementById('reset-token').value = token;
     document.getElementById('reset-password-modal').style.display = 'flex';
@@ -1468,11 +1725,11 @@
     } catch (e) { errEl.textContent = e.data?.detail || 'Connection error.'; }
   }
 
-  /* ── ToS Modal ── */
+  /* ?? ToS Modal ?? */
   function openTosModal(e) { if (e) e.preventDefault(); document.getElementById('tos-modal').style.display = 'flex'; }
   function closeTosModal() { document.getElementById('tos-modal').style.display = 'none'; }
 
-  /* ── Modal backdrop close ── */
+  /* ?? Modal backdrop close ?? */
   ['journal-modal','journal-save-modal','journal-outcome-modal','reset-password-modal','tos-modal'].forEach(id => {
     document.getElementById(id)?.addEventListener('click', e => {
       if (e.target.id === id) e.target.style.display = 'none';
@@ -1480,11 +1737,11 @@
   });
   </script>
 
-  <!-- ═══════════════════════════════════════
+  <!-- ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??
        DISCLAIMER FOOTER
-       ═══════════════════════════════════════ -->
+       ?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧?먥븧??-->
   <div class="disclaimer-bar" style="position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(10,10,15,0.95);border-top:1px solid rgba(244,63,94,0.3);padding:4px 16px;font-size:0.6rem;color:var(--text-muted);text-align:center;pointer-events:none;">
-    ⚠️ Ryzm Terminal provides AI-generated analysis for informational purposes only. Not financial advice. Trading crypto involves substantial risk of loss. DYOR.
+    ?좑툘 Ryzm Terminal provides AI-generated analysis for informational purposes only. Not financial advice. Trading crypto involves substantial risk of loss. DYOR.
   </div>
 
 </body>

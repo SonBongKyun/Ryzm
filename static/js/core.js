@@ -25,9 +25,8 @@ function safeColor(str) {
   return 'var(--text-muted)';
 }
 
-// Global state
-let validatorCredits = 3;
-const MAX_FREE_VALIDATIONS = 3;
+// Global state — credits loaded from server via /api/me
+let validatorCredits = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
@@ -418,6 +417,7 @@ function initChartTabs() {
   setTimeout(() => {
     RyzmChart.create('ryzm-chart-container');
     RyzmChart.switchSymbol('BTCUSDT', '1h');
+    startChartInfoBar();
   }, 200);
 
   // Symbol tab clicks
@@ -427,6 +427,7 @@ function initChartTabs() {
     tabContainer.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     RyzmChart.switchSymbol(tab.dataset.binance);
+    updateChartInfoBar();
     playSound('click');
   });
 
@@ -519,6 +520,196 @@ function initChartToolbar() {
       playSound('click');
     });
   }
+
+  // Chart Type toggle
+  toolbar.querySelectorAll('.ctype-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      toolbar.querySelectorAll('.ctype-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      RyzmChart.setChartType(btn.dataset.ctype);
+      playSound('click');
+    });
+  });
+
+  // Fullscreen toggle
+  const fsBtn = document.getElementById('btn-chart-fullscreen');
+  if (fsBtn) {
+    fsBtn.addEventListener('click', () => {
+      const panel = document.getElementById('chart-panel');
+      if (!panel) return;
+      panel.classList.toggle('chart-fullscreen');
+      // Trigger resize so chart re-fits
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+      playSound('click');
+    });
+    // ESC to exit fullscreen
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const panel = document.getElementById('chart-panel');
+        if (panel && panel.classList.contains('chart-fullscreen')) {
+          panel.classList.remove('chart-fullscreen');
+          setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+        }
+      }
+    });
+  }
+
+  // Symbol Search
+  initChartSymbolSearch();
+}
+
+/* ── Chart Symbol Search ── */
+const _POPULAR_SYMBOLS = [
+  { sym: 'DOGEUSDT', name: 'Dogecoin' },
+  { sym: 'BNBUSDT', name: 'BNB' },
+  { sym: 'ADAUSDT', name: 'Cardano' },
+  { sym: 'AVAXUSDT', name: 'Avalanche' },
+  { sym: 'DOTUSDT', name: 'Polkadot' },
+  { sym: 'MATICUSDT', name: 'Polygon' },
+  { sym: 'LINKUSDT', name: 'Chainlink' },
+  { sym: 'SHIBUSDT', name: 'Shiba Inu' },
+  { sym: 'LTCUSDT', name: 'Litecoin' },
+  { sym: 'ATOMUSDT', name: 'Cosmos' },
+  { sym: 'UNIUSDT', name: 'Uniswap' },
+  { sym: 'APTUSDT', name: 'Aptos' },
+  { sym: 'NEARUSDT', name: 'NEAR' },
+  { sym: 'ARBUSDT', name: 'Arbitrum' },
+  { sym: 'OPUSDT', name: 'Optimism' },
+  { sym: 'SUIUSDT', name: 'Sui' },
+  { sym: 'PEPEUSDT', name: 'Pepe' },
+  { sym: 'WIFUSDT', name: 'dogwifhat' },
+  { sym: 'AAVEUSDT', name: 'Aave' },
+  { sym: 'TRXUSDT', name: 'Tron' },
+];
+
+function initChartSymbolSearch() {
+  const addBtn = document.getElementById('chart-tab-add');
+  const popup = document.getElementById('chart-symbol-search');
+  const input = document.getElementById('css-input');
+  const results = document.getElementById('css-results');
+  if (!addBtn || !popup || !input || !results) return;
+
+  addBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+    if (popup.style.display === 'block') {
+      input.value = '';
+      input.focus();
+      renderSymbolResults('');
+    }
+  });
+
+  // Close popup on outside click
+  document.addEventListener('click', (e) => {
+    if (!popup.contains(e.target) && e.target !== addBtn) {
+      popup.style.display = 'none';
+    }
+  });
+
+  input.addEventListener('input', () => renderSymbolResults(input.value.trim().toUpperCase()));
+
+  function renderSymbolResults(q) {
+    // Filter existing tabs
+    const existing = new Set();
+    document.querySelectorAll('.chart-tab[data-binance]').forEach(t => existing.add(t.dataset.binance));
+
+    let filtered = _POPULAR_SYMBOLS.filter(s => !existing.has(s.sym));
+    if (q) {
+      filtered = filtered.filter(s => s.sym.includes(q) || s.name.toUpperCase().includes(q));
+    }
+    filtered = filtered.slice(0, 8);
+
+    results.innerHTML = filtered.map(s => {
+      const label = s.sym.replace('USDT', '');
+      return `<div class="css-result-item" data-sym="${s.sym}" data-name="${label}/USDT">
+        <span class="css-result-sym">${label}</span>
+        <span class="css-result-name">${s.name}</span>
+      </div>`;
+    }).join('') || '<div style="padding:6px;color:var(--text-muted);font-size:0.55rem;">No results</div>';
+  }
+
+  results.addEventListener('click', (e) => {
+    const item = e.target.closest('.css-result-item');
+    if (!item) return;
+    const sym = item.dataset.sym;
+    const name = item.dataset.name;
+    const label = sym.replace('USDT', '');
+
+    // Add new tab
+    const tabContainer = document.getElementById('chart-tabs');
+    const btn = document.createElement('button');
+    btn.className = 'chart-tab';
+    btn.dataset.binance = sym;
+    btn.dataset.name = name;
+    btn.innerHTML = `<span class="tab-label">${escapeHtml(label)}</span><span class="tab-price"></span>`;
+    tabContainer.insertBefore(btn, addBtn);
+
+    // Switch to it
+    tabContainer.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    RyzmChart.switchSymbol(sym);
+
+    popup.style.display = 'none';
+    playSound('click');
+  });
+}
+
+/* ── Chart Info Bar (24h Ticker) ── */
+let _cibInterval = null;
+function startChartInfoBar() {
+  updateChartInfoBar();
+  if (_cibInterval) clearInterval(_cibInterval);
+  _cibInterval = setInterval(updateChartInfoBar, 5000);
+}
+
+async function updateChartInfoBar() {
+  const sym = (typeof RyzmChart !== 'undefined' && RyzmChart.currentSymbol) || 'BTCUSDT';
+  try {
+    const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`;
+    const data = await extFetch(url, { timeoutMs: 5000, retries: 0 });
+    if (!data) return;
+
+    const price = parseFloat(data.lastPrice);
+    const change = parseFloat(data.priceChangePercent);
+    const high = parseFloat(data.highPrice);
+    const low = parseFloat(data.lowPrice);
+    const vol = parseFloat(data.quoteVolume);
+
+    const priceEl = document.getElementById('cib-price');
+    const changeEl = document.getElementById('cib-change');
+    const highEl = document.getElementById('cib-high');
+    const lowEl = document.getElementById('cib-low');
+    const volEl = document.getElementById('cib-vol');
+
+    if (priceEl) {
+      priceEl.textContent = '$' + (price >= 1 ? price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : price.toPrecision(4));
+      priceEl.style.color = change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
+    if (changeEl) {
+      changeEl.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+      changeEl.className = 'cib-change ' + (change >= 0 ? 'up' : 'down');
+    }
+    if (highEl) highEl.textContent = '$' + (high >= 1 ? high.toLocaleString('en-US', { maximumFractionDigits: 2 }) : high.toPrecision(4));
+    if (lowEl) lowEl.textContent = '$' + (low >= 1 ? low.toLocaleString('en-US', { maximumFractionDigits: 2 }) : low.toPrecision(4));
+
+    const _v = vol;
+    if (volEl) volEl.textContent = _v >= 1e9 ? '$' + (_v/1e9).toFixed(1) + 'B' : _v >= 1e6 ? '$' + (_v/1e6).toFixed(1) + 'M' : '$' + (_v/1e3).toFixed(0) + 'K';
+
+    // Range bar
+    const rangeLo = document.getElementById('cib-range-lo');
+    const rangeHi = document.getElementById('cib-range-hi');
+    const rangeFill = document.getElementById('cib-range-fill');
+    const rangeDot = document.getElementById('cib-range-dot');
+
+    if (rangeLo) rangeLo.textContent = (low >= 1 ? low.toLocaleString('en-US', { maximumFractionDigits: 0 }) : low.toPrecision(3));
+    if (rangeHi) rangeHi.textContent = (high >= 1 ? high.toLocaleString('en-US', { maximumFractionDigits: 0 }) : high.toPrecision(3));
+
+    if (rangeFill && high > low) {
+      const pct = Math.min(100, Math.max(0, ((price - low) / (high - low)) * 100));
+      rangeFill.style.width = pct + '%';
+      if (rangeDot) rangeDot.style.left = pct + '%';
+    }
+  } catch (e) { /* silent */ }
 }
 
 /* ── Number Countup Animation ── */
@@ -593,14 +784,16 @@ const RyzmScheduler = (() => {
 
   function startAll() {
     for (const [name, job] of _jobs) {
+      job._lastAttempt = 0;
       _exec(name);                          // initial fire
       const id = setInterval(() => {
-        // backoff: multiply interval by 2^fails (capped at 5)
+        // backoff: exponential delay capped at 2^5 = 32x interval
         if (job.fails > 0) {
-          const backoffMs = job.interval * Math.pow(2, job.fails);
-          // Skip this tick if within backoff window
-          if (backoffMs > job.interval * 2) return;
+          const backoffMs = job.interval * Math.pow(2, Math.min(job.fails, 5));
+          const elapsed = Date.now() - (job._lastAttempt || 0);
+          if (elapsed < backoffMs) return;   // still within backoff window
         }
+        job._lastAttempt = Date.now();
         _exec(name);
       }, job.interval);
       job.handle = id;

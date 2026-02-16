@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from app.core.logger import logger
 from app.core.config import CACHE_TTL, MUSEUM_OF_SCARS
 from app.core.cache import cache, build_api_meta
-from app.core.database import get_risk_history, db_connect, _db_lock, get_risk_component_changes, get_component_sparklines
+from app.core.database import get_risk_history, db_session, get_risk_component_changes, get_component_sparklines
 from app.core.http_client import get_api_health
 from app.services.market_service import fetch_multi_timeframe
 from app.services.onchain_service import (
@@ -52,7 +52,11 @@ async def get_manifest():
 
 @router.get("/service-worker.js")
 async def get_sw():
-    return FileResponse("static/service-worker.js", media_type="application/javascript")
+    return FileResponse(
+        "static/service-worker.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 @router.get("/health")
 async def health_check():
@@ -75,13 +79,9 @@ async def get_long_short():
 @router.get("/api/briefing")
 def get_briefing():
     try:
-        with _db_lock:
-            conn = db_connect()
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute("SELECT id, title, content, created_at_utc FROM briefings ORDER BY id DESC LIMIT 1")
             row = c.fetchone()
-            conn.close()
         if row:
             return {"status": "ok", "title": row["title"], "content": row["content"], "time": row["created_at_utc"]}
         briefing = cache["latest_briefing"]
@@ -96,10 +96,7 @@ def get_briefing():
 @router.get("/api/briefing/history")
 def get_briefing_history(days: int = 7):
     try:
-        with _db_lock:
-            conn = db_connect()
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute(
                 """SELECT id, title, content, created_at_utc
                    FROM briefings
@@ -108,7 +105,6 @@ def get_briefing_history(days: int = 7):
                 (f"-{days} days",)
             )
             rows = [dict(r) for r in c.fetchall()]
-            conn.close()
         return {"status": "ok", "briefings": rows, "days": days}
     except Exception as e:
         logger.error(f"[API] Briefing history error: {e}")
@@ -196,8 +192,13 @@ async def get_museum_of_scars():
 @router.get("/api/heatmap")
 async def get_heatmap():
     try:
+        data = cache["heatmap"]["data"] or {}
+        # v2: data is now a dict {coins, btc_dominance, total_mcap}
+        coins = data.get("coins", data) if isinstance(data, dict) else data
         return {
-            "coins": cache["heatmap"]["data"],
+            "coins": coins if isinstance(coins, list) else [],
+            "btc_dominance": data.get("btc_dominance") if isinstance(data, dict) else None,
+            "total_mcap": data.get("total_mcap") if isinstance(data, dict) else None,
             "_meta": build_api_meta("heatmap", sources=["api.coingecko.com"])
         }
     except Exception as e:
@@ -314,7 +315,18 @@ def get_multi_timeframe():
 @router.get("/api/onchain")
 def get_onchain():
     try:
-        return cache["onchain"]["data"] or fetch_onchain_data()
+        data = cache["onchain"]["data"] or fetch_onchain_data()
+        # Bundle funding rate + liquidation zones from their own caches
+        result = dict(data) if data else {}
+        try:
+            result["funding_rates"] = cache.get("funding_rate", {}).get("data") or []
+        except Exception:
+            result["funding_rates"] = []
+        try:
+            result["liq_zones"] = cache.get("liq_zones", {}).get("data") or {}
+        except Exception:
+            result["liq_zones"] = {}
+        return result
     except Exception as e:
         logger.error(f"[API] On-chain error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch on-chain data")

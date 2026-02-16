@@ -2,6 +2,7 @@
 Ryzm Terminal — FastAPI Application Entry Point
 Creates app, adds middleware, includes routers, mounts static files.
 """
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -49,7 +50,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Content Security Policy
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://cdn.jsdelivr.net https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://cdn.jsdelivr.net https://unpkg.com https://html2canvas.hertzen.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
             "img-src 'self' data: blob: https:; "
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
@@ -65,6 +66,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+# ── Anonymous UID Middleware ──
+class UIDMiddleware(BaseHTTPMiddleware):
+    """Auto-assign ryzm_uid cookie on first visit (all requests)."""
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        if not request.cookies.get("ryzm_uid"):
+            uid = str(uuid.uuid4())
+            _secure = request.url.scheme == "https"
+            response.set_cookie(
+                "ryzm_uid", uid,
+                max_age=86400 * 365, httponly=True, samesite="lax", secure=_secure,
+            )
+        return response
+
+
+app.add_middleware(UIDMiddleware)
 
 # CORS
 app.add_middleware(

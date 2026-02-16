@@ -1,13 +1,13 @@
-/* ─────────────────────────────────────────────
-   Ryzm Terminal – Service Worker v4.1
-   ───────────────────────────────────────────── */
-const CACHE_NAME = 'ryzm-v4.1';
-const API_CACHE_NAME = 'ryzm-api-v4';
+﻿/* ?????????????????????????????????????????????
+   Ryzm Terminal ??Service Worker v4.7
+   ????????????????????????????????????????????? */
+const CACHE_NAME = 'ryzm-v5.5';
+const API_CACHE_NAME = 'ryzm-api-v5.5';
 
-// ── Precache: actual files loaded by index.html ──
-// No ?v= suffix — SW uses ignoreSearch for cache matching
+// ?? Precache: actual files loaded by index.html ??
+// No ?v= suffix ??SW uses ignoreSearch for cache matching
+// NOTE: '/' is NOT in precache ??HTML is always network-first
 const STATIC_ASSETS = [
-  '/',
   '/static/styles.css',
   '/static/js/api.js',
   '/static/js/chart.js',
@@ -18,7 +18,7 @@ const STATIC_ASSETS = [
   '/manifest.json'
 ];
 
-// ── API caching whitelist + TTL (ms) ──
+// ?? API caching whitelist + TTL (ms) ??
 // User-specific / auth endpoints are NEVER cached.
 const API_CACHE_RULES = {
   '/api/market':          5 * 60_000,
@@ -50,7 +50,7 @@ const API_NEVER_CACHE = [
   '/api/export/', '/api/journal', '/api/risk-gauge/simulate'
 ];
 
-// ── Install: precache static assets ──
+// ?? Install: precache static assets ??
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
@@ -58,7 +58,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// ── Activate: purge old caches ──
+// ?? Activate: purge old caches ??
 self.addEventListener('activate', event => {
   const keep = new Set([CACHE_NAME, API_CACHE_NAME]);
   event.waitUntil(
@@ -69,13 +69,13 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// ── Fetch handler ──
+// ?? Fetch handler ??
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;         // skip external
   if (event.request.method !== 'GET') return;              // skip mutations
 
-  // ─ API routes ─
+  // ? API routes ?
   if (url.pathname.startsWith('/api/')) {
     // Block caching for user-specific endpoints
     if (API_NEVER_CACHE.some(p => url.pathname.startsWith(p))) {
@@ -83,15 +83,20 @@ self.addEventListener('fetch', event => {
     }
 
     const rule = Object.entries(API_CACHE_RULES).find(([p]) => url.pathname.startsWith(p));
-    if (!rule) return; // unknown API → network-only
+    if (!rule) return; // unknown API ??network-only
 
     const maxAge = rule[1];
 
     event.respondWith((async () => {
-      try {
+      const apiCache = await caches.open(API_CACHE_NAME);
+      const cached = await apiCache.match(event.request);
+      const cacheAge = cached
+        ? Date.now() - Number(cached.headers.get('sw-cache-time') || 0)
+        : Infinity;
+
+      // Helper: fetch from network and store with timestamp
+      const fetchAndCache = async () => {
         const netResp = await fetch(event.request);
-        // Store fresh response with timestamp in a wrapper
-        const cache = await caches.open(API_CACHE_NAME);
         const body = await netResp.clone().arrayBuffer();
         const wrapped = new Response(body, {
           status: netResp.status,
@@ -99,15 +104,25 @@ self.addEventListener('fetch', event => {
           headers: new Headers([...netResp.headers.entries(),
                                 ['sw-cache-time', String(Date.now())]])
         });
-        cache.put(event.request, wrapped);
+        apiCache.put(event.request, wrapped);
         return netResp;
-      } catch {
-        // Offline fallback: serve cached only if within TTL
-        const cached = await caches.match(event.request);
-        if (cached) {
-          const ts = Number(cached.headers.get('sw-cache-time') || 0);
-          if (Date.now() - ts < maxAge) return cached;
+      };
+
+      // Stale-while-revalidate: if cache is fresh, return it + revalidate only when >50% stale
+      if (cached && cacheAge < maxAge) {
+        // Background revalidate only when cache is more than half-stale
+        if (cacheAge > maxAge * 0.5) {
+          fetchAndCache().catch(() => {});
         }
+        return cached;
+      }
+
+      // Cache is stale or missing ??try network first
+      try {
+        return await fetchAndCache();
+      } catch {
+        // Offline: serve stale cache if available (even if expired), else 503
+        if (cached) return cached;
         return new Response(JSON.stringify({ error: 'offline' }),
           { status: 503, headers: { 'Content-Type': 'application/json' } });
       }
@@ -115,9 +130,25 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ─ Static assets: cache-first, ignoreSearch for ?v= busting ─
+  // ? HTML navigation: always network-first (so template changes apply immediately) ?
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.match(event.request).then(c => c || caches.match('/'))
+      )
+    );
+    return;
+  }
+
+  // ? Static assets: network-first, cache fallback for offline ?
+  // (ignoreSearch only used as offline fallback so ?v= busting always works)
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true })
-      .then(cached => cached || fetch(event.request))
+    fetch(event.request).then(resp => {
+      const clone = resp.clone();
+      caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+      return resp;
+    }).catch(() =>
+      caches.match(event.request, { ignoreSearch: true })
+    )
   );
 });

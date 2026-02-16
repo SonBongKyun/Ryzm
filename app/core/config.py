@@ -4,7 +4,7 @@ All environment variables, API keys, Pydantic models, and static data.
 """
 import os
 import pathlib
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -126,6 +126,10 @@ class InfographicRequest(BaseModel):
 class BriefingRequest(BaseModel):
     title: str = Field(..., max_length=200)
     content: str = Field(..., max_length=5000)
+
+class SetTierRequest(BaseModel):
+    uid: str = Field(..., min_length=1, max_length=128)
+    tier: Literal["free", "pro"]
 
 class TradeValidationRequest(BaseModel):
     symbol: str = Field(..., max_length=20)

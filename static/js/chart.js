@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Ryzm Terminal — Chart Engine v4.1
+   Ryzm Terminal — Chart Engine v4.2
    TradingView Lightweight Charts + Binance Data Feed
    ═══════════════════════════════════════════════════════════
    Features:
@@ -80,9 +80,14 @@ const RyzmChart = (() => {
   // Live EMA state
   let _liveEma7 = null, _liveEma25 = null, _liveEma99 = null;
 
+  // Chart type: 'candle' | 'line' | 'area'
+  let _chartType = 'candle';
+  let _lineSeries = null;
+  let _areaSeries = null;
+
   // ── Constants ──
   const BINANCE_REST = 'https://api.binance.com/api/v3/klines';
-  const BINANCE_WS   = 'wss://stream.binance.com:9443/ws';
+  const BINANCE_WS   = 'wss://stream.binance.com:9443/ws';  // kept for comparison/sub-chart WS
   const INTERVALS = { '1m':'1m','5m':'5m','15m':'15m','1H':'1h','4H':'4h','1D':'1d','1W':'1w' };
 
   /* ═══════════════════════════════════════
@@ -256,15 +261,51 @@ const RyzmChart = (() => {
   }
 
   /* ═══════════════════════════════════════
+     §2B CHART TYPE SWITCH
+     ═══════════════════════════════════════ */
+  function setChartType(type) {
+    if (!_chart || type === _chartType) return;
+    _chartType = type;
+    const t = getTheme();
+
+    // Remove old alternative series
+    if (_lineSeries) { try { _chart.removeSeries(_lineSeries); } catch(e){} _lineSeries = null; }
+    if (_areaSeries) { try { _chart.removeSeries(_areaSeries); } catch(e){} _areaSeries = null; }
+
+    if (type === 'candle') {
+      if (_candleSeries) _candleSeries.applyOptions({ visible: true });
+    } else {
+      // Hide candlestick
+      if (_candleSeries) _candleSeries.applyOptions({ visible: false });
+
+      const closes = _klineData.map(k => ({ time: Math.floor(k[0]/1000), value: +k[4] }));
+      if (type === 'line') {
+        _lineSeries = _chart.addLineSeries({
+          color: t.upColor, lineWidth: 2,
+          priceFormat: { type: 'price', precision: getPrecision(_currentSymbol), minMove: getMinMove(_currentSymbol) },
+          lastValueVisible: true, crosshairMarkerVisible: true,
+        });
+        _lineSeries.setData(closes);
+      } else if (type === 'area') {
+        _areaSeries = _chart.addAreaSeries({
+          lineColor: t.upColor, lineWidth: 2,
+          topColor: 'rgba(6,182,212,0.28)', bottomColor: 'rgba(6,182,212,0.02)',
+          priceFormat: { type: 'price', precision: getPrecision(_currentSymbol), minMove: getMinMove(_currentSymbol) },
+          lastValueVisible: true, crosshairMarkerVisible: true,
+        });
+        _areaSeries.setData(closes);
+      }
+    }
+  }
+
+  /* ═══════════════════════════════════════
      §3  LOAD HISTORICAL DATA
      ═══════════════════════════════════════ */
   async function loadKlines(symbol, interval, limit = 500) {
     const binInt = INTERVALS[interval] || interval;
     const url = `${BINANCE_REST}?symbol=${symbol}&interval=${binInt}&limit=${limit}`;
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Binance ${res.status}`);
-      const data = await res.json();
+      const data = await extFetch(url, { timeoutMs: 10000, retries: 1 });
       _klineData = data;
       const t = getTheme();
 
@@ -302,15 +343,60 @@ const RyzmChart = (() => {
   }
 
   /* ═══════════════════════════════════════
-     §4  WEBSOCKET REAL-TIME
+     §4  WEBSOCKET REAL-TIME + REST FALLBACK
      ═══════════════════════════════════════ */
+  let _wsRetry = 0;
+  let _wsReconnectTimer = null;
+  let _restPollTimer = null;
+  let _wsConnected = false;
+  const _WS_HOSTS = [
+    'wss://stream.binance.com:9443/ws',
+    'wss://stream.binance.com:443/ws',
+    'wss://fstream.binance.com/ws',
+  ];
+  let _wsHostIdx = 0;
+
   function connectWebSocket(symbol, interval) {
     disconnectWebSocket();
+    _wsRetry = 0;
+    _wsHostIdx = 0;
+    _wsConnected = false;
+    _connectWsAttempt(symbol, interval);
+    // Start REST polling as fallback (runs alongside WS, stops when WS confirmed)
+    _startRestPoll(symbol, interval);
+  }
+
+  function _connectWsAttempt(symbol, interval) {
     const binInt = INTERVALS[interval] || interval;
-    const wsUrl = `${BINANCE_WS}/${symbol.toLowerCase()}@kline_${binInt}`;
+    const host = _WS_HOSTS[_wsHostIdx % _WS_HOSTS.length];
+    const wsUrl = `${host}/${symbol.toLowerCase()}@kline_${binInt}`;
+    console.log(`[RyzmChart] WS connecting to ${host}...`);
+
     try {
       _ws = new WebSocket(wsUrl);
-      _ws.onmessage = (evt) => {
+    } catch (e) {
+      console.warn('[RyzmChart] WS create failed:', e);
+      _scheduleWsReconnect(symbol, interval);
+      return;
+    }
+
+    const connectTimeout = setTimeout(() => {
+      if (_ws && _ws.readyState !== WebSocket.OPEN) {
+        console.warn('[RyzmChart] WS connect timeout');
+        _ws.close();
+      }
+    }, 8000);
+
+    _ws.onopen = () => {
+      clearTimeout(connectTimeout);
+      _wsRetry = 0;
+      _wsConnected = true;
+      _stopRestPoll(); // WS connected, stop REST polling
+      console.log('[RyzmChart] WS connected via ' + host);
+    };
+
+    _ws.onmessage = (evt) => {
+      try {
         const msg = JSON.parse(evt.data);
         if (!msg.k) return;
         const k = msg.k, t = getTheme();
@@ -322,14 +408,64 @@ const RyzmChart = (() => {
         updateEMALive(candle);
         updateLegend(candle, vol);
         updateTabPrice(symbol, candle.close, candle.close >= candle.open);
-      };
-      _ws.onerror = () => {};
-      _ws.onclose = () => {};
-    } catch (e) { console.error('[RyzmChart] WS:', e); }
+      } catch (e) { /* ignore parse errors */ }
+    };
+
+    _ws.onerror = () => {
+      clearTimeout(connectTimeout);
+      console.warn('[RyzmChart] WS error');
+    };
+
+    _ws.onclose = () => {
+      clearTimeout(connectTimeout);
+      _wsConnected = false;
+      console.log('[RyzmChart] WS closed, scheduling reconnect...');
+      _wsHostIdx++;
+      _scheduleWsReconnect(symbol, interval);
+      _startRestPoll(symbol, interval); // Resume REST polling
+    };
+  }
+
+  function _scheduleWsReconnect(symbol, interval) {
+    if (_wsReconnectTimer) clearTimeout(_wsReconnectTimer);
+    const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(_wsRetry++, 5)));
+    console.log(`[RyzmChart] WS reconnect in ${delay}ms (attempt ${_wsRetry})`);
+    _wsReconnectTimer = setTimeout(() => _connectWsAttempt(symbol, interval), delay);
+  }
+
+  /** REST polling fallback: fetch latest klines every 10s when WS is down */
+  function _startRestPoll(symbol, interval) {
+    if (_restPollTimer || _wsConnected) return;
+    console.log('[RyzmChart] Starting REST poll fallback');
+    _restPollTimer = setInterval(async () => {
+      if (_wsConnected) { _stopRestPoll(); return; }
+      try {
+        const binInt = INTERVALS[interval] || interval;
+        const url = `${BINANCE_REST}?symbol=${symbol}&interval=${binInt}&limit=2`;
+        const data = await extFetch(url, { timeoutMs: 6000, retries: 0 });
+        if (!data || data.length === 0) return;
+        const last = data[data.length - 1];
+        const t = getTheme();
+        const candle = { time: Math.floor(last[0]/1000), open: +last[1], high: +last[2], low: +last[3], close: +last[4] };
+        const vol = { time: Math.floor(last[0]/1000), value: +last[5], color: candle.close >= candle.open ? t.volUp : t.volDown };
+
+        if (_candleSeries) _candleSeries.update(candle);
+        if (_volumeSeries) _volumeSeries.update(vol);
+        updateLegend(candle, vol);
+        updateTabPrice(symbol, candle.close, candle.close >= candle.open);
+      } catch (e) { /* REST poll error, will retry next interval */ }
+    }, 10000);
+  }
+
+  function _stopRestPoll() {
+    if (_restPollTimer) { clearInterval(_restPollTimer); _restPollTimer = null; }
   }
 
   function disconnectWebSocket() {
-    if (_ws) { _ws.onmessage = null; _ws.close(); _ws = null; }
+    if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
+    _stopRestPoll();
+    _wsConnected = false;
+    if (_ws) { _ws.onmessage = null; _ws.onerror = null; _ws.onclose = null; _ws.close(); _ws = null; }
   }
 
   /* ═══════════════════════════════════════
@@ -697,9 +833,7 @@ const RyzmChart = (() => {
     if (!_chart) return;
     clearFundingOverlay();
     try {
-      const res = await fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${_currentSymbol}&limit=100`);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await extFetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${_currentSymbol}&limit=100`, { timeoutMs: 8000 });
       const t = getTheme();
       _fundingSeries = _chart.addHistogramSeries({ priceScaleId: 'funding', priceFormat: { type: 'price', precision: 4 } });
       _chart.priceScale('funding').applyOptions({ scaleMargins: { top: 0.92, bottom: 0 }, visible: false });
@@ -757,9 +891,7 @@ const RyzmChart = (() => {
     if (!container) return;
     container.style.display = 'block';
     try {
-      const res = await fetch(`https://api.binance.com/api/v3/depth?symbol=${_currentSymbol}&limit=50`);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await extFetch(`https://api.binance.com/api/v3/depth?symbol=${_currentSymbol}&limit=50`, { timeoutMs: 8000 });
       const t = getTheme();
 
       _depthChart = LightweightCharts.createChart(container, {
@@ -887,8 +1019,7 @@ const RyzmChart = (() => {
 
     try {
       const binInt = INTERVALS[_currentInterval] || _currentInterval;
-      const res = await fetch(`${BINANCE_REST}?symbol=${symbol2}&interval=${binInt}&limit=500`);
-      const data = await res.json();
+      const data = await extFetch(`${BINANCE_REST}?symbol=${symbol2}&interval=${binInt}&limit=500`, { timeoutMs: 10000 });
       _compSeries.setData(data.map(k => ({ time: Math.floor(k[0]/1000), value: +k[4] })));
 
       _compWs = new WebSocket(`${BINANCE_WS}/${symbol2.toLowerCase()}@kline_${binInt}`);
@@ -956,8 +1087,7 @@ const RyzmChart = (() => {
           ch.applyOptions({ width: cell.clientWidth, height: cell.clientHeight });
 
           const binInt = INTERVALS[_currentInterval] || _currentInterval;
-          fetch(`${BINANCE_REST}?symbol=${sym}&interval=${binInt}&limit=200`)
-            .then(r => r.json())
+          extFetch(`${BINANCE_REST}?symbol=${sym}&interval=${binInt}&limit=200`, { timeoutMs: 10000 })
             .then(data => {
               cs.setData(data.map(k => ({ time: Math.floor(k[0]/1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] })));
               vs.setData(data.map(k => ({ time: Math.floor(k[0]/1000), value: +k[5], color: +k[4] >= +k[1] ? t.volUp : t.volDown })));
@@ -1115,9 +1245,10 @@ const RyzmChart = (() => {
     takeSnapshot, shareSnapshot,
     loadJournalOnChart,
     enableComparison, disableComparison,
-    setLayout,
+    setLayout, setChartType,
     get currentSymbol() { return _currentSymbol; },
     get currentInterval() { return _currentInterval; },
     get layoutMode() { return _layoutMode; },
+    get chartType() { return _chartType; },
   };
 })();

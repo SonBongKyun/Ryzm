@@ -96,8 +96,10 @@ def fetch_whale_wallets():
             if total_out >= 10:
                 btc_price = cache.get("market", {}).get("data", {}).get("BTC", {}).get("price", 68000)
                 usd_val = total_out * btc_price
-                is_exchange = any("exchange" in str(o.get("addr", "")).lower() or
-                                  o.get("spending_outpoints", []) for o in tx.get("out", []))
+                is_exchange = any(
+                    ("exchange" in str(o.get("addr", "")).lower()) or bool(o.get("spending_outpoints"))
+                    for o in tx.get("out", [])
+                )
                 large_txs.append({
                     "hash": tx.get("hash", "")[:12] + "...",
                     "btc": round(total_out, 2),
@@ -157,8 +159,8 @@ def fetch_liquidation_zones():
 
 
 def fetch_onchain_data():
-    """On-chain metrics: Open Interest + Mempool fees + Hashrate."""
-    result = {"open_interest": [], "mempool": {}, "hashrate": None}
+    """On-chain metrics: Open Interest (with 24h change) + Mempool fees + Hashrate sparkline."""
+    result = {"open_interest": [], "mempool": {}, "hashrate": None, "hashrate_spark": []}
 
     for sym in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
         try:
@@ -170,11 +172,32 @@ def fetch_onchain_data():
             pr.raise_for_status()
             mark = float(pr.json().get("markPrice", 0))
             oi_usd = oi_val * mark
+
+            # OI 24h change from kline data
+            oi_change_pct = 0.0
+            try:
+                kl = resilient_get(
+                    "https://fapi.binance.com/fapi/v1/klines",
+                    timeout=5,
+                    params={"symbol": sym, "interval": "1d", "limit": 2}
+                )
+                kl.raise_for_status()
+                klines = kl.json()
+                if len(klines) >= 2:
+                    prev_close = float(klines[0][4])
+                    curr_close = float(klines[1][4])
+                    if prev_close > 0:
+                        price_change = (curr_close - prev_close) / prev_close
+                        oi_change_pct = round(price_change * 100, 2)
+            except Exception:
+                pass
+
             result["open_interest"].append({
                 "symbol": sym.replace("USDT", ""),
                 "oi_coins": round(oi_val, 2),
                 "oi_usd": round(oi_usd, 0),
-                "mark_price": round(mark, 2)
+                "mark_price": round(mark, 2),
+                "change_pct": oi_change_pct
             })
         except Exception as e:
             logger.error(f"[OnChain] OI error for {sym}: {e}")
@@ -183,11 +206,13 @@ def fetch_onchain_data():
         resp = resilient_get("https://mempool.space/api/v1/fees/recommended", timeout=5)
         resp.raise_for_status()
         fees = resp.json()
+        fastest = fees.get("fastestFee", 0)
         result["mempool"] = {
-            "fastest": fees.get("fastestFee", 0),
+            "fastest": fastest,
             "half_hour": fees.get("halfHourFee", 0),
             "hour": fees.get("hourFee", 0),
-            "economy": fees.get("economyFee", 0)
+            "economy": fees.get("economyFee", 0),
+            "congestion": "high" if fastest > 50 else "medium" if fastest > 15 else "low"
         }
     except Exception as e:
         logger.error(f"[OnChain] Mempool error: {e}")
@@ -197,9 +222,16 @@ def fetch_onchain_data():
         resp.raise_for_status()
         data = resp.json()
         if data.get("hashrates"):
-            latest = data["hashrates"][-1]
+            hashrates = data["hashrates"]
+            latest = hashrates[-1]
             hashrate_eh = latest.get("avgHashrate", 0) / 1e18
             result["hashrate"] = {"value": round(hashrate_eh, 1), "unit": "EH/s"}
+            # Sparkline: sample up to 20 points from the 3-day data
+            step = max(1, len(hashrates) // 20)
+            result["hashrate_spark"] = [
+                round(h.get("avgHashrate", 0) / 1e18, 1)
+                for h in hashrates[::step]
+            ][-20:]
     except Exception as e:
         logger.error(f"[OnChain] Hashrate error: {e}")
 

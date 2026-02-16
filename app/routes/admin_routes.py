@@ -10,9 +10,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 
 from app.core.logger import logger
-from app.core.config import DISCORD_WEBHOOK_URL, InfographicRequest, BriefingRequest
+from app.core.config import DISCORD_WEBHOOK_URL, InfographicRequest, BriefingRequest, SetTierRequest
 from app.core.cache import cache
-from app.core.database import db_connect, _db_lock, utc_now_str
+from app.core.database import db_session, utc_now_str, update_user_tier, get_user_by_uid
 from app.core.security import require_admin
 from app.core.ai_client import call_gemini
 
@@ -70,15 +70,11 @@ def publish_briefing(request: BriefingRequest, http_request: Request):
     ts_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute(
                 "INSERT INTO briefings (title, content, created_at_utc) VALUES (?, ?, ?)",
                 (title, content, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
             )
-            conn.commit()
-            conn.close()
     except Exception as e:
         logger.error(f"[Admin] Briefing DB save error: {e}")
 
@@ -114,3 +110,15 @@ def publish_briefing(request: BriefingRequest, http_request: Request):
 def admin_page(request: Request):
     require_admin(request)  # PR-3: protect admin page
     return templates.TemplateResponse(request=request, name="admin.html")
+
+
+@router.post("/api/admin/set-tier")
+def admin_set_tier(request: Request, body: SetTierRequest):
+    """Admin endpoint to change a user's subscription tier."""
+    require_admin(request)
+    user = get_user_by_uid(body.uid)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with uid={body.uid} not found")
+    update_user_tier(user["id"], body.tier)
+    logger.info(f"[Admin] Set tier for uid={body.uid[:8]}... → {body.tier}")
+    return {"status": "ok", "uid": body.uid, "tier": body.tier}

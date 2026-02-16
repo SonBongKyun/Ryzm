@@ -3,7 +3,7 @@ Ryzm Terminal — AI API Routes
 Council, trade validator, chat endpoints (Phase 2: token-optimised).
 """
 import json
-import threading
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -60,7 +60,7 @@ async def get_council(request: Request, response: Response):
             logger.warning("[Council] Empty market data")
             raise HTTPException(status_code=503, detail="Market data not available yet")
 
-        result = generate_council_debate(market, news)
+        result = await asyncio.to_thread(generate_council_debate, market, news)
 
         # Compute Edge Summary
         agents = result.get("agents", [])
@@ -114,7 +114,6 @@ async def get_council(request: Request, response: Response):
                     break
         save_council_record(result, btc_price)
 
-        threading.Thread(target=evaluate_council_accuracy, daemon=True).start()
         record_usage(uid, "council")
         return result
     except HTTPException:
@@ -241,7 +240,7 @@ News:
 [OUTPUT SCHEMA]
 {{"overall_score":<0-100>,"verdict":"<STRONG LONG|CAUTIOUS LONG|NEUTRAL|CAUTIOUS SHORT|STRONG SHORT>","win_rate":"<0-100>%","personas":[{{"name":"Quant","stance":"BULLISH|BEARISH|NEUTRAL","score":<0-100>,"reason":"<1 sentence>"}},{{"name":"News Analyst","stance":"...","score":0,"reason":"..."}},{{"name":"Risk Manager","stance":"...","score":0,"reason":"..."}},{{"name":"Chart Reader","stance":"...","score":0,"reason":"..."}},{{"name":"Macro Analyst","stance":"...","score":0,"reason":"..."}}],"summary":"<1-2 sentences>"}}"""
 
-        result = call_gemini_json(prompt, max_tokens=VALIDATE_MAX_OUTPUT)
+        result = await asyncio.to_thread(call_gemini_json, prompt, max_tokens=VALIDATE_MAX_OUTPUT)
         result = validate_ai_response(result, ValidatorResponse)
         logger.info(f"[Validator] Trade validated: {request.symbol} @ ${request.entry_price}")
         record_usage(uid, "validate")
@@ -300,7 +299,7 @@ News:
 
 Return JSON: {{"response":"<answer>","confidence":"HIGH|MED|LOW"}}"""
 
-        result = call_gemini_json(prompt, max_tokens=CHAT_MAX_OUTPUT)
+        result = await asyncio.to_thread(call_gemini_json, prompt, max_tokens=CHAT_MAX_OUTPUT)
         result = validate_ai_response(result, ChatResponse)
         logger.info(f"[Chat] User asked: {request.message[:50]}...")
         record_usage(uid, "chat")

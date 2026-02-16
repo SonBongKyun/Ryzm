@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ryzm Terminal — Cyberpunk Bloomberg</title>
+  <meta name="description"
+    content="Ryzm Terminal: Professional cryptocurrency trading dashboard with cyberpunk Bloomberg aesthetics" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap"
+    rel="stylesheet" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="/static/styles.css?v=3.6" />
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#06b6d4" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+</head>
+
+<body>
+  <canvas id="matrix-bg"></canvas>
+
+  <!-- ═══════════════════════════════════════
+       HEADER
+       ═══════════════════════════════════════ -->
+  <header class="header">
+    <!-- Logo -->
+    <div class="logo">
+      <span class="logo-dot"></span>
+      Ryzm_OS
+      <span class="pro-badge">PRO</span>
+    </div>
+
+    <!-- BGM Player (v2) -->
+    <div class="bgm-player" id="bgm-player">
+      <!-- Playback controls -->
+      <div class="bgm-controls">
+        <button id="bgm-prev" title="Previous" class="bgm-btn bgm-btn-sm">
+          <i data-lucide="skip-back" style="width:11px;height:11px;"></i>
+        </button>
+        <button id="bgm-play" title="Play / Pause" class="bgm-btn bgm-btn-play">
+          <i data-lucide="play" style="width:14px;height:14px;"></i>
+        </button>
+        <button id="bgm-skip" title="Next" class="bgm-btn bgm-btn-sm">
+          <i data-lucide="skip-forward" style="width:11px;height:11px;"></i>
+        </button>
+      </div>
+      <!-- Track info + progress -->
+      <div class="bgm-info">
+        <div class="bgm-info-row">
+          <span id="bgm-track-name" class="bgm-track-name">Stopped</span>
+          <span id="bgm-time" class="bgm-time">0:00 / 0:00</span>
+        </div>
+        <div class="bgm-progress-track" id="bgm-progress-track">
+          <div class="bgm-progress-fill" id="bgm-progress-fill"></div>
+        </div>
+      </div>
+      <!-- Volume -->
+      <div class="bgm-vol-group">
+        <button id="bgm-mute" class="bgm-btn bgm-btn-sm" title="Mute" aria-label="Toggle mute">
+          <i data-lucide="volume-2" style="width:12px;height:12px;"></i>
+        </button>
+        <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="60" />
+      </div>
+      <!-- Playlist toggle -->
+      <button id="bgm-list-toggle" class="bgm-btn bgm-btn-sm" title="Playlist">
+        <i data-lucide="list-music" style="width:12px;height:12px;"></i>
+      </button>
+      <!-- Playlist dropdown -->
+      <div class="bgm-playlist" id="bgm-playlist" style="display:none;"></div>
+    </div>
+
+    <!-- Dark Mode Toggle -->
+    <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode" aria-label="Toggle dark mode">
+      <i data-lucide="moon" style="width:16px;height:16px;"></i>
+    </button>
+
+    <!-- Language Toggle (i18n) -->
+    <button id="lang-toggle" class="lang-toggle" title="한국어/English" aria-label="Switch language">
+      <span id="lang-label">EN</span>
+    </button>
+
+    <!-- Auth Button -->
+    <button id="btn-auth" class="auth-btn" title="Login / Register" onclick="toggleAuthModal()">
+      <i data-lucide="user" style="width:14px;height:14px;"></i>
+      <span id="auth-label">Login</span>
+    </button>
+    <span id="header-plan-badge" class="header-plan-badge" style="display:none;font-size:0.6rem;padding:2px 6px;border-radius:3px;cursor:pointer;" onclick="openUpgradeModal('general')">FREE</span>
+
+    <!-- FX Rate -->
+    <div class="header-fx" id="header-fx">
+      <span class="fx-label">USD/KRW</span>
+      <span class="fx-value" id="fx-usdkrw">—</span>
+      <span class="fx-change" id="fx-usdkrw-chg"></span>
+      <span class="fx-divider">|</span>
+      <span class="fx-label">USD/JPY</span>
+      <span class="fx-value" id="fx-usdjpy">—</span>
+      <span class="fx-change" id="fx-usdjpy-chg"></span>
+    </div>
+
+    <!-- Dual Clock -->
+    <!-- Market Status -->
+    <div class="market-status" id="market-status">
+      <span class="market-dot" id="mkt-crypto">CRYPTO</span>
+      <span class="market-dot" id="mkt-nyse">NYSE</span>
+      <span class="market-dot" id="mkt-forex">FOREX</span>
+    </div>
+
+    <div class="dual-clock">
+      <div class="clock-item">
+        <div class="clock-label">Seoul · KST</div>
+        <div class="clock-time" id="clock-kst">--:--:--</div>
+      </div>
+      <div class="clock-divider"></div>
+      <div class="clock-item">
+        <div class="clock-label">New York · EST</div>
+        <div class="clock-time" id="clock-est">--:--:--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Macro Ticker (New) -->
+  <div class="macro-ticker-container">
+    <div class="ticker-wrapper">
+      <div id="macro-ticker" class="ticker-content">
+        <span class="ticker-loading">INITIALIZING MARKET DATA FEED...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vibe Bar HUD -->
+  <div id="vibe-bar" class="vibe-bar">
+    <div class="vibe-label" data-i18n-text="market_vibe">MARKET VIBE:</div>
+    <div id="vibe-status" class="vibe-status">LOADING...</div>
+    <div id="regime-badge" class="regime-badge">--</div>
+    <div class="vibe-divider"></div>
+    <div id="vibe-message" class="vibe-marquee">Ryzm System Initializing...</div>
+  </div>
+
+  <!-- Quick Action Toolbar -->
+  <div class="quick-actions">
+    <div class="tooltip-wrapper">
+      <button class="quick-btn" id="btn-refresh-all" title="Refresh All Data">
+        <i data-lucide="refresh-cw" style="width:18px;height:18px;"></i>
+      </button>
+      <span class="tooltip" data-i18n-text="refresh_all">Refresh All</span>
+    </div>
+    <div class="tooltip-wrapper">
+      <button class="quick-btn" id="btn-fullscreen" title="Toggle Fullscreen">
+        <i data-lucide="maximize-2" style="width:18px;height:18px;"></i>
+      </button>
+      <span class="tooltip" data-i18n-text="fullscreen">Fullscreen</span>
+    </div>
+    <div class="tooltip-wrapper">
+      <button class="quick-btn" id="btn-notifications" title="Notification Settings">
+        <i data-lucide="bell" style="width:18px;height:18px;"></i>
+      </button>
+      <span class="tooltip" data-i18n-text="notifications">Notifications</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       MAIN 3-COLUMN GRID
+       ═══════════════════════════════════════ -->
+  <main class="main-grid" id="main-grid">
+
+    <div class="panel" id="panel-left" data-panel-id="left">
+      <!-- Systemic Risk Gauge -->
+      <div class="glass-panel risk-gauge-panel" id="risk-gauge-panel" style="flex: 1; position: relative; overflow: hidden;">
+        <div class="panel-title" data-i18n="risk_gauge">
+          <i data-lucide="shield-alert"></i> Systemic Risk Gauge
+        </div>
+        <div class="risk-gauge-body">
+          <div class="gauge-container">
+            <svg viewBox="0 0 200 140" class="gauge-svg">
+              <defs>
+                <!-- 3D arc gradient: green → yellow → orange → red -->
+                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#059669"/>
+                  <stop offset="35%" stop-color="#eab308"/>
+                  <stop offset="65%" stop-color="#f97316"/>
+                  <stop offset="100%" stop-color="#dc2626"/>
+                </linearGradient>
+                <!-- Inner shadow gradient for 3D depth -->
+                <linearGradient id="gaugeInner" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="white" stop-opacity="0.5"/>
+                  <stop offset="100%" stop-color="black" stop-opacity="0.15"/>
+                </linearGradient>
+                <!-- Glow filter -->
+                <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+                <!-- Needle glow filter -->
+                <filter id="needleGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+                <!-- Radial shine on center hub -->
+                <radialGradient id="hubGrad" cx="50%" cy="40%" r="50%">
+                  <stop offset="0%" stop-color="#1e293b" stop-opacity="1"/>
+                  <stop offset="60%" stop-color="#1e293b" stop-opacity="0.8"/>
+                  <stop offset="100%" stop-color="#1e293b" stop-opacity="0.4"/>
+                </radialGradient>
+                <radialGradient id="hubGradDark" cx="50%" cy="40%" r="50%">
+                  <stop offset="0%" stop-color="#e2e8f0" stop-opacity="1"/>
+                  <stop offset="60%" stop-color="#e2e8f0" stop-opacity="0.8"/>
+                  <stop offset="100%" stop-color="#e2e8f0" stop-opacity="0.4"/>
+                </radialGradient>
+              </defs>
+
+              <!-- Outer rim (3D bezel) -->
+              <path d="M 16 100 A 84 84 0 0 1 184 100" fill="none" stroke="var(--border-dim)" stroke-width="18" stroke-linecap="round" opacity="0.4"/>
+
+              <!-- Background arc (recessed track) -->
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--border-dim)" stroke-width="14" stroke-linecap="round"/>
+
+              <!-- Inner highlight (top edge light reflection for 3D) -->
+              <path d="M 22 98 A 78 78 0 0 1 178 98" fill="none" stroke="url(#gaugeInner)" stroke-width="10" stroke-linecap="round" opacity="0.5"/>
+
+              <!-- Gradient-filled arc (full background rainbow) -->
+              <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
+
+              <!-- Active arc (filled by JS), with glow -->
+              <path id="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="125" filter="url(#gaugeGlow)" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);"/>
+
+              <!-- Tick marks for scale -->
+              <g stroke="var(--text-muted)" stroke-width="1" opacity="0.4">
+                <line x1="24" y1="100" x2="32" y2="100"/>
+                <line x1="36" y1="62" x2="43" y2="66"/>
+                <line x1="68" y1="34" x2="72" y2="41"/>
+                <line x1="100" y1="24" x2="100" y2="32"/>
+                <line x1="132" y1="34" x2="128" y2="41"/>
+                <line x1="164" y1="62" x2="157" y2="66"/>
+                <line x1="176" y1="100" x2="168" y2="100"/>
+              </g>
+
+              <!-- Zone labels on arc -->
+              <text x="28" y="88" fill="#dc2626" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">CRIT</text>
+              <text x="50" y="55" fill="#f97316" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">HIGH</text>
+              <text x="80" y="35" fill="#eab308" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6" letter-spacing="0.5px">ELEV</text>
+              <text x="120" y="35" fill="#06b6d4" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.6" letter-spacing="0.5px">MOD</text>
+              <text x="155" y="55" fill="#059669" font-size="5.5" font-family="var(--font-head)" text-anchor="middle" opacity="0.7" letter-spacing="0.5px">LOW</text>
+
+              <!-- Scale labels -->
+              <text x="18" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">-100</text>
+              <text x="100" y="18" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">0</text>
+              <text x="182" y="115" fill="var(--text-muted)" font-size="7" font-family="var(--font-mono)" text-anchor="middle">+100</text>
+
+              <!-- Needle with smooth CSS transition -->
+              <g id="gauge-needle" transform="rotate(0, 100, 100)" style="transition: transform 1.2s cubic-bezier(0.4,0,0.2,1);">
+                <line x1="100" y1="100" x2="100" y2="30" stroke="#334155" stroke-width="3" stroke-linecap="round" opacity="0.2" transform="translate(1,1)"/>
+                <line id="needle-line" x1="100" y1="100" x2="100" y2="28" stroke="#1e293b" stroke-width="2.5" stroke-linecap="round" filter="url(#needleGlow)"/>
+              </g>
+
+              <!-- Center hub (3D metallic) -->
+              <circle cx="100" cy="100" r="8" fill="#1e293b" class="gauge-hub"/>
+              <circle cx="98" cy="97" r="3" fill="white" opacity="0.35"/>
+
+              <!-- Score inside SVG for tighter layout -->
+              <text id="gauge-score-svg" x="100" y="125" text-anchor="middle" fill="#1e293b" font-size="16" font-family="var(--font-mono)" font-weight="900">0</text>
+              <text id="gauge-label-svg" x="100" y="136" text-anchor="middle" fill="#1e293b" font-size="6" font-family="var(--font-head)" letter-spacing="1.5px">[LOADING]</text>
+            </svg>
+            <!-- Delta indicator -->
+            <div class="gauge-delta" id="risk-delta"></div>
+          </div>
+
+          <!-- Component contribution bars -->
+          <div class="risk-components-v2" id="risk-components">
+            <div class="rc-row">
+              <span class="rc-label">SENTIMENT</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fg-bar"></div></div>
+              <span class="rc-value" id="rc-fg">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">VOLATILITY</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-vix-bar"></div></div>
+              <span class="rc-value" id="rc-vix">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">LEVERAGE</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-ls-bar"></div></div>
+              <span class="rc-value" id="rc-ls">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">FUNDING</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-fr-bar"></div></div>
+              <span class="rc-value" id="rc-fr">—</span>
+            </div>
+            <div class="rc-row">
+              <span class="rc-label">KIMCHI P.</span>
+              <div class="rc-bar-track"><div class="rc-bar-fill" id="rc-kp-bar"></div></div>
+              <span class="rc-value" id="rc-kp">—</span>
+            </div>
+          </div>
+          <!-- Timestamp -->
+          <div class="gauge-timestamp" id="gauge-timestamp"></div>
+        </div>
+        <!-- Risk History 30D Chart -->
+        <div class="risk-history-chart" id="risk-history-section">
+          <div class="risk-history-header">
+            <span class="risk-history-title"><i data-lucide="trending-up" style="width:12px;height:12px;"></i> RISK INDEX (30D)</span>
+            <span class="risk-history-range" id="risk-history-range">—</span>
+          </div>
+          <canvas id="risk-history-canvas" width="320" height="80" style="width:100%;height:80px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Museum of Scars -->
+      <div class="glass-panel" style="flex: 1; min-height: 140px; position: relative;">
+        <div class="panel-title" data-i18n="museum_scars"><i data-lucide="skull"></i> Museum of Scars <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+        <div id="scars-feed" style="overflow-y:auto; max-height: 200px; font-size:0.72rem;">
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div>
+        </div>
+        </div>
+      </div>
+
+      <!-- Fear & Greed 30-Day Chart -->
+      <div class="glass-panel fg-chart-panel" style="min-height:160px;">
+        <div class="panel-title" data-i18n="fg_chart"><i data-lucide="thermometer"></i> Fear & Greed (30D) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div class="fg-header">
+            <span class="fg-score-big" id="fg-score-big">—</span>
+            <span class="fg-label-big" id="fg-label-big">Loading...</span>
+          </div>
+          <canvas id="fg-canvas" width="320" height="90" style="width:100%;height:90px;"></canvas>
+        </div>
+      </div>
+
+      <!-- Multi-Timeframe Analysis -->
+      <div class="glass-panel mtf-panel" style="min-height:160px;">
+        <div class="panel-title" data-i18n="mtf_analysis"><i data-lucide="layers"></i> Multi-TF Analysis <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div class="mtf-symbol" id="mtf-symbol">BTC/USDT</div>
+          <table class="mtf-table" id="mtf-table">
+            <thead>
+              <tr><th>TF</th><th>RSI</th><th>EMA</th><th>Signal</th></tr>
+            </thead>
+            <tbody id="mtf-tbody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="glass-panel" style="height: 120px; min-height:120px;">
+        <div class="panel-title" data-i18n="kimchi_premium"><i data-lucide="flame"></i> Kimchi Premium</div>
+        <div class="kp-gauge">
+          <div class="kp-value" id="kp-value" style="font-size:1.5rem; font-family:var(--font-mono); color:var(--neon-green);">+3.42%
+          </div>
+          <div id="kp-status" style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Arb Opportunity: LOW</div>
+          <div style="font-size:0.6rem; color:var(--text-tertiary); margin-top:3px;">updated <span id="kp-updated">--:--</span></div>
+        </div>
+      </div>
+
+      <!-- Economic Calendar -->
+      <div class="glass-panel" style="height: 150px; min-height:150px;">
+        <div class="panel-title" data-i18n="econ_calendar"><i data-lucide="calendar"></i> Economic Calendar <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+        <div id="calendar-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="center-panel" id="panel-center" data-panel-id="center">
+
+      <div class="council-container">
+        <div class="council-header">
+          <span class="council-label">/// NEURAL_COUNCIL</span>
+          <span id="consensus-score" class="council-score">SCORE: --</span>
+        </div>
+        <!-- Edge Summary -->
+        <div class="edge-summary" id="edge-summary" style="display:none;">
+          <span class="edge-badge" id="edge-badge">EDGE: —</span>
+          <span class="edge-agreement" id="edge-agreement"></span>
+        </div>
+        <div class="agents-grid" id="agents-grid">
+          <div class="agent-card">
+            <div class="agent-icon">R</div>
+            <div class="agent-name">SYSTEM</div>
+            <div class="agent-msg">Standby...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-panel chart-container" id="chart-panel"
+        style="height:450px; padding:0; border:1px solid var(--border-bright);">
+        <!-- Multi-Symbol Tabs -->
+        <div class="chart-tabs" id="chart-tabs">
+          <button class="chart-tab active" data-symbol="BINANCE:BTCUSDT" data-name="BTC/USDT">BTC</button>
+          <button class="chart-tab" data-symbol="BINANCE:ETHUSDT" data-name="ETH/USDT">ETH</button>
+          <button class="chart-tab" data-symbol="BINANCE:SOLUSDT" data-name="SOL/USDT">SOL</button>
+          <button class="chart-tab" data-symbol="BINANCE:XRPUSDT" data-name="XRP/USDT">XRP</button>
+          <button class="chart-tab" data-symbol="FX:USDJPY" data-name="USD/JPY">USD/JPY</button>
+          <button class="chart-tab" data-symbol="TVC:DXY" data-name="DXY">DXY</button>
+        </div>
+        <div class="tradingview-widget-container" style="height:calc(100% - 36px); width:100%;">
+          <div id="tradingview_b1e30" style="height:100%; width:100%;"></div>
+          <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+          <!-- Initial chart loaded by initChartTabs() in core.js -->
+        </div>
+      </div>
+
+      <button class="ai-scan-btn" id="btn-council-start">
+        <i data-lucide="zap"></i> <span data-i18n-text="execute_analysis">EXECUTE ANALYSIS PROTOCOL</span>
+      </button>
+
+      <button id="btn-copy-report" class="ai-scan-btn secondary-btn"
+        style="display:none; margin-top:10px; background:var(--bg-panel); border:1px solid var(--neon-magenta); color:var(--neon-magenta);">
+        <i data-lucide="copy"></i> <span data-i18n-text="copy_report">COPY REPORT FOR X</span>
+      </button>
+
+      <!-- Strategic Narrative -->
+      <div id="strategic-narrative" class="strategic-narrative" style="display:none;">
+        <div class="sn-header" data-i18n-text="strategic_narrative">
+          <i data-lucide="layers" style="width:14px;height:14px;"></i> STRATEGIC NARRATIVE
+        </div>
+        <div id="sn-layers"></div>
+      </div>
+
+      <button id="btn-snapshot" class="ai-scan-btn secondary-btn" style="margin-top:10px; background:#333; color:#fff;">
+        <i data-lucide="camera"></i> <span data-i18n-text="export_snapshot">EXPORT SNAPSHOT</span>
+      </button>
+
+      <!-- Trade Validator (P0-1) -->
+      <div class="glass-panel validator-panel" id="validator-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="trade_validator">
+          <i data-lucide="shield-check"></i> Trade Validator
+          <span class="val-credits" id="val-credits">3/3 Free</span>
+        </div>
+        <div class="panel-body">
+          <div class="validator-form">
+            <input type="text" id="val-symbol" class="val-input" placeholder="Symbol (e.g. BTC)" maxlength="20" />
+            <input type="number" id="val-price" class="val-input" placeholder="Entry Price ($)" step="0.01" min="0" />
+            <select id="val-position" class="val-input">
+              <option value="LONG">LONG</option>
+              <option value="SHORT">SHORT</option>
+            </select>
+            <button id="btn-validate" class="validate-btn">
+              <i data-lucide="zap"></i> <span data-i18n-text="validate_trade">VALIDATE TRADE</span>
+            </button>
+          </div>
+          <div id="validator-result" class="validator-result" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- AI Council Prediction History -->
+      <div class="glass-panel council-history-panel" id="council-history-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="ai_tracker">
+          <i data-lucide="brain-circuit"></i> AI Prediction Tracker
+          <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i>
+        </div>
+        <div class="panel-body">
+          <div class="ch-stats" id="ch-stats">
+            <div class="ch-stat-box">
+              <div class="ch-stat-value" id="ch-total">—</div>
+              <div class="ch-stat-label">SESSIONS</div>
+            </div>
+            <div class="ch-stat-box ch-accuracy">
+              <div class="ch-stat-value" id="ch-accuracy">—</div>
+              <div class="ch-stat-label">HIT RATE</div>
+            </div>
+            <div class="ch-stat-box">
+              <div class="ch-stat-value" id="ch-hits">—</div>
+              <div class="ch-stat-label">HITS</div>
+            </div>
+          </div>
+          <!-- Multi-Horizon Accuracy Breakdown -->
+          <div class="ch-horizons" id="ch-horizons" style="display:flex;gap:4px;margin:6px 0;font-size:0.65rem;">
+            <div class="ch-hz-pill" data-hz="15min"><span class="ch-hz-label">15m</span><span class="ch-hz-val" id="ch-hz-15">—</span></div>
+            <div class="ch-hz-pill" data-hz="60min"><span class="ch-hz-label">1h</span><span class="ch-hz-val" id="ch-hz-60">—</span></div>
+            <div class="ch-hz-pill" data-hz="240min"><span class="ch-hz-label">4h</span><span class="ch-hz-val" id="ch-hz-240">—</span></div>
+            <div class="ch-hz-pill" data-hz="1440min"><span class="ch-hz-label">1d</span><span class="ch-hz-val" id="ch-hz-1440">—</span></div>
+          </div>
+          <div class="ch-chart" id="ch-chart">
+            <canvas id="ch-canvas" width="400" height="80"></canvas>
+          </div>
+          <!-- Council Score vs BTC Overlay -->
+          <div class="ch-overlay-section" id="ch-overlay-section">
+            <div class="ch-overlay-header">
+              <span class="ch-overlay-title"><i data-lucide="git-compare" style="width:12px;height:12px;"></i> SCORE vs BTC</span>
+            </div>
+            <canvas id="ch-overlay-canvas" width="400" height="100" style="width:100%;height:100px;"></canvas>
+            <div class="ch-overlay-stats" id="ch-overlay-stats">
+              <div class="ch-zone-stat bull">
+                <span class="ch-zone-label">BULL ZONE (≥70)</span>
+                <span class="ch-zone-value" id="ch-bull-avg">—</span>
+              </div>
+              <div class="ch-zone-stat bear">
+                <span class="ch-zone-label">BEAR ZONE (≤30)</span>
+                <span class="ch-zone-value" id="ch-bear-avg">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="ch-records" id="ch-records" style="max-height:120px; overflow-y:auto; font-size:0.7rem;">
+            <div style="text-align:center; color:var(--text-muted); padding:10px;">Run Council to start tracking...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mini Heatmap -->
+      <div class="glass-panel heatmap-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="market_heatmap"><i data-lucide="grid-3x3"></i> Market Heatmap (24h)</div>
+        <div id="heatmap-grid" class="heatmap-grid">
+          <div style="text-align:center; padding:15px; color:var(--text-muted); font-size:0.75rem;">Loading heatmap...</div>
+        </div>
+      </div>
+
+      <!-- Liquidation Kill Zone -->
+      <div class="glass-panel liq-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="liq_heatmap"><i data-lucide="target"></i> Liquidation Kill Zone <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="liq-zones" style="min-height:80px;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Correlation Matrix -->
+      <div class="glass-panel corr-panel" style="margin-top:12px;">
+        <div class="panel-title" data-i18n="correlation_matrix"><i data-lucide="network"></i> Correlation Matrix (30D) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="corr-matrix" style="min-height:80px;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-block"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-right" data-panel-id="right">
+      <!-- Real-time Price Panel (NEW) -->
+      <div class="glass-panel" style="flex: 1;">
+        <div class="panel-title" data-i18n="realtime_prices"><i data-lucide="trending-up"></i> Realtime Prices <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+        <div id="realtime-prices" class="price-panel">
+          <div class="skeleton-loader"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div></div>
+        </div>
+        </div>
+      </div>
+
+      <!-- L/S Ratio Panel -->
+      <div class="glass-panel ls-panel" style="margin-bottom:15px;">
+        <div class="panel-title" data-i18n="long_short"><i data-lucide="scale"></i> Long/Short Ratio</div>
+        <div class="ls-container">
+          <!-- 3D Bar Gauge -->
+          <div class="ls-bar-3d">
+            <div class="ls-bar-track">
+              <div id="ls-long" class="ls-fill long" style="width: 50%;">
+                <span class="ls-val">50%</span>
+              </div>
+              <div id="ls-short" class="ls-fill short" style="width: 50%;">
+                <span class="ls-val">50%</span>
+              </div>
+            </div>
+            <div class="ls-bar-shine"></div>
+          </div>
+          <!-- Percentage indicators -->
+          <div class="ls-indicators">
+            <div class="ls-indicator long-ind">
+              <span class="ls-dot dot-long"></span>
+              <span class="ls-ind-label">LONG</span>
+              <span class="ls-ind-val" id="ls-long-pct">50%</span>
+            </div>
+            <div class="ls-indicator">
+              <div class="ls-ratio-display" id="ls-ratio-num">1.00</div>
+            </div>
+            <div class="ls-indicator short-ind">
+              <span class="ls-ind-val" id="ls-short-pct">50%</span>
+              <span class="ls-ind-label">SHORT</span>
+              <span class="ls-dot dot-short"></span>
+            </div>
+          </div>
+          <!-- Funding Rate -->
+          <div id="funding-rates" class="funding-rates">
+            <span class="fr-label">FUNDING:</span>
+            <span id="fr-btc" class="fr-item">BTC —</span>
+            <span id="fr-eth" class="fr-item">ETH —</span>
+            <span id="fr-sol" class="fr-item">SOL —</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alpha Scanner -->
+      <div class="glass-panel scanner-panel" style="margin-bottom:15px;">
+        <div class="panel-title" data-i18n="alpha_scanner"><i data-lucide="radar"></i> Alpha Scanner (15m) <span class="scanner-live-dot"></span> <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+        <div id="scanner-feed" style="min-height:60px; max-height:200px; overflow-y:auto;">
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+        </div>
+        </div>
+      </div>
+
+      <!-- Price Alerts -->
+      <div class="glass-panel" style="margin-bottom:15px;">
+        <div class="panel-title"><i data-lucide="bell"></i> Price Alerts <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="price-alerts-container" style="min-height:40px;"></div>
+        </div>
+      </div>
+
+      <!-- Whale Alert Feed -->
+      <div class="glass-panel" style="height: 150px; min-height:150px;">
+        <div class="panel-title" data-i18n="whale_alert"><i data-lucide="anchor"></i> Whale Alert <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+        <div id="whale-feed" style="overflow-y:auto; max-height:105px; font-size:0.72rem;">
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+        </div>
+        </div>
+      </div>
+
+      <!-- Whale Wallet Tracker -->
+      <div class="glass-panel whale-wallet-panel" style="min-height:120px;">
+        <div class="panel-title" data-i18n="whale_wallets"><i data-lucide="wallet"></i> Whale Wallets (BTC) <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="whale-wallet-feed" style="overflow-y:auto; max-height:150px; font-size:0.72rem;">
+            <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- On-Chain Radar -->
+      <div class="glass-panel onchain-panel" style="min-height:180px;">
+        <div class="panel-title" data-i18n="onchain_radar"><i data-lucide="link"></i> On-Chain Radar <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div class="oc-section">
+            <div class="oc-subtitle">Open Interest</div>
+            <div id="oc-oi" class="oc-oi-grid">
+              <div class="skeleton-loader"><div class="skeleton skeleton-line"></div></div>
+            </div>
+          </div>
+          <div class="oc-section">
+            <div class="oc-subtitle">BTC Mempool Fees (sat/vB)</div>
+            <div id="oc-mempool" class="oc-fees-row">
+              <span class="oc-fee-item"><span class="oc-fee-label">⚡</span><span class="oc-fee-val" id="oc-fee-fast">—</span></span>
+              <span class="oc-fee-item"><span class="oc-fee-label">30m</span><span class="oc-fee-val" id="oc-fee-30m">—</span></span>
+              <span class="oc-fee-item"><span class="oc-fee-label">1h</span><span class="oc-fee-val" id="oc-fee-1h">—</span></span>
+              <span class="oc-fee-item"><span class="oc-fee-label">🐢</span><span class="oc-fee-val" id="oc-fee-eco">—</span></span>
+            </div>
+          </div>
+          <div class="oc-section">
+            <div class="oc-subtitle">Network Hashrate</div>
+            <div id="oc-hashrate" class="oc-hashrate" style="font-family:var(--font-mono);font-size:1.1rem;font-weight:700;color:var(--neon-cyan);">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-panel" style="flex: 1; min-height: 200px;">
+        <div class="panel-title" data-i18n="live_wire"><i data-lucide="rss"></i> Live Wire <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+        <div id="news-feed" style="overflow-y:auto; max-height:400px; font-size:0.8rem;">
+          <div class="skeleton-loader"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line"></div></div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Briefing Panel (Floating Bottom) -->
+  <div id="briefing-panel" class="briefing-panel" style="display:none;">
+    <div class="briefing-header">
+      <div class="briefing-badge">BRIEFING</div>
+      <span id="briefing-title" class="briefing-title">—</span>
+      <span id="briefing-time" class="briefing-time"></span>
+      <button id="briefing-close" class="briefing-close"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div id="briefing-content" class="briefing-content"></div>
+  </div>
+
+  <!-- Ask Ryzm Chat Float Button -->
+  <button id="chat-float-btn" class="chat-float-btn" title="Ask Ryzm">
+    <i data-lucide="message-circle"></i>
+  </button>
+
+  <!-- Chat Overlay -->
+  <div id="chat-overlay" class="chat-overlay">
+    <div class="chat-header">
+      <span data-i18n-text="ask_ryzm"><i data-lucide="bot"></i> Ask Ryzm</span>
+      <button id="chat-close" class="chat-close-btn">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div class="chat-input-container">
+      <input type="text" id="chat-input" placeholder="Ask anything about the market..." />
+      <button id="chat-send">
+        <i data-lucide="send"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- TradingView Chart Modal -->
+  <div id="tv-modal" class="tv-modal" style="display:none;">
+    <div class="tv-modal-content">
+      <div class="tv-modal-header">
+        <span id="tv-modal-title">BTC/USDT</span>
+        <button id="tv-modal-close" class="chat-close-btn"><i data-lucide="x"></i></button>
+      </div>
+      <div id="tv-chart-container" style="height:400px;"></div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-item">
+      <span class="status-dot" id="connection-status"></span>
+      <span data-i18n-text="system_online">SYSTEM ONLINE</span>
+    </div>
+    <div class="status-item">
+      <i data-lucide="activity" style="width:12px;height:12px;"></i>
+      <span id="last-update" data-i18n-prefix="last_update">Last Update: --:--</span>
+    </div>
+    <div class="status-item source-status" id="source-status">
+      <i data-lucide="database" style="width:12px;height:12px;"></i>
+      <span id="data-sources">-- Sources</span>
+      <div class="source-tooltip" id="source-tooltip"></div>
+    </div>
+    <div class="status-item">
+      <i data-lucide="zap" style="width:12px;height:12px;"></i>
+      <span>Ryzm Terminal v3.2</span>
+    </div>
+  </div>
+
+  <!-- JS Modules (v1.5) -->
+  <script src="/static/js/core.js?v=1.5"></script>
+  <script src="/static/js/data.js?v=1.5"></script>
+  <script src="/static/js/council.js?v=1.5"></script>
+  <script src="/static/js/ui.js?v=1.5"></script>
+
+  <!-- ═══ Auth Modal ═══ -->
+  <div id="auth-modal" class="auth-modal" style="display:none;">
+    <div class="auth-modal-inner">
+      <button class="auth-close" onclick="toggleAuthModal()">&times;</button>
+      <div class="auth-logo"><span class="logo-dot"></span> Ryzm_OS</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">LOGIN</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">REGISTER</button>
+      </div>
+      <!-- Login Form -->
+      <form id="auth-login-form" class="auth-form" onsubmit="handleLogin(event)">
+        <input type="email" id="login-email" placeholder="Email" required autocomplete="email" />
+        <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password" />
+        <button type="submit" class="auth-submit">Sign In</button>
+        <div id="login-error" class="auth-error"></div>
+      </form>
+      <!-- Register Form -->
+      <form id="auth-register-form" class="auth-form" style="display:none;" onsubmit="handleRegister(event)">
+        <input type="text" id="reg-name" placeholder="Display Name (optional)" maxlength="50" autocomplete="name" />
+        <input type="email" id="reg-email" placeholder="Email" required autocomplete="email" />
+        <input type="password" id="reg-password" placeholder="Password (8+ chars)" required minlength="8" autocomplete="new-password" />
+        <button type="submit" class="auth-submit">Create Account</button>
+        <div id="reg-error" class="auth-error"></div>
+      </form>
+      <!-- Logged-in state -->
+      <div id="auth-profile" class="auth-profile" style="display:none;">
+        <div class="auth-profile-info">
+          <div class="auth-email" id="profile-email"></div>
+          <div class="auth-tier" id="profile-tier"></div>
+        </div>
+        <button class="auth-submit" id="btn-upgrade" style="display:none;" onclick="handleUpgrade()">
+          <i data-lucide="crown" style="width:14px;height:14px;"></i> Upgrade to PRO
+        </button>
+        <button class="auth-logout" onclick="handleLogout()">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* ── Auth UI Logic ── */
+  let _authUser = null;
+  function toggleAuthModal() {
+    const m = document.getElementById('auth-modal');
+    m.style.display = m.style.display === 'none' ? 'flex' : 'none';
+  }
+  function switchAuthTab(tab) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('auth-login-form').style.display = tab === 'login' ? '' : 'none';
+    document.getElementById('auth-register-form').style.display = tab === 'register' ? '' : 'none';
+    document.getElementById('auth-profile').style.display = 'none';
+    event.target.classList.add('active');
+  }
+  async function handleLogin(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({ email: document.getElementById('login-email').value, password: document.getElementById('login-password').value }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.detail || 'Login failed'; return; }
+      localStorage.setItem('ryzm_token', data.token);
+      _authUser = data;
+      updateAuthUI(data);
+      showToast('success', 'Welcome', `Logged in as ${data.email}`);
+    } catch (err) { errEl.textContent = 'Connection error'; }
+  }
+  async function handleRegister(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('reg-error');
+    errEl.textContent = '';
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({
+          email: document.getElementById('reg-email').value,
+          password: document.getElementById('reg-password').value,
+          display_name: document.getElementById('reg-name').value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.detail || 'Registration failed'; return; }
+      localStorage.setItem('ryzm_token', data.token);
+      _authUser = data;
+      updateAuthUI(data);
+      showToast('success', 'Account Created', 'Welcome to Ryzm Terminal!');
+    } catch (err) { errEl.textContent = 'Connection error'; }
+  }
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    localStorage.removeItem('ryzm_token');
+    _authUser = null;
+    updateAuthUI(null);
+    toggleAuthModal();
+    showToast('info', 'Logged Out', 'Session ended.');
+  }
+  async function handleUpgrade() {
+    try {
+      const res = await fetch('/api/payments/create-checkout', { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.checkout_url) window.location.href = data.checkout_url;
+      else showToast('warning', 'Payment', data.detail || 'Stripe not configured yet.');
+    } catch { showToast('error', 'Error', 'Payment system unavailable.'); }
+  }
+  function updateAuthUI(user) {
+    const label = document.getElementById('auth-label');
+    const badge = document.querySelector('.pro-badge');
+    const loginForm = document.getElementById('auth-login-form');
+    const regForm = document.getElementById('auth-register-form');
+    const profile = document.getElementById('auth-profile');
+    const planBadge = document.getElementById('header-plan-badge');
+    if (user && user.email) {
+      label.textContent = user.display_name || user.email.split('@')[0];
+      if (user.tier === 'pro' && badge) badge.style.display = 'inline-block';
+      loginForm.style.display = 'none';
+      regForm.style.display = 'none';
+      profile.style.display = '';
+      document.getElementById('profile-email').textContent = user.email;
+      document.getElementById('profile-tier').textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
+      document.getElementById('profile-tier').className = 'auth-tier tier-' + user.tier;
+      document.getElementById('btn-upgrade').style.display = user.tier === 'pro' ? 'none' : '';
+      document.querySelectorAll('.auth-tab').forEach(t => t.style.display = 'none');
+      // Header plan badge
+      if (planBadge) {
+        planBadge.style.display = 'inline-block';
+        planBadge.textContent = user.tier === 'pro' ? '⭐ PRO' : 'FREE';
+        planBadge.style.background = user.tier === 'pro' ? 'rgba(6,182,212,0.3)' : 'rgba(255,255,255,0.08)';
+        planBadge.style.color = user.tier === 'pro' ? 'var(--neon-cyan)' : 'var(--text-muted)';
+      }
+    } else {
+      label.textContent = 'Login';
+      if (badge) badge.style.display = 'none';
+      loginForm.style.display = '';
+      regForm.style.display = 'none';
+      profile.style.display = 'none';
+      document.querySelectorAll('.auth-tab').forEach(t => t.style.display = '');
+      if (planBadge) planBadge.style.display = 'none';
+    }
+  }
+  // Check auth on load
+  (async function checkAuth() {
+    try {
+      const r = await fetch('/api/auth/profile', { credentials: 'same-origin' });
+      if (r.ok) { _authUser = await r.json(); updateAuthUI(_authUser); }
+      else updateAuthUI(null);
+    } catch { updateAuthUI(null); }
+  })();
+  </script>
+
+  <!-- ═══════════════════════════════════════
+       UPGRADE MODAL (Plan Gate)
+       ═══════════════════════════════════════ -->
+  <div id="upgrade-modal" class="upgrade-modal" style="display:none;">
+    <div class="upgrade-modal-inner">
+      <button class="upgrade-close" onclick="closeUpgradeModal()">&times;</button>
+      <div class="upgrade-logo">⚡ Ryzm Pro</div>
+      <p id="upgrade-context-msg" class="upgrade-context" style="color:var(--text-secondary);margin:8px 0 16px;font-size:0.82rem;"></p>
+      <table class="upgrade-compare">
+        <thead>
+          <tr><th></th><th>Free</th><th style="color:var(--neon-cyan);">Pro</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>AI Council</td><td>10/day</td><td>Unlimited</td></tr>
+          <tr><td>Trade Validator</td><td>3/day</td><td>Unlimited</td></tr>
+          <tr><td>Ask Ryzm Chat</td><td>20/day</td><td>Unlimited</td></tr>
+          <tr><td>Price Alerts</td><td>5</td><td>100</td></tr>
+          <tr><td>Council History</td><td>7 days</td><td>90 days + CSV</td></tr>
+          <tr><td>Accuracy Tracker</td><td>Basic</td><td>Multi-horizon</td></tr>
+        </tbody>
+      </table>
+      <button class="upgrade-cta" id="upgrade-cta-btn" onclick="handleUpgradeFromModal()">
+        🚀 Upgrade to Pro
+      </button>
+      <div style="font-size:0.65rem; color:var(--text-tertiary); margin-top:8px;">Cancel anytime · Stripe secure checkout</div>
+    </div>
+  </div>
+
+  <script>
+  /* ── Upgrade Modal logic ── */
+  const _upgradeMessages = {
+    council_limit:   'You\'ve used all free AI Council runs today.',
+    validator_limit: 'Daily free validation limit reached.',
+    chat_limit:      'Daily free chat messages exhausted.',
+    alerts_limit:    'Free plan alert limit reached.',
+    general:         'Unlock unlimited access to all Ryzm features.'
+  };
+  function openUpgradeModal(context) {
+    const modal = document.getElementById('upgrade-modal');
+    if (!modal) return;
+    const msg = document.getElementById('upgrade-context-msg');
+    if (msg) msg.textContent = _upgradeMessages[context] || _upgradeMessages.general;
+    modal.style.display = 'flex';
+  }
+  function closeUpgradeModal() {
+    const m = document.getElementById('upgrade-modal'); if (m) m.style.display = 'none';
+  }
+  async function handleUpgradeFromModal() {
+    try {
+      const r = await fetch('/api/auth/profile', { credentials: 'same-origin' });
+      if (!r.ok) { closeUpgradeModal(); toggleAuthModal(); return; } // not logged in → show login
+      const res = await fetch('/api/payments/create-checkout', { method: 'POST', credentials: 'same-origin' });
+      const data = await res.json();
+      if (data.checkout_url) window.location.href = data.checkout_url;
+      else showToast('warning', 'Payment', data.detail || 'Stripe not configured.');
+    } catch { showToast('error', 'Error', 'Payment unavailable.'); }
+  }
+  // Close on backdrop click
+  document.getElementById('upgrade-modal')?.addEventListener('click', e => {
+    if (e.target.id === 'upgrade-modal') closeUpgradeModal();
+  });
+  </script>
+
+</body>
+
+</html>

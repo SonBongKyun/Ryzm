@@ -15,7 +15,7 @@ from app.core.config import (
 )
 from app.core.cache import cache
 from app.core.database import (
-    db_connect, _db_lock, utc_now_str,
+    utc_now_str, db_session,
     save_council_record, store_price_snapshot,
     evaluate_council_accuracy,
 )
@@ -42,6 +42,7 @@ from app.services.ai_service import generate_council_debate
 _last_auto_council = 0
 _last_critical_alert = 0
 _bg_started = False
+_bg_lock = threading.Lock()
 
 
 def send_discord_alert(title, message, color=0xdc2626):
@@ -72,9 +73,7 @@ def check_price_alerts():
         market = cache["market"]["data"]
         if not market or not isinstance(market, dict):
             return
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute("SELECT id, uid, symbol, target_price, direction FROM price_alerts WHERE triggered = 0")
             alerts = c.fetchall()
             now_str = utc_now_str()
@@ -92,9 +91,7 @@ def check_price_alerts():
                     c.execute("UPDATE price_alerts SET triggered = 1, triggered_at_utc = ? WHERE id = ?", (now_str, alert_id))
                     triggered_count += 1
                     logger.info(f"[Alerts] TRIGGERED #{alert_id}: {symbol} {direction} ${target} (current: ${current})")
-            if triggered_count > 0:
-                conn.commit()
-            conn.close()
+            # db_session auto-commits on clean exit
     except Exception as e:
         logger.error(f"[Alerts] Check error: {e}")
 
@@ -304,8 +301,9 @@ def refresh_cache():
 def startup_background_tasks():
     """Start background refresh thread (guarded against multi-worker duplication)."""
     global _bg_started
-    if not _bg_started:
-        _bg_started = True
-        bg_thread = threading.Thread(target=refresh_cache, daemon=True)
-        bg_thread.start()
-        logger.info("[Startup] Background refresh thread started")
+    with _bg_lock:
+        if not _bg_started:
+            _bg_started = True
+            bg_thread = threading.Thread(target=refresh_cache, daemon=True)
+            bg_thread.start()
+            logger.info("[Startup] Background refresh thread started")

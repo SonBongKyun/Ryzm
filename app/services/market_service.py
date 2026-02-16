@@ -33,26 +33,42 @@ def fetch_yahoo_chart(symbol: str, range_str: str = "5d", interval: str = "1d") 
 
 
 def fetch_heatmap_data():
-    """Top cryptocurrency 24h change heatmap."""
+    """Top cryptocurrency heatmap with 24h & 7d changes + BTC dominance."""
+    result = {"coins": [], "btc_dominance": None, "total_mcap": None}
     try:
-        url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=16&page=1&sparkline=false&price_change_percentage=24h"
+        url = ("https://api.coingecko.com/api/v3/coins/markets"
+               "?vs_currency=usd&order=market_cap_desc&per_page=20&page=1"
+               "&sparkline=false&price_change_percentage=1h_in_currency,24h,7d")
         resp = resilient_get(url, timeout=10, headers={"Accept": "application/json"})
         resp.raise_for_status()
         coins = resp.json()
-        result = []
         for i, c in enumerate(coins, 1):
-            result.append({
+            result["coins"].append({
                 "symbol": (c.get("symbol") or "???").upper(),
                 "name": c.get("name", ""),
                 "price": round(c.get("current_price", 0) or 0, 4),
+                "change_1h": round(c.get("price_change_percentage_1h_in_currency", 0) or 0, 2),
                 "change_24h": round(c.get("price_change_percentage_24h", 0) or 0, 2),
+                "change_7d": round(c.get("price_change_percentage_7d_in_currency", 0) or 0, 2),
                 "mcap": round(c.get("market_cap", 0) or 0, 0),
+                "volume": round(c.get("total_volume", 0) or 0, 0),
                 "market_cap_rank": i
             })
-        return result
     except Exception as e:
-        logger.error(f"[Heatmap] Error: {e}")
-        return []
+        logger.error(f"[Heatmap] Coins error: {e}")
+
+    # BTC Dominance from /global
+    try:
+        g_resp = resilient_get("https://api.coingecko.com/api/v3/global", timeout=8,
+                               headers={"Accept": "application/json"})
+        g_resp.raise_for_status()
+        g_data = g_resp.json().get("data", {})
+        result["btc_dominance"] = round(g_data.get("market_cap_percentage", {}).get("btc", 0), 1)
+        result["total_mcap"] = round(g_data.get("total_market_cap", {}).get("usd", 0), 0)
+    except Exception as e:
+        logger.error(f"[Heatmap] Global error: {e}")
+
+    return result
 
 
 def fetch_coingecko_price(coin_id):
@@ -178,12 +194,35 @@ def fetch_fear_greed():
             latest = fg_list[0]
             history = [{"ts": int(item["timestamp"]), "value": int(item["value"])} for item in fg_list]
             history.reverse()
-            return {"score": int(latest["value"]), "label": latest["value_classification"], "history": history}
+            score = int(latest["value"])
+            prev_score = int(fg_list[1]["value"]) if len(fg_list) > 1 else score
+            delta = score - prev_score
+            # Compute 7d and 14d averages
+            values = [int(item["value"]) for item in fg_list]
+            avg_7d = round(sum(values[:7]) / min(7, len(values)), 1) if values else score
+            avg_14d = round(sum(values[:14]) / min(14, len(values)), 1) if values else score
+            avg_30d = round(sum(values[:30]) / min(30, len(values)), 1) if values else score
+            # Min/max in 30 days
+            all_vals = [int(item["value"]) for item in fg_list]
+            min_30d = min(all_vals) if all_vals else 0
+            max_30d = max(all_vals) if all_vals else 100
+            return {
+                "score": score,
+                "label": latest["value_classification"],
+                "delta": delta,
+                "prev_score": prev_score,
+                "avg_7d": avg_7d,
+                "avg_14d": avg_14d,
+                "avg_30d": avg_30d,
+                "min_30d": min_30d,
+                "max_30d": max_30d,
+                "history": history,
+            }
         else:
             logger.warning("[FG] No data in API response")
     except Exception as e:
         logger.error(f"[FG] Error: {e}")
-    return {"score": 50, "label": "Neutral", "history": [], "_is_estimate": True}
+    return {"score": 50, "label": "Neutral", "delta": 0, "prev_score": 50, "avg_7d": 50, "avg_14d": 50, "avg_30d": 50, "min_30d": 50, "max_30d": 50, "history": [], "_is_estimate": True}
 
 
 def fetch_kimchi_premium():

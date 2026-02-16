@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.core.logger import logger
 from app.core.config import DAILY_FREE_LIMITS, DAILY_PRO_LIMITS, MAX_FREE_ALERTS, MAX_PRO_ALERTS, PriceAlertRequest, LayoutSaveRequest
 from app.core.database import (
-    db_connect, _db_lock, utc_now_str, count_usage_today,
+    db_session, utc_now_str, count_usage_today,
     get_user_by_id, get_council_history,
 )
 from app.core.security import get_or_create_uid, get_user_tier, check_pro
@@ -74,9 +74,7 @@ def get_alerts(request: Request):
     if not uid:
         return {"alerts": [], "triggered": []}
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute(
                 "SELECT id, symbol, target_price, direction, note, created_at_utc FROM price_alerts WHERE uid = ? AND triggered = 0 ORDER BY created_at_utc DESC",
                 (uid,)
@@ -87,7 +85,6 @@ def get_alerts(request: Request):
                 (uid,)
             )
             triggered = [{"id": r[0], "symbol": r[1], "target_price": r[2], "direction": r[3], "note": r[4], "triggered_at": r[5]} for r in c.fetchall()]
-            conn.close()
         return {"alerts": active, "triggered": triggered}
     except Exception as e:
         logger.error(f"[Alerts] Fetch error: {e}")
@@ -99,30 +96,24 @@ def create_alert(request: PriceAlertRequest, http_request: Request, response: Re
     """Create a new price alert."""
     uid = get_or_create_uid(http_request, response)
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute("SELECT COUNT(*) FROM price_alerts WHERE uid = ? AND triggered = 0", (uid,))
             count = c.fetchone()[0]
-            conn.close()
         if count >= MAX_FREE_ALERTS and get_user_tier(uid) != "pro":
             raise HTTPException(status_code=403, detail=f"Free tier limit: {MAX_FREE_ALERTS} active alerts. Upgrade to Pro for unlimited.")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[Alerts] Count error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check alert limit")
 
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute(
                 "INSERT INTO price_alerts (uid, symbol, target_price, direction, note, created_at_utc) VALUES (?, ?, ?, ?, ?, ?)",
                 (uid, request.symbol.upper(), request.target_price, request.direction, request.note, utc_now_str())
             )
             alert_id = c.lastrowid
-            conn.commit()
-            conn.close()
         logger.info(f"[Alerts] Created alert #{alert_id}: {request.symbol} {request.direction} ${request.target_price}")
         return {"status": "created", "id": alert_id}
     except Exception as e:
@@ -137,13 +128,9 @@ def delete_alert(alert_id: int, request: Request):
     if not uid:
         raise HTTPException(status_code=401, detail="No user identity")
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute("DELETE FROM price_alerts WHERE id = ? AND uid = ?", (alert_id, uid))
             deleted = c.rowcount
-            conn.commit()
-            conn.close()
         if deleted == 0:
             raise HTTPException(status_code=404, detail="Alert not found")
         return {"status": "deleted", "id": alert_id}
@@ -162,12 +149,9 @@ def get_layout(request: Request):
     if not uid:
         return {"layout": None}
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute("SELECT layout_json FROM user_layouts WHERE uid = ? ORDER BY updated_at_utc DESC LIMIT 1", (uid,))
             row = c.fetchone()
-            conn.close()
         if row:
             return {"layout": json.loads(row[0])}
         return {"layout": None}
@@ -182,15 +166,11 @@ def save_layout(request: LayoutSaveRequest, http_request: Request, response: Res
     uid = get_or_create_uid(http_request, response)
     layout_json = json.dumps(request.panels)
     try:
-        with _db_lock:
-            conn = db_connect()
-            c = conn.cursor()
+        with db_session() as (conn, c):
             c.execute(
                 "INSERT OR REPLACE INTO user_layouts (uid, layout_json, updated_at_utc) VALUES (?, ?, ?)",
                 (uid, layout_json, utc_now_str())
             )
-            conn.commit()
-            conn.close()
         logger.info(f"[Layout] Saved for uid={uid[:8]}...")
         return {"status": "saved"}
     except Exception as e:

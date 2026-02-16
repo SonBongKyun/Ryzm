@@ -245,11 +245,11 @@ async function fetchCorrelation() {
 
     const assets = data.assets || Object.keys(data.matrix);
     let html = '<table class="corr-table"><thead><tr><th></th>';
-    assets.forEach(a => html += `<th>${a}</th>`);
+    assets.forEach(a => html += `<th>${escapeHtml(a)}</th>`);
     html += '</tr></thead><tbody>';
 
     assets.forEach(row => {
-      html += `<tr><td class="corr-label">${row}</td>`;
+      html += `<tr><td class="corr-label">${escapeHtml(row)}</td>`;
       assets.forEach(col => {
         const v = data.matrix[row]?.[col];
         const val = v !== undefined ? v.toFixed(2) : '--';
@@ -261,7 +261,7 @@ async function fetchCorrelation() {
         else if (v <= -0.3) bg = `rgba(220,38,38,${0.1 + intensity * 0.3})`;
         else if (v <= -0.7) bg = `rgba(220,38,38,${0.3 + intensity * 0.5})`;
         else bg = 'rgba(128,128,128,0.1)';
-        html += `<td class="corr-cell" style="background:${bg};" title="${row}↔${col}: ${val}">${val}</td>`;
+        html += `<td class="corr-cell" style="background:${bg};" title="${escapeHtml(row)}↔${escapeHtml(col)}: ${val}">${val}</td>`;
       });
       html += '</tr>';
     });
@@ -283,8 +283,8 @@ async function fetchWhaleWallets() {
         const color = tx.type === 'INFLOW' ? 'var(--neon-green)' : 'var(--neon-red)';
         return `<div class="whale-tx-item">
           <span class="whale-tx-icon">${icon}</span>
-          <span class="whale-tx-amount" style="color:${color}">${tx.btc.toFixed(2)} BTC</span>
-          <span class="whale-tx-usd">≈ $${(tx.usd/1e6).toFixed(1)}M</span>
+          <span class="whale-tx-amount" style="color:${color}">${(Number(tx.btc) || 0).toFixed(2)} BTC</span>
+          <span class="whale-tx-usd">≈ $${(Number(tx.usd || 0)/1e6).toFixed(1)}M</span>
           <span class="whale-tx-time">${new Date(tx.time * 1000).toLocaleTimeString()}</span>
         </div>`;
       }).join('');
@@ -339,6 +339,7 @@ async function fetchLiqZones() {
 
 /* ── Chart Modal (Price Card Click) ── */
 let _modalChart = null;
+let _modalResizeObserver = null;
 
 function initTradingViewModal() {
   const modal = document.getElementById('tv-modal');
@@ -347,6 +348,7 @@ function initTradingViewModal() {
 
   const destroyModal = () => {
     modal.style.display = 'none';
+    if (_modalResizeObserver) { _modalResizeObserver.disconnect(); _modalResizeObserver = null; }
     if (_modalChart) { _modalChart.remove(); _modalChart = null; }
     document.getElementById('tv-chart-container').innerHTML = '';
   };
@@ -412,8 +414,7 @@ function openRyzmModalChart(symbol) {
   _modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
   // Fetch 1h klines for modal
-  fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1h&limit=300`)
-    .then(r => r.json())
+  extFetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1h&limit=300`, { timeoutMs: 10000 })
     .then(data => {
       const candles = data.map(k => ({
         time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4],
@@ -431,45 +432,262 @@ function openRyzmModalChart(symbol) {
     .catch(err => console.error('[RyzmModal] kline fetch error:', err));
 
   // Resize on window resize
-  const ro = new ResizeObserver(() => {
+  if (_modalResizeObserver) _modalResizeObserver.disconnect();
+  _modalResizeObserver = new ResizeObserver(() => {
     if (_modalChart) _modalChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
   });
-  ro.observe(container);
+  _modalResizeObserver.observe(container);
 }
 
 /* ── PWA Service Worker Registration ── */
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(reg => console.log('SW registered:', reg.scope))
+    navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+      .then(reg => {
+        console.log('SW registered:', reg.scope);
+        // Force check for updates on every page load
+        reg.update().catch(() => {});
+      })
       .catch(err => console.warn('SW registration failed:', err));
   }
 }
 
-/* ── Mini Heatmap ── */
+/* ── Mini Heatmap (Upgraded) ── */
+let _hmPeriod = '24h';
+let _hmLastData = null;
+
+function _hmGetChange(c, period) {
+  if (period === '7d') return c.change_7d ?? c.change_24h ?? 0;
+  return c.change_24h ?? 0;
+}
+
+function _hmColor(pct) {
+  const abs = Math.abs(pct);
+  if (pct > 8)  return { bg: '#059669', clr: '#fff' };
+  if (pct > 3)  return { bg: `rgba(5,150,105,${Math.min(0.85, 0.3 + abs * 0.06)})`, clr: '#fff' };
+  if (pct > 0)  return { bg: `rgba(5,150,105,${0.12 + abs * 0.06})`, clr: '#a7f3d0' };
+  if (pct < -8) return { bg: '#dc2626', clr: '#fff' };
+  if (pct < -3) return { bg: `rgba(220,38,38,${Math.min(0.85, 0.3 + abs * 0.06)})`, clr: '#fff' };
+  if (pct < 0)  return { bg: `rgba(220,38,38,${0.12 + abs * 0.06})`, clr: '#fca5a5' };
+  return { bg: 'rgba(100,100,120,0.25)', clr: '#94a3b8' };
+}
+
+function _hmColorSolid(pct) {
+  if (pct > 0) return '#34d399';
+  if (pct < 0) return '#f87171';
+  return '#64748b';
+}
+
+function _hmFmtMcap(v) {
+  if (!v) return '—';
+  if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+  if (v >= 1e9)  return '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6)  return '$' + (v / 1e6).toFixed(1) + 'M';
+  return '$' + (v / 1e3).toFixed(0) + 'K';
+}
+
+function _hmFmtVol(v) {
+  if (!v) return '—';
+  if (v >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+  return '$' + (v / 1e3).toFixed(0) + 'K';
+}
+
+/* Squarify-lite treemap layout */
+function _hmSquarify(items, W, H) {
+  if (!items.length) return [];
+  const total = items.reduce((s, i) => s + i.weight, 0);
+  if (total <= 0) return [];
+  const rects = [];
+  let x = 0, y = 0, w = W, h = H;
+
+  function layoutRow(row, rowArea, isHoriz) {
+    const side = isHoriz ? h : w;
+    const rowLen = rowArea / side;
+    let pos = isHoriz ? y : x;
+    row.forEach(item => {
+      const itemLen = (item.weight / total) * (W * H) / rowLen;
+      if (isHoriz) {
+        rects.push({ ...item, rx: x, ry: pos, rw: rowLen, rh: itemLen });
+        pos += itemLen;
+      } else {
+        rects.push({ ...item, rx: pos, ry: y, rw: itemLen, rh: rowLen });
+        pos += itemLen;
+      }
+    });
+    if (isHoriz) { x += rowLen; w -= rowLen; }
+    else { y += rowLen; h -= rowLen; }
+  }
+
+  function worst(row, rowArea, side) {
+    const s2 = side * side;
+    let rMax = 0, rMin = Infinity;
+    row.forEach(r => { rMax = Math.max(rMax, r.weight); rMin = Math.min(rMin, r.weight); });
+    const ra2 = rowArea * rowArea;
+    return Math.max((s2 * rMax) / ra2, ra2 / (s2 * rMin));
+  }
+
+  const sorted = items.map(it => ({ ...it, weight: (it.weight / total) * W * H })).sort((a, b) => b.weight - a.weight);
+  let row = [], rowArea = 0;
+
+  for (const item of sorted) {
+    const isHoriz = w >= h;
+    const side = isHoriz ? h : w;
+    const newRow = [...row, item];
+    const newArea = rowArea + item.weight;
+    if (row.length === 0 || worst(newRow, newArea, side) <= worst(row, rowArea, side)) {
+      row = newRow;
+      rowArea = newArea;
+    } else {
+      layoutRow(row, rowArea, isHoriz);
+      row = [item];
+      rowArea = item.weight;
+    }
+  }
+  if (row.length) layoutRow(row, rowArea, w >= h);
+  return rects;
+}
+
+function _hmRenderTreemap(coins, period) {
+  const grid = document.getElementById('heatmap-grid');
+  if (!grid) return;
+
+  const items = coins.map(c => ({
+    ...c,
+    weight: Math.max(c.mcap || 1, 1)
+  }));
+
+  const treemapEl = grid.querySelector('.hm-treemap') || document.createElement('div');
+  treemapEl.className = 'hm-treemap';
+  if (!grid.contains(treemapEl)) { grid.innerHTML = ''; grid.appendChild(treemapEl); }
+
+  const W = treemapEl.offsetWidth || 320;
+  const H = treemapEl.offsetHeight || 180;
+  const rects = _hmSquarify(items, W, H);
+
+  treemapEl.innerHTML = rects.map(r => {
+    const pct = _hmGetChange(r, period);
+    const { bg, clr } = _hmColor(pct);
+    const c1h = r.change_1h ?? 0;
+    const c24 = r.change_24h ?? 0;
+    const showLabels = r.rw > 32 && r.rh > 28;
+    const showTf = r.rw > 44 && r.rh > 38;
+
+    return `<div class="heatmap-cell" data-symbol="${escapeHtml(r.symbol)}" data-name="${escapeHtml(r.name)}" data-price="${r.price||0}" data-c1h="${c1h}" data-c24="${c24}" data-c7d="${r.change_7d||0}" data-mcap="${r.mcap||0}" data-vol="${r.volume||0}" style="left:${r.rx.toFixed(1)}px;top:${r.ry.toFixed(1)}px;width:${r.rw.toFixed(1)}px;height:${r.rh.toFixed(1)}px;background:${safeColor(bg)};color:${safeColor(clr)};">
+      ${showLabels ? `<span class="hm-symbol">${escapeHtml(r.symbol)}</span><span class="hm-pct">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>` : ''}
+      ${showTf ? `<div class="hm-tf-bar"><span style="background:${safeColor(_hmColorSolid(c1h))}"></span><span style="background:${safeColor(_hmColorSolid(c24))}"></span></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function _hmRenderDominance(data) {
+  const domFill = document.getElementById('hm-btc-dom-fill');
+  const domVal = document.getElementById('hm-btc-dom-val');
+  const mcapEl = document.getElementById('hm-total-mcap');
+  if (domFill && data.btc_dominance != null) {
+    domFill.style.width = data.btc_dominance.toFixed(1) + '%';
+  }
+  if (domVal && data.btc_dominance != null) {
+    domVal.textContent = data.btc_dominance.toFixed(1) + '%';
+  }
+  if (mcapEl && data.total_mcap) {
+    mcapEl.textContent = _hmFmtMcap(data.total_mcap);
+  }
+}
+
+function _hmRenderMovers(coins, period) {
+  const sorted = [...coins].sort((a, b) => _hmGetChange(b, period) - _hmGetChange(a, period));
+  const gainers = sorted.slice(0, 3);
+  const losers = sorted.slice(-3).reverse();
+
+  const gList = document.getElementById('hm-gainers-list');
+  const lList = document.getElementById('hm-losers-list');
+  if (gList) {
+    gList.innerHTML = gainers.map(c => {
+      const p = _hmGetChange(c, period);
+      return `<span class="hm-mover-chip gain">${escapeHtml(c.symbol)} +${p.toFixed(1)}%</span>`;
+    }).join('');
+  }
+  if (lList) {
+    lList.innerHTML = losers.map(c => {
+      const p = _hmGetChange(c, period);
+      return `<span class="hm-mover-chip loss">${escapeHtml(c.symbol)} ${p.toFixed(1)}%</span>`;
+    }).join('');
+  }
+}
+
+function _hmInitTooltip() {
+  const panel = document.getElementById('heatmap-section');
+  const tip = document.getElementById('hm-tooltip');
+  if (!panel || !tip || panel._hmTipInit) return;
+  panel._hmTipInit = true;
+
+  panel.addEventListener('mouseover', e => {
+    const cell = e.target.closest('.heatmap-cell');
+    if (!cell) { tip.classList.remove('show'); return; }
+    const d = cell.dataset;
+    const c1h = parseFloat(d.c1h) || 0;
+    const c24 = parseFloat(d.c24) || 0;
+    const c7d = parseFloat(d.c7d) || 0;
+    const price = parseFloat(d.price) || 0;
+    const mcap = parseFloat(d.mcap) || 0;
+    const vol = parseFloat(d.vol) || 0;
+
+    const fmtPct = v => `<span class="hm-tt-val ${v > 0 ? 'pos' : v < 0 ? 'neg' : 'neutral'}">${v >= 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+
+    tip.innerHTML = `
+      <div class="hm-tt-name">${escapeHtml(d.name)} (${escapeHtml(d.symbol?.toUpperCase())})</div>
+      <div class="hm-tt-row"><span class="hm-tt-label">Price</span><span class="hm-tt-val neutral">$${price < 1 ? price.toPrecision(4) : price.toLocaleString(undefined, {maximumFractionDigits: 2})}</span></div>
+      <div class="hm-tt-row"><span class="hm-tt-label">1H</span>${fmtPct(c1h)}</div>
+      <div class="hm-tt-row"><span class="hm-tt-label">24H</span>${fmtPct(c24)}</div>
+      <div class="hm-tt-row"><span class="hm-tt-label">7D</span>${fmtPct(c7d)}</div>
+      <div class="hm-tt-row"><span class="hm-tt-label">MCap</span><span class="hm-tt-val neutral">${_hmFmtMcap(mcap)}</span></div>
+      <div class="hm-tt-row"><span class="hm-tt-label">Vol 24h</span><span class="hm-tt-val neutral">${_hmFmtVol(vol)}</span></div>
+    `;
+    tip.classList.add('show');
+
+    const rect = panel.getBoundingClientRect();
+    const cr = cell.getBoundingClientRect();
+    let tx = cr.left - rect.left + cr.width + 6;
+    let ty = cr.top - rect.top;
+    if (tx + 180 > rect.width) tx = cr.left - rect.left - 180;
+    if (ty + 160 > rect.height) ty = rect.height - 165;
+    tip.style.left = tx + 'px';
+    tip.style.top = ty + 'px';
+  });
+
+  panel.addEventListener('mouseleave', () => tip.classList.remove('show'));
+}
+
+function _hmInitPeriodToggle() {
+  const wrap = document.getElementById('hm-period-toggle');
+  if (!wrap || wrap._hmInit) return;
+  wrap._hmInit = true;
+  wrap.addEventListener('click', e => {
+    const btn = e.target.closest('.hm-period-btn');
+    if (!btn || btn.classList.contains('active')) return;
+    wrap.querySelectorAll('.hm-period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _hmPeriod = btn.dataset.period;
+    if (_hmLastData) {
+      _hmRenderTreemap(_hmLastData.coins, _hmPeriod);
+      _hmRenderMovers(_hmLastData.coins, _hmPeriod);
+    }
+  });
+}
+
 async function fetchHeatmap() {
   try {
     const data = await apiFetch('/api/heatmap', { silent: true });
-    const grid = document.getElementById('heatmap-grid');
-    if (!grid || !data.coins || data.coins.length === 0) return;
+    if (!data || !data.coins || data.coins.length === 0) return;
+    _hmLastData = data;
 
-    grid.innerHTML = data.coins.map(c => {
-      const pct = c.change_24h;
-      const abs = Math.abs(pct);
-      let bg, clr;
-      if (pct > 5) { bg = '#059669'; clr = '#fff'; }
-      else if (pct > 0) { bg = `rgba(5,150,105,${0.15 + abs*0.08})`; clr = '#059669'; }
-      else if (pct < -5) { bg = '#dc2626'; clr = '#fff'; }
-      else if (pct < 0) { bg = `rgba(220,38,38,${0.15 + abs*0.08})`; clr = '#dc2626'; }
-      else { bg = 'var(--border-dim)'; clr = 'var(--text-muted)'; }
-
-      const size = c.market_cap_rank <= 5 ? 'heatmap-cell-lg' : c.market_cap_rank <= 10 ? 'heatmap-cell-md' : 'heatmap-cell-sm';
-      return `<div class="heatmap-cell ${size}" style="background:${safeColor(bg)}; color:${safeColor(clr)};" title="${escapeHtml(c.name)}: ${pct >= 0 ? '+':''}${pct.toFixed(2)}%">
-        <span class="hm-symbol">${escapeHtml(c.symbol)}</span>
-        <span class="hm-pct">${pct >= 0 ? '+':''}${pct.toFixed(1)}%</span>
-      </div>`;
-    }).join('');
-  } catch(e) { console.error('Heatmap Error:', e); }
+    _hmInitTooltip();
+    _hmInitPeriodToggle();
+    _hmRenderDominance(data);
+    _hmRenderMovers(data.coins, _hmPeriod);
+    _hmRenderTreemap(data.coins, _hmPeriod);
+  } catch (e) { console.error('Heatmap Error:', e); }
 }
 
 /* ── Health Check / Connection Status ── */
@@ -587,10 +805,9 @@ function updateConnectionStatus() {
   if (!statusDot) return;
 
   // Use lightweight /health endpoint instead of /api/market
-  fetch('/health')
-    .then(r => {
-      if (r.ok) statusDot.classList.remove('offline');
-      else statusDot.classList.add('offline');
+  apiFetch('/health', { silent: true, timeoutMs: 5000, retries: 0 })
+    .then(() => {
+      statusDot.classList.remove('offline');
     })
     .catch(() => {
       statusDot.classList.add('offline');
@@ -641,14 +858,40 @@ document.addEventListener('keydown', (e) => {
     toggleTheme();
   }
 
+  // F key: Fullscreen toggle (when not in input)
+  if (e.key === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    e.preventDefault();
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      showToast('success', '⛶ Fullscreen', 'Press F or F11 to exit');
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
   // F11: Fullscreen (browser default, but we show toast)
   if (e.key === 'F11') {
     setTimeout(() => {
       const isFullscreen = !!document.fullscreenElement;
       if (isFullscreen) {
-        showToast('success', '⛶ Fullscreen', 'Entered fullscreen mode (Press F11 to exit)');
+        showToast('success', '⛶ Fullscreen', 'Press F or F11 to exit');
       }
     }, 100);
+  }
+
+  // 1, 2, 3: Scroll to panel & flash
+  if (['1', '2', '3'].includes(e.key) && !e.ctrlKey && !e.metaKey) {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    const panelIds = { '1': 'panel-left', '2': 'panel-center', '3': 'panel-right' };
+    const panel = document.getElementById(panelIds[e.key]);
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      panel.classList.add('panel-focus-flash');
+      panel.addEventListener('animationend', () => panel.classList.remove('panel-focus-flash'), { once: true });
+    }
   }
 
   // Escape: Close modals
@@ -952,7 +1195,7 @@ function drawCouncilSparkline(records) {
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = 'var(--neon-cyan, #0284c7)';
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan').trim() || '#0284c7';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
@@ -997,36 +1240,129 @@ document.addEventListener('visibilitychange', () => {
 // }
 
 /* ═══════════════════════════════════════
-   #3 Fear & Greed 30-Day Chart
+   #3 Fear & Greed Index (Upgraded v2)
    ═══════════════════════════════════════ */
-async function fetchFearGreedChart() {
-  try {
-    const data = await apiFetch('/api/fear-greed', { silent: true });
 
-    // Update score display
-    const scoreEl = document.getElementById('fg-score-big');
-    const labelEl = document.getElementById('fg-label-big');
-    if (scoreEl && data.score !== undefined) {
-      scoreEl.textContent = data.score;
-      const c = data.score < 25 ? '#dc2626' : data.score < 45 ? '#f97316' : data.score < 55 ? '#eab308' : data.score < 75 ? '#06b6d4' : '#059669';
-      scoreEl.style.color = c;
-    }
-    if (labelEl && data.label) {
-      labelEl.textContent = data.label;
-    }
+// ── Helpers ──
 
-    // Draw 30-day chart
-    if (data.history && data.history.length > 0) {
-      drawFGChart(data.history);
-    }
-  } catch (e) {
-    console.error('[FG Chart]', e);
-  }
+/** Score → zone color */
+function _fgColor(score) {
+  if (score < 25) return '#dc2626';
+  if (score < 45) return '#f97316';
+  if (score < 55) return '#eab308';
+  if (score < 75) return '#06b6d4';
+  return '#059669';
 }
 
-function drawFGChart(history) {
+/** Score → emoji + short comment (EN / KO) */
+function _fgMood(score, lang) {
+  const moods = [
+    { max: 12, emoji: '😱', en: 'Extreme panic. Blood on the streets.',      ko: '극도의 패닉. 시장이 공포에 빠졌어요.' },
+    { max: 25, emoji: '😰', en: 'Heavy fear lingers in the market.',         ko: '강한 공포가 시장을 지배합니다.' },
+    { max: 40, emoji: '😟', en: 'Traders remain cautious and uneasy.',       ko: '불안감이 퍼져 있는 상태입니다.' },
+    { max: 55, emoji: '😐', en: 'Market sentiment is balanced, neutral.',    ko: '중립적 분위기. 관망세가 이어지네요.' },
+    { max: 70, emoji: '🙂', en: 'Optimism is building slowly.',              ko: '낙관론이 서서히 고개를 듭니다.' },
+    { max: 85, emoji: '🤑', en: 'Greed is rising — stay vigilant.',          ko: '탐욕이 퍼지고 있어요. 경계하세요.' },
+    { max: 101, emoji: '🚀', en: 'Extreme greed! Possible overheating.',     ko: '극단적 탐욕! 과열 신호입니다.' }
+  ];
+  const m = moods.find(m => score < m.max) || moods[moods.length - 1];
+  return { emoji: m.emoji, comment: lang === 'ko' ? m.ko : m.en };
+}
+
+/** Persistent state for period toggle */
+let _fgPeriod = 7;
+let _fgLastData = null;
+
+/** Draw semicircle arc gauge */
+function _drawFGGauge(score) {
+  const canvas = document.getElementById('fg-gauge-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = 180, H = 110;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H - 10, r = 72;
+  const startAngle = Math.PI;
+  const endAngle = 2 * Math.PI;
+  const lineW = 14;
+
+  // Background track
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, endAngle);
+  ctx.strokeStyle = 'rgba(100,116,139,0.15)';
+  ctx.lineWidth = lineW;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Color arc segments (gradient stops)
+  const segs = [
+    { from: 0,    to: 0.25,  color: '#dc2626' },
+    { from: 0.25, to: 0.45,  color: '#f97316' },
+    { from: 0.45, to: 0.55,  color: '#eab308' },
+    { from: 0.55, to: 0.75,  color: '#06b6d4' },
+    { from: 0.75, to: 1,     color: '#059669' }
+  ];
+  segs.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startAngle + s.from * Math.PI, startAngle + s.to * Math.PI);
+    ctx.strokeStyle = s.color;
+    ctx.globalAlpha = 0.25;
+    ctx.lineWidth = lineW;
+    ctx.lineCap = 'butt';
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+
+  // Active arc (0→score)
+  const pct = Math.min(Math.max(score / 100, 0), 1);
+  const activeEnd = startAngle + pct * Math.PI;
+  const activeGrad = ctx.createConicGradient(startAngle, cx, cy);
+  activeGrad.addColorStop(0, '#dc2626');
+  activeGrad.addColorStop(0.25, '#f97316');
+  activeGrad.addColorStop(0.45, '#eab308');
+  activeGrad.addColorStop(0.65, '#06b6d4');
+  activeGrad.addColorStop(1, '#059669');
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, activeEnd);
+  ctx.strokeStyle = _fgColor(score);
+  ctx.lineWidth = lineW;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Needle dot
+  const nx = cx + r * Math.cos(activeEnd);
+  const ny = cy + r * Math.sin(activeEnd);
+  ctx.beginPath();
+  ctx.arc(nx, ny, 5, 0, 2 * Math.PI);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(nx, ny, 3, 0, 2 * Math.PI);
+  ctx.fillStyle = _fgColor(score);
+  ctx.fill();
+
+  // Min / Max labels
+  ctx.font = '600 9px sans-serif';
+  ctx.fillStyle = 'rgba(100,116,139,0.6)';
+  ctx.textAlign = 'left';
+  ctx.fillText('0', cx - r - 4, cy + 14);
+  ctx.textAlign = 'right';
+  ctx.fillText('100', cx + r + 4, cy + 14);
+}
+
+/** Enhanced history chart with zone colors + date labels + hover tooltip */
+function _drawFGHistoryChart(history, period) {
   const canvas = document.getElementById('fg-canvas');
   if (!canvas || !history.length) return;
+
+  // Filter by period
+  const slice = history.slice(0, period).reverse(); // oldest first
+  if (!slice.length) return;
 
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -1035,88 +1371,212 @@ function drawFGChart(history) {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
 
-  const w = rect.width;
-  const h = rect.height;
-  const pad = 6;
+  const w = rect.width, h = rect.height;
+  const padT = 6, padB = 20, padL = 6, padR = 6;
+  const chartW = w - padL - padR;
+  const chartH = h - padT - padB;
 
   ctx.clearRect(0, 0, w, h);
 
   // Zone backgrounds
-  const zoneColors = [
-    { y: 0, h: 0.25, color: 'rgba(5,150,105,0.08)' },     // 75-100 Greed
-    { y: 0.25, h: 0.2, color: 'rgba(6,182,212,0.06)' },    // 55-75
-    { y: 0.45, h: 0.1, color: 'rgba(234,179,8,0.06)' },    // 45-55 Neutral
-    { y: 0.55, h: 0.2, color: 'rgba(249,115,22,0.06)' },   // 25-45
-    { y: 0.75, h: 0.25, color: 'rgba(220,38,38,0.08)' }    // 0-25 Fear
+  const zones = [
+    { lo: 75, hi: 100, color: 'rgba(5,150,105,0.08)' },
+    { lo: 55, hi: 75,  color: 'rgba(6,182,212,0.06)' },
+    { lo: 45, hi: 55,  color: 'rgba(234,179,8,0.06)' },
+    { lo: 25, hi: 45,  color: 'rgba(249,115,22,0.06)' },
+    { lo: 0,  hi: 25,  color: 'rgba(220,38,38,0.08)' }
   ];
-  zoneColors.forEach(z => {
+  zones.forEach(z => {
+    const y1 = padT + chartH * (1 - z.hi / 100);
+    const y2 = padT + chartH * (1 - z.lo / 100);
     ctx.fillStyle = z.color;
-    ctx.fillRect(pad, pad + z.y * (h - 2 * pad), w - 2 * pad, z.h * (h - 2 * pad));
+    ctx.fillRect(padL, y1, chartW, y2 - y1);
   });
 
   // 50-line
-  const mid = pad + (h - 2 * pad) * 0.5;
-  ctx.strokeStyle = 'rgba(100,116,139,0.3)';
+  const midY = padT + chartH * 0.5;
+  ctx.strokeStyle = 'rgba(100,116,139,0.25)';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 3]);
   ctx.beginPath();
-  ctx.moveTo(pad, mid);
-  ctx.lineTo(w - pad, mid);
+  ctx.moveTo(padL, midY);
+  ctx.lineTo(w - padR, midY);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  const values = history.map(h => h.value);
-  const step = (w - 2 * pad) / Math.max(values.length - 1, 1);
+  const values = slice.map(h => h.value);
+  const step = chartW / Math.max(values.length - 1, 1);
 
   // Gradient fill
-  const gradient = ctx.createLinearGradient(0, 0, 0, h);
-  gradient.addColorStop(0, 'rgba(5,150,105,0.25)');
-  gradient.addColorStop(0.5, 'rgba(234,179,8,0.1)');
-  gradient.addColorStop(1, 'rgba(220,38,38,0.25)');
-
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+  grad.addColorStop(0, 'rgba(5,150,105,0.22)');
+  grad.addColorStop(0.5, 'rgba(234,179,8,0.08)');
+  grad.addColorStop(1, 'rgba(220,38,38,0.22)');
   ctx.beginPath();
-  ctx.moveTo(pad, h - pad);
+  ctx.moveTo(padL, padT + chartH);
   values.forEach((v, i) => {
-    const x = pad + i * step;
-    const y = pad + (h - 2 * pad) * (1 - v / 100);
-    ctx.lineTo(x, y);
+    ctx.lineTo(padL + i * step, padT + chartH * (1 - v / 100));
   });
-  ctx.lineTo(pad + (values.length - 1) * step, h - pad);
+  ctx.lineTo(padL + (values.length - 1) * step, padT + chartH);
   ctx.closePath();
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = grad;
   ctx.fill();
 
   // Line
   ctx.beginPath();
   values.forEach((v, i) => {
-    const x = pad + i * step;
-    const y = pad + (h - 2 * pad) * (1 - v / 100);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    const x = padL + i * step;
+    const y = padT + chartH * (1 - v / 100);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
   ctx.strokeStyle = '#eab308';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Dots — color by zone
+  // Dots
   values.forEach((v, i) => {
-    const x = pad + i * step;
-    const y = pad + (h - 2 * pad) * (1 - v / 100);
+    const x = padL + i * step;
+    const y = padT + chartH * (1 - v / 100);
     ctx.beginPath();
     ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = v < 25 ? '#dc2626' : v < 45 ? '#f97316' : v < 55 ? '#eab308' : v < 75 ? '#06b6d4' : '#059669';
+    ctx.fillStyle = _fgColor(v);
     ctx.fill();
   });
 
   // Last value label
   const last = values[values.length - 1];
-  const lx = pad + (values.length - 1) * step;
-  const ly = pad + (h - 2 * pad) * (1 - last / 100);
+  const lx = padL + (values.length - 1) * step;
+  const ly = padT + chartH * (1 - last / 100);
   ctx.font = 'bold 9px sans-serif';
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'right';
   ctx.fillText(last, lx - 4, ly - 5);
+
+  // Date labels on x-axis
+  ctx.font = '500 8px sans-serif';
+  ctx.fillStyle = 'rgba(100,116,139,0.6)';
+  ctx.textAlign = 'center';
+  const labelCount = Math.min(slice.length, 5);
+  const every = Math.max(1, Math.floor((slice.length - 1) / (labelCount - 1)));
+  for (let i = 0; i < slice.length; i += every) {
+    const ts = slice[i].ts;
+    const d = new Date(typeof ts === 'number' ? (ts > 1e12 ? ts : ts * 1000) : ts);
+    const label = `${d.getMonth() + 1}/${d.getDate()}`;
+    ctx.fillText(label, padL + i * step, h - 4);
+  }
+  // Always draw last date
+  if ((slice.length - 1) % every !== 0) {
+    const ts = slice[slice.length - 1].ts;
+    const d = new Date(typeof ts === 'number' ? (ts > 1e12 ? ts : ts * 1000) : ts);
+    ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, padL + (slice.length - 1) * step, h - 4);
+  }
+
+  // Setup hover tooltip
+  _setupFGChartTooltip(canvas, slice, padL, padT, chartW, chartH, step);
 }
+
+/** Hover tooltip for chart */
+function _setupFGChartTooltip(canvas, sliceData, padL, padT, chartW, chartH, step) {
+  // Remove any existing tooltip
+  let tooltip = canvas.parentElement.querySelector('.fg-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'fg-tooltip';
+    canvas.parentElement.style.position = 'relative';
+    canvas.parentElement.appendChild(tooltip);
+  }
+
+  // Remove old listeners
+  const newCanvas = canvas; // same element, remove via named handler
+  newCanvas._fgMove && newCanvas.removeEventListener('mousemove', newCanvas._fgMove);
+  newCanvas._fgLeave && newCanvas.removeEventListener('mouseleave', newCanvas._fgLeave);
+
+  newCanvas._fgMove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const idx = Math.round((mx - padL) / step);
+    if (idx < 0 || idx >= sliceData.length) { tooltip.classList.remove('visible'); return; }
+    const item = sliceData[idx];
+    const d = new Date(typeof item.ts === 'number' ? (item.ts > 1e12 ? item.ts : item.ts * 1000) : item.ts);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    tooltip.innerHTML = `<span style="color:${_fgColor(item.value)};font-weight:700">${item.value}</span> <span style="opacity:0.6">${dateStr}</span>`;
+    tooltip.classList.add('visible');
+    const tx = padL + idx * step;
+    const ty = padT + chartH * (1 - item.value / 100);
+    tooltip.style.left = `${Math.min(tx, rect.width - 90)}px`;
+    tooltip.style.top = `${ty - 28}px`;
+  };
+  newCanvas._fgLeave = () => { tooltip.classList.remove('visible'); };
+  newCanvas.addEventListener('mousemove', newCanvas._fgMove);
+  newCanvas.addEventListener('mouseleave', newCanvas._fgLeave);
+}
+
+/** Main fetch + render */
+async function fetchFearGreedChart() {
+  try {
+    const data = await apiFetch('/api/fear-greed', { silent: true });
+    _fgLastData = data;
+    const score = data.score ?? 0;
+    const lang = (typeof _currentLang !== 'undefined') ? _currentLang : 'en';
+
+    // 1) Gauge
+    _drawFGGauge(score);
+
+    // 2) Score + label
+    const scoreEl = document.getElementById('fg-score-big');
+    const labelEl = document.getElementById('fg-label-big');
+    if (scoreEl) { scoreEl.textContent = score; scoreEl.style.color = _fgColor(score); }
+    if (labelEl && data.label) labelEl.textContent = data.label;
+
+    // 3) Emoji + comment
+    const mood = _fgMood(score, lang);
+    const emojiEl = document.getElementById('fg-emoji');
+    const commentEl = document.getElementById('fg-comment');
+    if (emojiEl) emojiEl.textContent = mood.emoji;
+    if (commentEl) commentEl.textContent = mood.comment;
+
+    // 4) Delta
+    const deltaEl = document.getElementById('fg-delta');
+    const arrowEl = document.getElementById('fg-delta-arrow');
+    const valEl = document.getElementById('fg-delta-val');
+    if (deltaEl && data.delta !== undefined && data.delta !== null) {
+      const d = data.delta;
+      deltaEl.className = 'fg-delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'flat');
+      if (arrowEl) arrowEl.textContent = d > 0 ? '▲' : d < 0 ? '▼' : '─';
+      if (valEl) valEl.textContent = (d > 0 ? '+' : '') + d;
+    }
+
+    // 5) Stats bar
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+    set('fg-avg-7d', data.avg_7d ?? '--');
+    set('fg-avg-14d', data.avg_14d ?? '--');
+    set('fg-avg-30d', data.avg_30d ?? '--');
+    if (data.min_30d != null && data.max_30d != null) set('fg-range-30d', `${data.min_30d}–${data.max_30d}`);
+
+    // 6) Chart
+    if (data.history && data.history.length > 0) {
+      _drawFGHistoryChart(data.history, _fgPeriod);
+    }
+  } catch (e) {
+    console.error('[FG]', e);
+  }
+}
+
+/** Period toggle click handler — attached once via event delegation */
+(function _initFGPeriodTabs() {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.fg-period-btn');
+    if (!btn) return;
+    const period = parseInt(btn.dataset.period, 10);
+    if (!period || period === _fgPeriod) return;
+    _fgPeriod = period;
+    btn.closest('.fg-period-tabs').querySelectorAll('.fg-period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (_fgLastData && _fgLastData.history) {
+      _drawFGHistoryChart(_fgLastData.history, period);
+    }
+  });
+})();
 
 /* ═══════════════════════════════════════
    #4 Multi-Timeframe Analysis
@@ -1178,37 +1638,170 @@ async function fetchOnChainData() {
 }
 
 function renderOnChainData(data) {
-  // Open Interest
+  _renderOI(data);
+  _renderFunding(data);
+  _renderMempool(data);
+  _renderHashrate(data);
+  _renderLiqZones(data);
+  _initOCSectionToggles();
+}
+
+/* --- OI with 24h change bar --- */
+function _renderOI(data) {
   const oiGrid = document.getElementById('oc-oi');
-  if (oiGrid && data.open_interest && data.open_interest.length > 0) {
-    oiGrid.innerHTML = data.open_interest.map(o => {
-      const oiStr = o.oi_usd >= 1e9 ? `$${(o.oi_usd/1e9).toFixed(2)}B` : `$${(o.oi_usd/1e6).toFixed(0)}M`;
-      return `<div class="oc-oi-item">
-        <span class="oc-oi-sym">${o.symbol}</span>
-        <span class="oc-oi-val">${oiStr}</span>
-        <span class="oc-oi-coins" style="font-size:0.65rem;color:var(--text-muted);">${o.oi_coins.toLocaleString()} coins</span>
-      </div>`;
-    }).join('');
-  }
+  if (!oiGrid || !data.open_interest || !data.open_interest.length) return;
+  oiGrid.innerHTML = data.open_interest.map(o => {
+    const oiStr = o.oi_usd >= 1e9 ? `$${(o.oi_usd/1e9).toFixed(2)}B` : `$${(o.oi_usd/1e6).toFixed(0)}M`;
+    const chg = o.change_pct || 0;
+    const dir = chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat';
+    const arrow = chg > 0 ? '▲' : chg < 0 ? '▼' : '—';
+    const barW = Math.min(Math.abs(chg) * 5, 100);
+    const barColor = dir === 'up' ? 'var(--neon-green)' : dir === 'down' ? 'var(--neon-red)' : 'var(--text-muted)';
+    return `<div class="oc-oi-item">
+      <span class="oc-oi-sym">${o.symbol}</span>
+      <span class="oc-oi-val">${oiStr}</span>
+      <span class="oc-oi-change ${dir}">${arrow} ${Math.abs(chg).toFixed(1)}%</span>
+      <div class="oc-oi-bar"><div class="oc-oi-bar-fill" style="width:${barW}%;background:${barColor}"></div></div>
+    </div>`;
+  }).join('');
+}
 
-  // Mempool fees
-  if (data.mempool) {
-    const fm = data.mempool;
-    const elFast = document.getElementById('oc-fee-fast');
-    const el30m = document.getElementById('oc-fee-30m');
-    const el1h = document.getElementById('oc-fee-1h');
-    const elEco = document.getElementById('oc-fee-eco');
-    if (elFast) elFast.textContent = fm.fastest || '—';
-    if (el30m) el30m.textContent = fm.half_hour || '—';
-    if (el1h) el1h.textContent = fm.hour || '—';
-    if (elEco) elEco.textContent = fm.economy || '—';
+/* --- Funding Rates --- */
+function _renderFunding(data) {
+  const el = document.getElementById('oc-funding');
+  if (!el) return;
+  const rates = data.funding_rates;
+  if (!rates || !rates.length) {
+    el.innerHTML = '<span style="font-size:0.7rem;color:var(--text-muted)">No data</span>';
+    return;
   }
+  el.innerHTML = rates.map(r => {
+    const cls = r.rate > 0.01 ? 'positive' : r.rate < -0.01 ? 'negative' : 'neutral';
+    const sign = r.rate > 0 ? '+' : '';
+    return `<div class="oc-funding-item">
+      <span class="oc-funding-sym">${r.symbol}</span>
+      <span class="oc-funding-rate ${cls}">${sign}${r.rate.toFixed(4)}%</span>
+      <span class="oc-funding-mark">$${r.mark.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
 
-  // Hashrate
+/* --- Mempool + congestion gauge --- */
+function _renderMempool(data) {
+  if (!data.mempool) return;
+  const fm = data.mempool;
+  const elFast = document.getElementById('oc-fee-fast');
+  const el30m = document.getElementById('oc-fee-30m');
+  const el1h = document.getElementById('oc-fee-1h');
+  const elEco = document.getElementById('oc-fee-eco');
+  if (elFast) elFast.textContent = fm.fastest || '—';
+  if (el30m) el30m.textContent = fm.half_hour || '—';
+  if (el1h) el1h.textContent = fm.hour || '—';
+  if (elEco) elEco.textContent = fm.economy || '—';
+
+  // Congestion bar
+  const fill = document.getElementById('oc-congestion-fill');
+  const label = document.getElementById('oc-congestion-label');
+  if (fill && label) {
+    const cong = fm.congestion || 'low';
+    const pct = cong === 'high' ? 90 : cong === 'medium' ? 55 : 25;
+    const color = cong === 'high' ? '#dc2626' : cong === 'medium' ? '#f59e0b' : '#059669';
+    const txt = cong === 'high' ? 'HIGH CONGESTION' : cong === 'medium' ? 'MODERATE' : 'LOW';
+    fill.style.width = pct + '%';
+    fill.style.background = `linear-gradient(90deg, ${color}cc, ${color})`;
+    label.textContent = txt;
+  }
+}
+
+/* --- Hashrate + sparkline --- */
+function _renderHashrate(data) {
   const hrEl = document.getElementById('oc-hashrate');
   if (hrEl && data.hashrate) {
     hrEl.textContent = `${data.hashrate.value} ${data.hashrate.unit}`;
   }
+  // Sparkline
+  const canvas = document.getElementById('oc-hashrate-spark');
+  if (!canvas || !data.hashrate_spark || data.hashrate_spark.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  const vals = data.hashrate_spark;
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  const range = mx - mn || 1;
+  const step = w / (vals.length - 1);
+  ctx.clearRect(0, 0, w, h);
+  ctx.beginPath();
+  vals.forEach((v, i) => {
+    const x = i * step;
+    const y = h - 2 - ((v - mn) / range) * (h - 4);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan').trim() || '#06b6d4';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // fill
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(6,182,212,0.1)';
+  ctx.fill();
+}
+
+/* --- Liquidation Zones summary card --- */
+function _renderLiqZones(data) {
+  const el = document.getElementById('oc-liq-summary');
+  if (!el) return;
+  const lz = data.liq_zones;
+  if (!lz || !lz.zones || !lz.zones.length) {
+    el.innerHTML = '<span style="font-size:0.7rem;color:var(--text-muted)">No liquidation data</span>';
+    return;
+  }
+  const fmtUsd = v => v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : `$${v.toLocaleString()}`;
+  const biasLabel = lz.bias === 'LONG_HEAVY' ? '🔴 LONG HEAVY' : lz.bias === 'SHORT_HEAVY' ? '🟢 SHORT HEAVY' : '⚖ BALANCED';
+  let html = `<div class="oc-liq-header">
+    <span class="oc-liq-price">BTC $${lz.current_price?.toLocaleString() || '—'}</span>
+    <span class="oc-liq-bias" style="background:${lz.bias_color || '#888'}22;color:${lz.bias_color || '#888'}">${biasLabel}</span>
+  </div>`;
+  html += lz.zones.slice(0, 4).map(z => `<div class="oc-liq-zone-row">
+    <span class="oc-liq-lev">${z.leverage}</span>
+    <span class="oc-liq-long">L $${z.long_liq_price?.toLocaleString()}</span>
+    <span class="oc-liq-short">S $${z.short_liq_price?.toLocaleString()}</span>
+    <span class="oc-liq-vol">${fmtUsd(z.est_volume_usd)}</span>
+  </div>`).join('');
+  el.innerHTML = html;
+}
+
+/* --- Section collapse/expand toggle --- */
+let _ocTogglesInited = false;
+function _initOCSectionToggles() {
+  if (_ocTogglesInited) return;
+  _ocTogglesInited = true;
+  document.querySelectorAll('[data-oc-toggle]').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const section = hdr.closest('.oc-section');
+      if (!section) return;
+      section.classList.toggle('collapsed');
+      const key = section.dataset.ocSection;
+      if (key) {
+        const collapsed = JSON.parse(localStorage.getItem('ryzm_oc_collapsed') || '{}');
+        collapsed[key] = section.classList.contains('collapsed');
+        localStorage.setItem('ryzm_oc_collapsed', JSON.stringify(collapsed));
+      }
+      try { lucide.createIcons(); } catch(e) {}
+    });
+  });
+  // Restore saved state
+  const saved = JSON.parse(localStorage.getItem('ryzm_oc_collapsed') || '{}');
+  Object.entries(saved).forEach(([key, isCollapsed]) => {
+    if (isCollapsed) {
+      const sec = document.querySelector(`[data-oc-section="${key}"]`);
+      if (sec) sec.classList.add('collapsed');
+    }
+  });
 }
 
 /* ═══════════════════════════════════════
@@ -1221,7 +1814,7 @@ function initPanelDragDrop() {
     const container = document.getElementById(panelId);
     if (!container || typeof Sortable === 'undefined') return;
 
-    // Restore saved order
+    // Restore saved order — only reorder children that actually belong to this container
     const savedOrder = JSON.parse(localStorage.getItem(`ryzm_panel_order_${panelId}`) || '[]');
     if (savedOrder.length > 0) {
       const childMap = {};
@@ -1232,7 +1825,10 @@ function initPanelDragDrop() {
         }
       });
       savedOrder.forEach(key => {
-        if (childMap[key]) container.appendChild(childMap[key]);
+        // Only reorder if the element is ALREADY a child of this container
+        if (childMap[key] && childMap[key].parentElement === container) {
+          container.appendChild(childMap[key]);
+        }
       });
     }
 
@@ -1244,6 +1840,7 @@ function initPanelDragDrop() {
       handle: '.panel-title',
       filter: '.chart-container, .council-container, .ai-scan-btn',
       preventOnFilter: false,
+      group: { name: panelId, pull: false, put: false }, // prevent cross-panel drag
       onEnd: () => {
         // Save order locally
         const order = Array.from(container.children)
@@ -1267,7 +1864,7 @@ const _translations = {
     // Panel titles  
     risk_gauge: "Systemic Risk Gauge",
     museum_scars: "Museum of Scars",
-    fg_chart: "Fear & Greed (30D)",
+    fg_chart: "Fear & Greed Index",
     mtf_analysis: "Multi-TF Analysis",
     kimchi_premium: "Kimchi Premium",
     econ_calendar: "Economic Calendar",
@@ -1277,7 +1874,10 @@ const _translations = {
     onchain_radar: "On-Chain Radar",
     live_wire: "Live Wire",
     ai_tracker: "AI Prediction Tracker",
-    market_heatmap: "Market Heatmap (24h)",
+    market_heatmap: "Market Heatmap",
+    hm_total_mcap: "Total MCap",
+    hm_top_gainers: "Top Gainers",
+    hm_top_losers: "Top Losers",
     // Buttons
     execute_analysis: "EXECUTE ANALYSIS PROTOCOL",
     copy_report: "COPY REPORT FOR X",
@@ -1297,8 +1897,10 @@ const _translations = {
     tf: "TF", rsi: "RSI", ema: "EMA", signal: "Signal",
     // On-chain
     open_interest: "Open Interest",
+    funding_rates: "Funding Rates",
     mempool_fees: "BTC Mempool Fees (sat/vB)",
     network_hashrate: "Network Hashrate",
+    liq_zones: "Liquidation Zones",
     // Council stats
     sessions: "SESSIONS", hit_rate: "HIT RATE", hits: "HITS",
     // Strategic narrative
@@ -1371,7 +1973,7 @@ const _translations = {
     market_vibe: "시장 분위기:",
     risk_gauge: "시스템 리스크 게이지",
     museum_scars: "상흔의 박물관",
-    fg_chart: "공포 & 탐욕 (30일)",
+    fg_chart: "공포 & 탐욕 지수",
     mtf_analysis: "멀티 타임프레임 분석",
     kimchi_premium: "김치 프리미엄",
     econ_calendar: "경제 캘린더",
@@ -1381,7 +1983,10 @@ const _translations = {
     onchain_radar: "온체인 레이더",
     live_wire: "뉴스 피드",
     ai_tracker: "AI 예측 추적기",
-    market_heatmap: "시장 히트맵 (24h)",
+    market_heatmap: "시장 히트맵",
+    hm_total_mcap: "총 시가총액",
+    hm_top_gainers: "상승 TOP",
+    hm_top_losers: "하락 TOP",
     execute_analysis: "분석 프로토콜 실행",
     copy_report: "X용 리포트 복사",
     export_snapshot: "스냅샷 내보내기",
@@ -1396,8 +2001,10 @@ const _translations = {
     chat_placeholder: "시장에 대해 무엇이든 물어보세요...",
     tf: "주기", rsi: "RSI", ema: "EMA", signal: "시그널",
     open_interest: "미결제약정",
+    funding_rates: "펀딩비율",
     mempool_fees: "BTC 멤풀 수수료 (sat/vB)",
     network_hashrate: "네트워크 해시레이트",
+    liq_zones: "청산 존",
     sessions: "세션", hit_rate: "적중률", hits: "적중",
     strategic_narrative: "전략적 내러티브",
     rc_sentiment: "심리지수",
@@ -1565,8 +2172,10 @@ function applyTranslations(lang) {
   // 7) On-chain subtitles
   const ocSubs = document.querySelectorAll('.oc-subtitle');
   if (ocSubs[0]) ocSubs[0].textContent = dict.open_interest || 'Open Interest';
-  if (ocSubs[1]) ocSubs[1].textContent = dict.mempool_fees || 'BTC Mempool Fees (sat/vB)';
-  if (ocSubs[2]) ocSubs[2].textContent = dict.network_hashrate || 'Network Hashrate';
+  if (ocSubs[1]) ocSubs[1].textContent = dict.funding_rates || 'Funding Rates';
+  if (ocSubs[2]) ocSubs[2].textContent = dict.mempool_fees || 'BTC Mempool Fees (sat/vB)';
+  if (ocSubs[3]) ocSubs[3].textContent = dict.network_hashrate || 'Network Hashrate';
+  if (ocSubs[4]) ocSubs[4].textContent = dict.liq_zones || 'Liquidation Zones';
 
   // 8) Council stat labels
   const statLabels = document.querySelectorAll('.ch-stat-label');
@@ -1603,7 +2212,10 @@ function toggleShortcutsModal() {
     { keys: [mod, 'R'], label: _currentLang === 'ko' ? '전체 새로고침' : 'Refresh all data' },
     { keys: [mod, '/'], label: _currentLang === 'ko' ? '채팅 열기' : 'Open Ryzm Chat' },
     { keys: ['D'], label: _currentLang === 'ko' ? '다크/라이트 모드 전환' : 'Toggle dark/light mode' },
-    { keys: ['F11'], label: _currentLang === 'ko' ? '전체화면' : 'Fullscreen' },
+    { keys: ['F'], label: _currentLang === 'ko' ? '전체화면 토글' : 'Toggle fullscreen' },
+    { keys: ['1'], label: _currentLang === 'ko' ? '좌측 패널 포커스' : 'Focus left panel' },
+    { keys: ['2'], label: _currentLang === 'ko' ? '중앙 패널 포커스' : 'Focus center panel' },
+    { keys: ['3'], label: _currentLang === 'ko' ? '우측 패널 포커스' : 'Focus right panel' },
     { keys: ['Esc'], label: _currentLang === 'ko' ? '모달/채팅 닫기' : 'Close modals' },
     { keys: ['?'], label: _currentLang === 'ko' ? '이 도움말 표시' : 'Show this help' },
   ];
