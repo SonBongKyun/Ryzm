@@ -200,6 +200,51 @@ def init_council_db():
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             """)
+            # ── Announcements table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS announcements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    level TEXT DEFAULT 'info',
+                    active INTEGER DEFAULT 1,
+                    created_at_utc TEXT NOT NULL
+                )
+            """)
+            # ── Briefing Subscribers table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS briefing_subscribers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    active INTEGER DEFAULT 1,
+                    subscribed_at_utc TEXT NOT NULL,
+                    unsubscribed_at_utc TEXT DEFAULT NULL
+                )
+            """)
+            # ── Portfolio Holdings table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS portfolio_holdings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    symbol TEXT NOT NULL,
+                    amount REAL NOT NULL DEFAULT 0,
+                    avg_price REAL NOT NULL DEFAULT 0,
+                    created_at_utc TEXT NOT NULL,
+                    updated_at_utc TEXT NOT NULL,
+                    UNIQUE(user_id, symbol),
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+            # Migration: add trial columns to users
+            for col_def in [
+                ("trial_used", "INTEGER DEFAULT 0"),
+                ("trial_started_at", "TEXT DEFAULT NULL"),
+                ("onboarding_step", "INTEGER DEFAULT 0"),
+            ]:
+                try:
+                    c.execute(f"ALTER TABLE users ADD COLUMN {col_def[0]} {col_def[1]}")
+                except sqlite3.OperationalError:
+                    pass
             # Migration: add new columns to existing users table if missing
             for col_def in [
                 ("email_verified", "INTEGER DEFAULT 0"),
@@ -312,6 +357,28 @@ def update_user_stripe_customer(user_id: int, stripe_customer_id: str):
             c.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", (stripe_customer_id, user_id))
     except Exception as e:
         logger.error(f"[DB] Update Stripe customer error: {e}")
+
+
+def update_user_display_name(user_id: int, display_name: str):
+    """Update user display name."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE users SET display_name = ? WHERE id = ?", (display_name.strip(), user_id))
+            return True
+    except Exception as e:
+        logger.error(f"[DB] Update display name error: {e}")
+        return False
+
+
+def update_user_password_hash(user_id: int, pw_hash: str):
+    """Update user password hash."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, user_id))
+            return True
+    except Exception as e:
+        logger.error(f"[DB] Update password error: {e}")
+        return False
 
 
 def update_user_login(user_id: int):
@@ -992,6 +1059,359 @@ def record_usage(uid: str, endpoint: str):
             )
     except Exception as e:
         logger.error(f"[Usage] Record error: {e}")
+
+
+# ───────────────────────────────────────
+# Admin Dashboard Queries
+# ───────────────────────────────────────
+def admin_get_users(search: str = "", page: int = 1, per_page: int = 20) -> dict:
+    """Paginated user list for admin dashboard."""
+    try:
+        offset = (page - 1) * per_page
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            if search:
+                like = f"%{search}%"
+                c.execute("SELECT COUNT(*) FROM users WHERE email LIKE ? OR display_name LIKE ? OR uid LIKE ?", (like, like, like))
+                total = c.fetchone()[0]
+                c.execute(
+                    """SELECT id, email, display_name, uid, tier, email_verified,
+                              stripe_customer_id, created_at_utc, last_login_utc
+                       FROM users WHERE email LIKE ? OR display_name LIKE ? OR uid LIKE ?
+                       ORDER BY id DESC LIMIT ? OFFSET ?""",
+                    (like, like, like, per_page, offset)
+                )
+            else:
+                c.execute("SELECT COUNT(*) FROM users")
+                total = c.fetchone()[0]
+                c.execute(
+                    """SELECT id, email, display_name, uid, tier, email_verified,
+                              stripe_customer_id, created_at_utc, last_login_utc
+                       FROM users ORDER BY id DESC LIMIT ? OFFSET ?""",
+                    (per_page, offset)
+                )
+            users = [dict(r) for r in c.fetchall()]
+        return {"users": users, "total": total, "page": page, "per_page": per_page, "pages": max(1, (total + per_page - 1) // per_page)}
+    except Exception as e:
+        logger.error(f"[Admin] Get users error: {e}")
+        return {"users": [], "total": 0, "page": 1, "per_page": per_page, "pages": 1}
+
+
+def admin_get_stats() -> dict:
+    """Aggregate dashboard statistics for admin."""
+    stats = {}
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            # Total users
+            c.execute("SELECT COUNT(*) FROM users")
+            stats["total_users"] = c.fetchone()[0]
+            # Pro users
+            c.execute("SELECT COUNT(*) FROM users WHERE tier = 'pro'")
+            stats["pro_users"] = c.fetchone()[0]
+            # Free users
+            stats["free_users"] = stats["total_users"] - stats["pro_users"]
+            # Email verified
+            c.execute("SELECT COUNT(*) FROM users WHERE email_verified = 1")
+            stats["verified_users"] = c.fetchone()[0]
+            # Registered today
+            c.execute("SELECT COUNT(*) FROM users WHERE date(created_at_utc) = date('now')")
+            stats["signups_today"] = c.fetchone()[0]
+            # Active today (last_login_utc today)
+            c.execute("SELECT COUNT(*) FROM users WHERE date(last_login_utc) = date('now')")
+            stats["active_today"] = c.fetchone()[0]
+            # Active last 7 days
+            c.execute("SELECT COUNT(*) FROM users WHERE datetime(last_login_utc) > datetime('now', '-7 days')")
+            stats["active_7d"] = c.fetchone()[0]
+            # AI usage today
+            c.execute("SELECT endpoint, COUNT(*) AS cnt FROM ai_usage WHERE date(used_at_utc) = date('now') GROUP BY endpoint")
+            stats["usage_today"] = {r["endpoint"]: r["cnt"] for r in c.fetchall()}
+            # AI usage last 7 days by day
+            c.execute("""
+                SELECT date(used_at_utc) AS day, endpoint, COUNT(*) AS cnt
+                FROM ai_usage
+                WHERE datetime(used_at_utc) > datetime('now', '-7 days')
+                GROUP BY day, endpoint ORDER BY day
+            """)
+            daily = {}
+            for r in c.fetchall():
+                d = r["day"]
+                if d not in daily:
+                    daily[d] = {}
+                daily[d][r["endpoint"]] = r["cnt"]
+            stats["usage_7d"] = daily
+            # Total council analyses
+            c.execute("SELECT COUNT(*) FROM council_history")
+            stats["total_councils"] = c.fetchone()[0]
+            # Total journal entries
+            c.execute("SELECT COUNT(*) FROM signal_journal")
+            stats["total_journals"] = c.fetchone()[0]
+            # Active subscriptions
+            c.execute("SELECT COUNT(*) FROM subscriptions WHERE status = 'active'")
+            stats["active_subscriptions"] = c.fetchone()[0]
+            # Signup trend (last 14 days)
+            c.execute("""
+                SELECT date(created_at_utc) AS day, COUNT(*) AS cnt
+                FROM users
+                WHERE datetime(created_at_utc) > datetime('now', '-14 days')
+                GROUP BY day ORDER BY day
+            """)
+            stats["signup_trend"] = [{"day": r["day"], "count": r["cnt"]} for r in c.fetchall()]
+    except Exception as e:
+        logger.error(f"[Admin] Stats error: {e}")
+    return stats
+
+
+def admin_get_system_info() -> dict:
+    """System/cache status for admin monitoring."""
+    from app.core.cache import cache
+    info = {"cache": {}}
+    try:
+        for key, val in cache.items():
+            if isinstance(val, dict) and "updated" in val:
+                updated = val["updated"]
+                age = round(time.time() - updated) if updated else None
+                has_data = bool(val.get("data"))
+                info["cache"][key] = {"has_data": has_data, "age_seconds": age, "updated": updated}
+    except Exception as e:
+        logger.error(f"[Admin] System info error: {e}")
+    # DB file size
+    try:
+        info["db_size_mb"] = round(os.path.getsize(DB_PATH) / (1024 * 1024), 2)
+    except Exception:
+        info["db_size_mb"] = None
+    return info
+
+
+def admin_delete_user(user_id: int) -> bool:
+    """Delete a user and all associated data."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT uid FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            if not row:
+                return False
+            uid = row[0]
+            # Clean up related data
+            if uid:
+                c.execute("DELETE FROM ai_usage WHERE uid = ?", (uid,))
+                c.execute("DELETE FROM price_alerts WHERE uid = ?", (uid,))
+                c.execute("DELETE FROM user_layouts WHERE uid = ?", (uid,))
+            c.execute("DELETE FROM signal_journal WHERE user_id = ?", (user_id,))
+            c.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
+            c.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        logger.info(f"[Admin] Deleted user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"[Admin] Delete user error: {e}")
+        return False
+
+
+# ── Announcements ──
+def admin_create_announcement(title: str, content: str, level: str = "info") -> Optional[int]:
+    """Create an admin announcement."""
+    try:
+        with db_session() as (conn, c):
+            c.execute(
+                "INSERT INTO announcements (title, content, level, active, created_at_utc) VALUES (?, ?, ?, 1, ?)",
+                (title, content, level, utc_now_str())
+            )
+            return c.lastrowid
+    except Exception as e:
+        logger.error(f"[Admin] Create announcement error: {e}")
+        return None
+
+
+def admin_get_announcements(active_only: bool = True) -> List[dict]:
+    """Get announcements."""
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            if active_only:
+                c.execute("SELECT * FROM announcements WHERE active = 1 ORDER BY id DESC")
+            else:
+                c.execute("SELECT * FROM announcements ORDER BY id DESC LIMIT 50")
+            return [dict(r) for r in c.fetchall()]
+    except Exception as e:
+        logger.error(f"[Admin] Get announcements error: {e}")
+        return []
+
+
+def admin_toggle_announcement(ann_id: int, active: bool) -> bool:
+    """Toggle announcement active status."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE announcements SET active = ? WHERE id = ?", (1 if active else 0, ann_id))
+            return c.rowcount > 0
+    except Exception as e:
+        logger.error(f"[Admin] Toggle announcement error: {e}")
+        return False
+
+
+# ───────────────────────────────────────
+# Briefing Subscribers
+# ───────────────────────────────────────
+def subscribe_briefing(email: str) -> dict:
+    """Subscribe email to daily briefing. Returns status dict."""
+    try:
+        with db_session() as (conn, c):
+            # Check if already exists
+            c.execute("SELECT id, active FROM briefing_subscribers WHERE email = ?", (email,))
+            row = c.fetchone()
+            if row:
+                if row[1] == 1:
+                    return {"status": "exists", "message": "Already subscribed!"}
+                else:
+                    # Re-activate
+                    c.execute(
+                        "UPDATE briefing_subscribers SET active = 1, unsubscribed_at_utc = NULL WHERE id = ?",
+                        (row[0],)
+                    )
+                    return {"status": "reactivated", "message": "Welcome back! Subscription reactivated."}
+            else:
+                c.execute(
+                    "INSERT INTO briefing_subscribers (email, active, subscribed_at_utc) VALUES (?, 1, ?)",
+                    (email, utc_now_str())
+                )
+                return {"status": "ok", "message": "Subscribed! You'll receive daily briefings at 9:00 KST."}
+    except Exception as e:
+        logger.error(f"[Briefing] Subscribe error: {e}")
+        return {"status": "error", "message": "Subscription failed. Please try again."}
+
+
+def unsubscribe_briefing(email: str) -> bool:
+    """Unsubscribe email from daily briefing."""
+    try:
+        with db_session() as (conn, c):
+            c.execute(
+                "UPDATE briefing_subscribers SET active = 0, unsubscribed_at_utc = ? WHERE email = ? AND active = 1",
+                (utc_now_str(), email)
+            )
+            return c.rowcount > 0
+    except Exception as e:
+        logger.error(f"[Briefing] Unsubscribe error: {e}")
+        return False
+
+
+def get_active_briefing_subscribers() -> List[str]:
+    """Get list of active subscriber emails."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT email FROM briefing_subscribers WHERE active = 1")
+            return [row[0] for row in c.fetchall()]
+    except Exception as e:
+        logger.error(f"[Briefing] Get subscribers error: {e}")
+        return []
+
+
+# ───────────────────────────────────────
+# Portfolio Holdings
+# ───────────────────────────────────────
+def upsert_portfolio_holding(user_id: int, symbol: str, amount: float, avg_price: float = 0) -> bool:
+    """Insert or update a portfolio holding."""
+    try:
+        now = utc_now_str()
+        with db_session() as (conn, c):
+            c.execute(
+                """INSERT INTO portfolio_holdings (user_id, symbol, amount, avg_price, created_at_utc, updated_at_utc)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id, symbol) DO UPDATE SET amount=excluded.amount, avg_price=excluded.avg_price, updated_at_utc=excluded.updated_at_utc""",
+                (user_id, symbol.upper(), amount, avg_price, now, now)
+            )
+        return True
+    except Exception as e:
+        logger.error(f"[Portfolio] Upsert error: {e}")
+        return False
+
+
+def get_portfolio_holdings(user_id: int) -> list:
+    """Get all holdings for a user."""
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            c.execute("SELECT * FROM portfolio_holdings WHERE user_id = ? ORDER BY symbol", (user_id,))
+            return [dict(r) for r in c.fetchall()]
+    except Exception as e:
+        logger.error(f"[Portfolio] Get error: {e}")
+        return []
+
+
+def delete_portfolio_holding(user_id: int, symbol: str) -> bool:
+    """Remove a holding."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("DELETE FROM portfolio_holdings WHERE user_id = ? AND symbol = ?", (user_id, symbol.upper()))
+            return c.rowcount > 0
+    except Exception as e:
+        logger.error(f"[Portfolio] Delete error: {e}")
+        return False
+
+
+def get_council_accuracy_summary() -> dict:
+    """Get overall council accuracy stats for the accuracy dashboard."""
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            # Overall stats
+            c.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END) as hits,
+                    SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) as misses
+                FROM council_eval WHERE hit >= 0
+            """)
+            overall = dict(c.fetchone())
+            total = overall["total"] or 0
+            hits = overall["hits"] or 0
+            accuracy_pct = round((hits / total) * 100, 1) if total > 0 else None
+
+            # Recent 30 entries for sparkline
+            c.execute("""
+                SELECT e.hit, e.horizon_min, h.consensus_score, h.timestamp
+                FROM council_eval e
+                JOIN council_history h ON h.id = e.council_id
+                WHERE e.hit >= 0
+                ORDER BY e.evaluated_at_utc DESC
+                LIMIT 30
+            """)
+            recent = [dict(r) for r in c.fetchall()]
+
+            # By prediction direction
+            c.execute("""
+                SELECT
+                    COALESCE(h.prediction, 'NEUTRAL') as pred,
+                    COUNT(*) as cnt,
+                    SUM(CASE WHEN e.hit = 1 THEN 1 ELSE 0 END) as h
+                FROM council_eval e
+                JOIN council_history h ON h.id = e.council_id
+                WHERE e.hit >= 0
+                GROUP BY pred
+            """)
+            by_prediction = {r["pred"]: {"total": r["cnt"], "hits": r["h"], "pct": round((r["h"]/r["cnt"])*100, 1) if r["cnt"] > 0 else 0} for r in c.fetchall()}
+
+            return {
+                "total_evaluated": total,
+                "total_hits": hits,
+                "accuracy_pct": accuracy_pct,
+                "recent": recent,
+                "by_prediction": by_prediction,
+            }
+    except Exception as e:
+        logger.error(f"[DB] Council accuracy summary error: {e}")
+        return {"total_evaluated": 0, "total_hits": 0, "accuracy_pct": None, "recent": [], "by_prediction": {}}
+
+
+def update_user_onboarding_step(user_id: int, step: int):
+    """Update user's onboarding progress step."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE users SET onboarding_step = ? WHERE id = ?", (step, user_id))
+    except Exception as e:
+        logger.error(f"[DB] Update onboarding step error: {e}")
+
+
+def mark_user_trial_used(user_id: int):
+    """Mark that user has used their free trial."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE users SET trial_used = 1, trial_started_at = ? WHERE id = ?", (utc_now_str(), user_id))
+    except Exception as e:
+        logger.error(f"[DB] Mark trial used error: {e}")
 
 
 # ── Initialize DB on import ──

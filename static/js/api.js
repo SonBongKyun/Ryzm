@@ -31,6 +31,12 @@ async function apiFetch(url, opts = {}) {
 
   fetchOpts.credentials = fetchOpts.credentials || 'same-origin';
 
+  // Auto-attach Bearer token from localStorage (dual-auth: cookie + header)
+  const token = typeof localStorage !== 'undefined' && localStorage.getItem('ryzm_token');
+  if (token && !fetchOpts.headers?.['Authorization']) {
+    fetchOpts.headers = { ...fetchOpts.headers, 'Authorization': `Bearer ${token}` };
+  }
+
   const doFetch = async (attempt) => {
     const controller = new AbortController();
     const timer = timeoutMs > 0

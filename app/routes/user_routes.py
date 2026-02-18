@@ -53,7 +53,8 @@ def get_me(request: Request):
 
     response = JSONResponse(content=content)
     if not request.cookies.get("ryzm_uid"):
-        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax", secure=True)
+        _secure = request.url.scheme == "https"
+        response.set_cookie("ryzm_uid", uid, max_age=86400 * 365, httponly=True, samesite="lax", secure=_secure)
     return response
 
 
@@ -68,11 +69,9 @@ def check_feature(feature: str, request: Request):
 
 # ─── Price Alert System ───
 @router.get("/api/alerts")
-def get_alerts(request: Request):
+def get_alerts(request: Request, response: Response):
     """Get all active (un-triggered) alerts for this user."""
-    uid = request.cookies.get("ryzm_uid")
-    if not uid:
-        return {"alerts": [], "triggered": []}
+    uid = get_or_create_uid(request, response)
     try:
         with db_session() as (conn, c):
             c.execute(
@@ -100,7 +99,11 @@ def create_alert(request: PriceAlertRequest, http_request: Request, response: Re
             c.execute("SELECT COUNT(*) FROM price_alerts WHERE uid = ? AND triggered = 0", (uid,))
             count = c.fetchone()[0]
         if count >= MAX_FREE_ALERTS and get_user_tier(uid) != "pro":
-            raise HTTPException(status_code=403, detail=f"Free tier limit: {MAX_FREE_ALERTS} active alerts. Upgrade to Pro for unlimited.")
+            return JSONResponse(status_code=403, content={
+                "code": "LIMIT_REACHED",
+                "feature": "alerts",
+                "detail": f"Free tier limit: {MAX_FREE_ALERTS} active alerts. Upgrade to Pro for more.",
+            })
     except HTTPException:
         raise
     except Exception as e:

@@ -9,7 +9,11 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.logger import logger
-from app.core.config import RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, BASE_URL
+from app.core.config import RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, UpdateProfileRequest, ChangePasswordRequest, BASE_URL, ADMIN_EMAILS
+
+# ── Beta Invite Code (optional gating) ──
+import os
+BETA_INVITE_CODE = os.getenv("BETA_INVITE_CODE", "")  # empty = open registration
 from app.core.auth import (
     hash_password, verify_password, create_token, get_current_user,
     generate_verification_token, generate_reset_token, get_reset_expiry,
@@ -19,6 +23,7 @@ from app.core.database import (
     link_uid_to_user, update_user_login, update_user_tos,
     set_email_verify_token, verify_email_token,
     set_password_reset_token, validate_reset_token, reset_password,
+    update_user_display_name, update_user_password_hash,
 )
 from app.core.email import send_verification_email, send_password_reset_email
 
@@ -37,6 +42,9 @@ def register(body: RegisterRequest, request: Request):
     """Register a new account with email + password. Sends verification email."""
     if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
         raise HTTPException(429, "Too many requests. Please wait a moment.")
+    # Beta invite code gate (if configured)
+    if BETA_INVITE_CODE and body.invite_code.strip() != BETA_INVITE_CODE:
+        raise HTTPException(403, "Invalid invite code. Ryzm is currently in closed beta.")
     if not _EMAIL_RE.match(body.email):
         raise HTTPException(400, "Invalid email format")
     if len(body.password) < 8:
@@ -74,6 +82,7 @@ def register(body: RegisterRequest, request: Request):
         "user_id": user_id,
         "email": body.email,
         "tier": "free",
+        "is_admin": body.email.lower() in ADMIN_EMAILS,
         "token": token,
         "email_verified": False,
         "message": "Verification email sent. Please check your inbox.",
@@ -96,12 +105,14 @@ def login(body: LoginRequest, request: Request):
 
     update_user_login(user["id"])
     token = create_token(user["id"], user["email"], user["tier"])
+    from app.core.config import ADMIN_EMAILS
     resp = JSONResponse(content={
         "status": "ok",
         "user_id": user["id"],
         "email": user["email"],
         "display_name": user["display_name"],
         "tier": user["tier"],
+        "is_admin": user["email"].lower() in ADMIN_EMAILS,
         "token": token,
     })
     resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=True)
@@ -112,17 +123,20 @@ def login(body: LoginRequest, request: Request):
 @router.get("/profile")
 def get_profile(request: Request):
     """Get authenticated user profile."""
+    from app.core.config import ADMIN_EMAILS
     user_data = get_current_user(request)
     if not user_data:
         raise HTTPException(401, "Not authenticated")
     user = get_user_by_id(int(user_data["sub"]))
     if not user:
         raise HTTPException(404, "User not found")
+    is_admin = user["email"].lower() in ADMIN_EMAILS
     return {
         "user_id": user["id"],
         "email": user["email"],
         "display_name": user["display_name"],
         "tier": user["tier"],
+        "is_admin": is_admin,
         "email_verified": bool(user.get("email_verified", 0)),
         "tos_accepted": bool(user.get("tos_accepted_at")),
         "created_at": user["created_at_utc"],
@@ -200,3 +214,39 @@ def do_reset_password(body: ResetPasswordRequest):
 
     logger.info(f"[Auth] Password reset completed for {user_info['email']}")
     return {"status": "ok", "message": "Password reset successfully. You can now login."}
+
+
+@router.post("/update-profile")
+def update_profile(body: UpdateProfileRequest, request: Request):
+    """Update display name for the current user."""
+    user_data = get_current_user(request)
+    if not user_data:
+        raise HTTPException(401, "Not authenticated")
+    user = get_user_by_id(int(user_data["sub"]))
+    if not user:
+        raise HTTPException(404, "User not found")
+    success = update_user_display_name(user["id"], body.display_name)
+    if not success:
+        raise HTTPException(500, "Failed to update profile")
+    return {"status": "ok", "display_name": body.display_name.strip()}
+
+
+@router.post("/change-password")
+def change_password(body: ChangePasswordRequest, request: Request):
+    """Change password for the current user (requires current password)."""
+    user_data = get_current_user(request)
+    if not user_data:
+        raise HTTPException(401, "Not authenticated")
+    user = get_user_by_id(int(user_data["sub"]))
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(400, "Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters")
+    new_hash = hash_password(body.new_password)
+    success = update_user_password_hash(user["id"], new_hash)
+    if not success:
+        raise HTTPException(500, "Failed to change password")
+    logger.info(f"[Auth] Password changed for user {user['id']}")
+    return {"status": "ok", "message": "Password changed successfully."}

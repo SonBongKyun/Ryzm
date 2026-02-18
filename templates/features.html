@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Features — Ryzm Terminal{% endblock %}
+{% block description %}Explore all features of Ryzm Terminal: Analysis Council, Trade Validator, 20+ live panels, TradingView charts, and more.{% endblock %}
+
+{% block body %}
+
+<!-- ── Features Hero ── -->
+<section class="page-hero">
+  <div class="page-hero-inner anim-fade-up">
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      EVERYTHING YOU NEED
+    </div>
+    <h1>Powerful Features for<br/><span class="hero-highlight">Serious Traders</span></h1>
+    <p>Ryzm Terminal combines AI intelligence, real-time market data, and professional analytics into one unified platform.</p>
+  </div>
+</section>
+
+<!-- ── AI Intelligence ── -->
+<section class="section feature-section">
+  <div class="section-inner">
+    <div class="feature-block">
+      <div class="feature-text anim-fade-up">
+        <span class="feature-label">AI INTELLIGENCE</span>
+        <h2>5 Specialized Analysis Frameworks</h2>
+        <p>Every analysis passes through five distinct frameworks, each applying a different lens to the same market data:</p>
+        <ul class="feature-list">
+          <li><strong>Macro Framework</strong> — Macro economy & fundamental analysis</li>
+          <li><strong>On-Chain Framework</strong> — Blockchain data & whale activity tracking</li>
+          <li><strong>Technical Framework</strong> — Chart patterns, indicators & price action</li>
+          <li><strong>Sentiment Framework</strong> — Market sentiment, news & social signals</li>
+          <li><strong>Risk Framework</strong> — Risk management & downside protection</li>
+        </ul>
+      </div>
+      <div class="feature-visual anim-fade-up anim-delay-1">
+        <div class="feat-council-demo">
+          <div class="fcd-header">
+            <span class="fcd-dot"></span>
+            AI COUNCIL ANALYSIS
+          </div>
+          <div class="fcd-verdict">
+            <span class="fcd-verdict-label">CONSENSUS</span>
+            <span class="fcd-verdict-val fcd-bullish">BULLISH — 72%</span>
+          </div>
+          <div class="fcd-lenses">
+            <div class="fcd-lens"><span class="fcd-lens-name"><i data-lucide="globe" style="width:12px;height:12px;"></i> Macro</span><span class="fcd-bar"><span class="fcd-fill" style="width:78%"></span></span><span class="fcd-score mock-up">78</span></div>
+            <div class="fcd-lens"><span class="fcd-lens-name"><i data-lucide="link" style="width:12px;height:12px;"></i> On-Chain</span><span class="fcd-bar"><span class="fcd-fill" style="width:82%"></span></span><span class="fcd-score mock-up">82</span></div>
+            <div class="fcd-lens"><span class="fcd-lens-name"><i data-lucide="bar-chart-2" style="width:12px;height:12px;"></i> Technical</span><span class="fcd-bar"><span class="fcd-fill" style="width:70%"></span></span><span class="fcd-score mock-up">70</span></div>
+            <div class="fcd-lens"><span class="fcd-lens-name"><i data-lucide="message-circle" style="width:12px;height:12px;"></i> Sentiment</span><span class="fcd-bar"><span class="fcd-fill fcd-fill-dn" style="width:45%"></span></span><span class="fcd-score mock-dn">45</span></div>
+            <div class="fcd-lens"><span class="fcd-lens-name"><i data-lucide="shield" style="width:12px;height:12px;"></i> Risk</span><span class="fcd-bar"><span class="fcd-fill fcd-fill-neutral" style="width:60%"></span></span><span class="fcd-score">60</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Trade Validator ── -->
+<section class="section feature-section alt">
+  <div class="section-inner">
+    <div class="feature-block reverse">
+      <div class="feature-text anim-fade-up">
+        <span class="feature-label">RISK MANAGEMENT</span>
+        <h2>Trade Validator</h2>
+        <p>Before you execute, submit your trade idea for instant AI-powered validation. Get a comprehensive risk score, entry/exit analysis, and personalized recommendations.</p>
+        <ul class="feature-list">
+          <li>Instant risk scoring (1–100)</li>
+          <li>Entry price & leverage analysis</li>
+          <li>Position sizing recommendations</li>
+          <li>Historical pattern matching</li>
+        </ul>
+      </div>
+      <div class="feature-visual anim-fade-up anim-delay-1">
+        <div class="validator-demo-v2">
+          <div class="vd2-header">TRADE VALIDATION</div>
+          <div class="vd2-trade-info">
+            <span class="vd2-pair">BTC/USDT</span>
+            <span class="vd2-dir vd2-long">LONG</span>
+            <span class="vd2-lev">10x</span>
+          </div>
+          <div class="vd2-score-wrap">
+            <svg viewBox="0 0 120 120" class="score-ring">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#2D2D32" stroke-width="8"/>
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#C9A96E" stroke-width="8" stroke-dasharray="254" stroke-dashoffset="76" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+            </svg>
+            <span class="score-num">72</span>
+          </div>
+          <div class="vd2-verdict">MODERATE RISK — PROCEED WITH CAUTION</div>
+          <div class="vd2-details">
+            <div class="vd2-row"><span>Entry Zone</span><span class="mock-up">$66,800 – $67,200</span></div>
+            <div class="vd2-row"><span>Stop Loss</span><span class="mock-dn">$65,400</span></div>
+            <div class="vd2-row"><span>Take Profit</span><span class="mock-up">$69,800</span></div>
+            <div class="vd2-row"><span>R:R Ratio</span><span>1 : 2.8</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Live Panels ── -->
+<section class="section feature-section">
+  <div class="section-inner">
+    <div class="feature-block">
+      <div class="feature-text anim-fade-up">
+        <span class="feature-label">REAL-TIME DATA</span>
+        <h2>20+ Professional Panels</h2>
+        <p>Access the same caliber of market intelligence that institutional traders rely on:</p>
+        <div class="panel-tag-grid">
+          <span class="panel-tag">Fear & Greed Index</span>
+          <span class="panel-tag">Liquidation Heatmap</span>
+          <span class="panel-tag">Whale Tracker</span>
+          <span class="panel-tag">Correlation Matrix</span>
+          <span class="panel-tag">Kimchi Premium</span>
+          <span class="panel-tag">Alpha Scanner</span>
+          <span class="panel-tag">On-Chain Radar</span>
+          <span class="panel-tag">Multi-Timeframe</span>
+          <span class="panel-tag">Funding Rates</span>
+          <span class="panel-tag">Open Interest</span>
+          <span class="panel-tag">BTC Dominance</span>
+          <span class="panel-tag">Orderbook Depth</span>
+        </div>
+      </div>
+      <div class="feature-visual anim-fade-up anim-delay-1">
+        <div class="feat-panels-demo">
+          <div class="fpd-grid">
+            <div class="fpd-cell">
+              <span class="fpd-label">Fear & Greed</span>
+              <span class="fpd-val mock-up" style="font-size:1.4rem;">72</span>
+              <span class="fpd-sub mock-up">Greed</span>
+            </div>
+            <div class="fpd-cell">
+              <span class="fpd-label">BTC Dominance</span>
+              <span class="fpd-val">54.2%</span>
+              <span class="fpd-sub mock-dn">-0.3%</span>
+            </div>
+            <div class="fpd-cell fpd-wide">
+              <span class="fpd-label">Funding Rate</span>
+              <div class="fpd-funding-row">
+                <span>BTC <em class="mock-up">0.012%</em></span>
+                <span>ETH <em class="mock-up">0.008%</em></span>
+                <span>SOL <em class="mock-dn">-0.003%</em></span>
+              </div>
+            </div>
+            <div class="fpd-cell">
+              <span class="fpd-label">Liquidations 24h</span>
+              <span class="fpd-val mock-dn">$142M</span>
+              <span class="fpd-sub">Long: 62% · Short: 38%</span>
+            </div>
+            <div class="fpd-cell">
+              <span class="fpd-label">Whale Flow</span>
+              <span class="fpd-val mock-up">+2,840</span>
+              <span class="fpd-sub">BTC net inflow</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Additional Features Grid ── -->
+<section class="section feature-section alt">
+  <div class="section-inner">
+    <div class="section-header anim-fade-up">
+      <h2 class="section-title">And Much More</h2>
+      <p class="section-subtitle">Every tool a modern crypto trader needs — in one platform</p>
+    </div>
+    <div class="highlight-grid cols-4">
+      <div class="highlight-card compact anim-fade-up">
+        <div class="highlight-icon sm"><i data-lucide="candlestick-chart"></i></div>
+        <h3>TradingView Charts</h3>
+        <p>Full TradingView integration with multi-symbol support</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up anim-delay-1">
+        <div class="highlight-icon sm"><i data-lucide="message-circle"></i></div>
+        <h3>Ask Ryzm Chat</h3>
+        <p>AI chatbot for market questions and strategy ideas</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up anim-delay-2">
+        <div class="highlight-icon sm"><i data-lucide="bell-ring"></i></div>
+        <h3>Price Alerts</h3>
+        <p>Set alerts on any coin with custom conditions</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up">
+        <div class="highlight-icon sm"><i data-lucide="notebook-pen"></i></div>
+        <h3>Signal Journal</h3>
+        <p>Log trades, track P&L, review performance</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up anim-delay-1">
+        <div class="highlight-icon sm"><i data-lucide="layout-dashboard"></i></div>
+        <h3>Custom Layout</h3>
+        <p>Drag & drop panel arrangement saved per user</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up anim-delay-2">
+        <div class="highlight-icon sm"><i data-lucide="download"></i></div>
+        <h3>Data Export</h3>
+        <p>Export journal and council data as CSV</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up">
+        <div class="highlight-icon sm"><i data-lucide="moon"></i></div>
+        <h3>Dark / Light Mode</h3>
+        <p>Cyberpunk dark theme and clean white/gold theme</p>
+      </div>
+      <div class="highlight-card compact anim-fade-up anim-delay-1">
+        <div class="highlight-icon sm"><i data-lucide="languages"></i></div>
+        <h3>Multi-Language</h3>
+        <p>English and Korean language support</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Platform Numbers ── -->
+<section class="section">
+  <div class="section-inner">
+    <div class="proof-stats anim-fade-up">
+      <div class="proof-stat">
+        <span class="proof-num" data-count="20">0</span><span class="proof-suffix">+</span>
+        <span class="proof-label">Live Panels</span>
+      </div>
+      <div class="proof-divider"></div>
+      <div class="proof-stat">
+        <span class="proof-num" data-count="5">0</span><span class="proof-suffix"></span>
+        <span class="proof-label">AI Frameworks</span>
+      </div>
+      <div class="proof-divider"></div>
+      <div class="proof-stat">
+        <span class="proof-num" data-count="15">0</span><span class="proof-suffix">+</span>
+        <span class="proof-label">Data Sources</span>
+      </div>
+      <div class="proof-divider"></div>
+      <div class="proof-stat">
+        <span class="proof-num" data-count="500">0</span><span class="proof-suffix">ms</span>
+        <span class="proof-label">Avg Response</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="section cta-banner">
+  <div class="cta-banner-inner anim-fade-up">
+    <h2>Experience the full power of Ryzm</h2>
+    <p>Start with Free and upgrade when you're ready.</p>
+    <div class="cta-actions">
+      <a href="/app" class="site-btn site-btn-primary site-btn-lg hero-btn-glow">
+        <i data-lucide="rocket" style="width:18px;height:18px;"></i>
+        Launch Terminal
+      </a>
+      <a href="/pricing" class="site-btn site-btn-ghost site-btn-lg">View Pricing</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const animEls = document.querySelectorAll('.anim-fade-up');
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('anim-visible'); obs.unobserve(e.target); } });
+    }, { threshold: 0.15 });
+    animEls.forEach(el => obs.observe(el));
+  } else { animEls.forEach(el => el.classList.add('anim-visible')); }
+
+  const countEls = document.querySelectorAll('.proof-num[data-count]');
+  if ('IntersectionObserver' in window) {
+    const cObs = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const target = +e.target.dataset.count;
+          let current = 0;
+          const step = Math.max(1, Math.floor(target / 60));
+          const iv = setInterval(() => { current += step; if (current >= target) { current = target; clearInterval(iv); } e.target.textContent = current.toLocaleString(); }, 20);
+          cObs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    countEls.forEach(el => cObs.observe(el));
+  }
+})();
+</script>
+{% endblock %}

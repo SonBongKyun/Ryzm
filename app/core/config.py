@@ -23,6 +23,7 @@ if not GENAI_API_KEY:
 
 # ── Admin / Discord ──
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+ADMIN_EMAILS = [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # ── CORS ──
@@ -45,9 +46,9 @@ RISK_SAVE_INTERVAL = 600  # 10 min
 # ── SaaS Limits ──
 DAILY_FREE_LIMITS = {"validate": 3, "chat": 20, "council": 10}
 DAILY_PRO_LIMITS = {"validate": 9999, "chat": 9999, "council": 9999}
-MAX_FREE_ALERTS = 3
+MAX_FREE_ALERTS = 5
 MAX_PRO_ALERTS = 100
-MAX_FREE_JOURNAL = 5
+MAX_FREE_JOURNAL = 20
 MAX_PRO_JOURNAL = 500
 
 # ── Email / SMTP Configuration ──
@@ -61,15 +62,21 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 # ── ToS ──
 TOS_VERSION = "1.0"
 
+# ── Pro Plan Pricing ──
+PRO_PRICE_USD = 20  # monthly price in USD
+STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")  # Stripe Price ID
+PRO_TRIAL_DAYS = int(os.getenv("PRO_TRIAL_DAYS", "7"))  # Free trial period
+
 PRO_FEATURES = {
     "unlimited_validate",
     "unlimited_council",
     "unlimited_chat",
     "price_alerts",
     "layout_sync",
-    "export_pdf",
-    "telegram_alerts",
-    "backtest",
+    "export_csv",
+    # "export_pdf",       # Coming soon — v2.0
+    # "telegram_alerts",  # Coming soon — v2.0
+    # "backtest",         # Coming soon — v2.0
 }
 
 # ── Yahoo Finance ──
@@ -155,6 +162,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=200)
     display_name: str = Field(default="", max_length=50)
     accept_tos: bool = Field(default=False)
+    invite_code: str = Field(default="", max_length=50)
 
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=200)
@@ -166,6 +174,30 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., max_length=200)
     new_password: str = Field(..., min_length=8, max_length=200)
+
+class UpdateProfileRequest(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=50)
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., max_length=200)
+    new_password: str = Field(..., min_length=8, max_length=200)
+
+# ── Admin Request Models ──
+class AdminChangeTierRequest(BaseModel):
+    tier: Literal["free", "pro"]
+
+class AdminAnnouncementRequest(BaseModel):
+    title: str = Field(..., max_length=200)
+    content: str = Field(..., max_length=5000)
+    level: Literal["info", "warning", "critical"] = "info"
+
+class AdminToggleAnnouncementRequest(BaseModel):
+    active: bool = True
+
+class PortfolioHoldingRequest(BaseModel):
+    symbol: str = Field(..., max_length=20)
+    amount: float = Field(..., gt=0)
+    avg_price: float = Field(default=0, ge=0)
 
 class JournalCreateRequest(BaseModel):
     council_id: int = Field(default=0)

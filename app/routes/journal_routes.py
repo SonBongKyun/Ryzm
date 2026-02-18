@@ -3,6 +3,8 @@ Ryzm Terminal — Signal Journal Routes
 CRUD for journal entries: save council snapshots, track positions, record outcomes.
 Pro feature with limited free access.
 """
+import csv
+import io
 import json
 
 from fastapi import APIRouter, HTTPException, Request
@@ -18,6 +20,7 @@ from app.core.database import (
     update_journal_entry, delete_journal_entry, get_journal_stats,
     get_user_by_id, utc_now_str,
 )
+from app.core.security import get_user_tier
 
 router = APIRouter(prefix="/api/journal", tags=["journal"])
 
@@ -142,3 +145,39 @@ def delete_entry(entry_id: int, request: Request):
         raise HTTPException(404, "Entry not found")
 
     return {"status": "deleted", "id": entry_id}
+
+
+# ─── Pro Feature: Journal CSV Export ───
+@router.get("/export/csv")
+def export_journal_csv(request: Request):
+    """Export signal journal as CSV (Pro feature)."""
+    from fastapi.responses import StreamingResponse
+    user_data = _require_auth(request)
+    user_id = int(user_data["sub"])
+
+    # Check Pro tier
+    user = get_user_by_id(user_id)
+    if not user or user.get("tier") != "pro":
+        raise HTTPException(403, "Pro subscription required for CSV export.")
+
+    entries = get_journal_entries(user_id, limit=500, offset=0)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "created_at", "position_type", "entry_price",
+        "stop_loss", "take_profit", "outcome", "exit_price",
+        "pnl_pct", "user_note", "tags", "closed_at"
+    ])
+    for e in entries:
+        writer.writerow([
+            e.get("id"), e.get("created_at_utc"), e.get("position_type"),
+            e.get("entry_price"), e.get("stop_loss"), e.get("take_profit"),
+            e.get("outcome"), e.get("exit_price"), e.get("pnl_pct"),
+            e.get("user_note"), e.get("tags"), e.get("closed_at_utc"),
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=ryzm_journal.csv"},
+    )

@@ -28,7 +28,7 @@ from app.services.market_service import (
     fetch_heatmap_data, fetch_multi_timeframe,
 )
 from app.services.onchain_service import (
-    fetch_long_short_ratio, fetch_funding_rate, fetch_whale_trades,
+    fetch_long_short_ratio, fetch_long_short_history, fetch_funding_rate, fetch_whale_trades,
     fetch_whale_wallets, fetch_liquidation_zones, fetch_onchain_data,
 )
 from app.services.scanner_service import fetch_alpha_scanner
@@ -68,7 +68,7 @@ def send_discord_alert(title, message, color=0xdc2626):
 
 
 def check_price_alerts():
-    """Check all active alerts against current market prices."""
+    """Check all active alerts against current market prices. Sends email + Discord notifications."""
     try:
         market = cache["market"]["data"]
         if not market or not isinstance(market, dict):
@@ -78,6 +78,7 @@ def check_price_alerts():
             alerts = c.fetchall()
             now_str = utc_now_str()
             triggered_count = 0
+            triggered_details = []
             for alert_id, uid, symbol, target, direction in alerts:
                 current = market.get(symbol.upper(), {}).get("price")
                 if current is None:
@@ -90,8 +91,43 @@ def check_price_alerts():
                 if hit:
                     c.execute("UPDATE price_alerts SET triggered = 1, triggered_at_utc = ? WHERE id = ?", (now_str, alert_id))
                     triggered_count += 1
+                    triggered_details.append((uid, symbol, direction, target, current))
                     logger.info(f"[Alerts] TRIGGERED #{alert_id}: {symbol} {direction} ${target} (current: ${current})")
             # db_session auto-commits on clean exit
+
+        # Broadcast triggered alerts via SSE to connected browsers
+        if triggered_details:
+            try:
+                from app.routes.sse_routes import broadcast_event
+                for uid, symbol, direction, target, current in triggered_details:
+                    broadcast_event('price_alert', {
+                        'symbol': symbol,
+                        'direction': direction,
+                        'target_price': target,
+                        'current_price': current,
+                    })
+            except Exception as sse_err:
+                logger.error(f"[Alerts] SSE broadcast error: {sse_err}")
+
+        # Send individual email notifications for triggered alerts
+        if triggered_details:
+            try:
+                from app.core.email import send_price_alert_email
+                from app.core.database import get_user_by_uid
+                for uid, symbol, direction, target, current in triggered_details:
+                    user = get_user_by_uid(uid) if uid else None
+                    if user and user.get("email"):
+                        send_price_alert_email(user["email"], symbol, direction, target, current)
+            except Exception as email_err:
+                logger.error(f"[Alerts] Email notification error: {email_err}")
+
+            # Also send Discord summary
+            alert_lines = [f"• {s} {d} ${t:,.2f} (now: ${c:,.2f})" for _, s, d, t, c in triggered_details]
+            send_discord_alert(
+                f"🔔 {triggered_count} Alert(s) Triggered",
+                "\n".join(alert_lines[:10]),
+                color=0xC9A96E
+            )
     except Exception as e:
         logger.error(f"[Alerts] Check error: {e}")
 
@@ -143,6 +179,14 @@ def refresh_cache():
                 logger.info("[Cache] L/S Ratio refreshed")
         except Exception as e:
             logger.error(f"[Cache] L/S Ratio refresh error: {e}")
+
+        try:
+            if now - cache["long_short_history"]["updated"] > 3600:  # refresh every hour
+                cache["long_short_history"]["data"] = fetch_long_short_history()
+                cache["long_short_history"]["updated"] = now
+                logger.info("[Cache] L/S History refreshed")
+        except Exception as e:
+            logger.error(f"[Cache] L/S History refresh error: {e}")
 
         try:
             if now - cache["funding_rate"]["updated"] > CACHE_TTL:

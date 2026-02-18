@@ -4,6 +4,8 @@ Checkout session, webhooks, customer portal, subscription status.
 Stripe is lazy-loaded so the app runs fine without STRIPE_SECRET_KEY.
 """
 import os
+import time
+from collections import OrderedDict
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -14,6 +16,7 @@ from app.core.database import (
     get_user_by_id, update_user_tier, update_user_stripe_customer,
     create_subscription, update_subscription_status,
     get_active_subscription, get_subscription_by_stripe_id,
+    mark_user_trial_used,
 )
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -21,8 +24,26 @@ router = APIRouter(prefix="/api/payments", tags=["payments"])
 # ── Stripe Config (optional — app works without it) ──
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_PRICE_ID_PRO = os.getenv("STRIPE_PRICE_ID_PRO", "")
-SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
+STRIPE_PRICE_ID_PRO = os.getenv("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID_MONTHLY", ""))
+SITE_URL = os.getenv("SITE_URL", os.getenv("APP_BASE_URL", "http://localhost:8000"))
+PRO_TRIAL_DAYS = int(os.getenv("PRO_TRIAL_DAYS", "7"))
+
+_stripe = None
+
+# ── Idempotency: track recently processed webhook event IDs ──
+_processed_events: OrderedDict = OrderedDict()
+_MAX_PROCESSED_EVENTS = 500
+
+
+def _is_duplicate_event(event_id: str) -> bool:
+    """Check if this webhook event was already processed (idempotent)."""
+    if event_id in _processed_events:
+        return True
+    _processed_events[event_id] = time.time()
+    # Evict oldest entries to prevent memory leak
+    while len(_processed_events) > _MAX_PROCESSED_EVENTS:
+        _processed_events.popitem(last=False)
+    return False
 
 _stripe = None
 
@@ -65,8 +86,9 @@ def create_checkout(request: Request):
             customer=customer_id,
             mode="subscription",
             line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
-            success_url=f"{SITE_URL}/?payment=success",
-            cancel_url=f"{SITE_URL}/?payment=canceled",
+            subscription_data={"trial_period_days": PRO_TRIAL_DAYS} if not user.get("trial_used") else {},
+            success_url=f"{SITE_URL}/app?payment=success",
+            cancel_url=f"{SITE_URL}/app?payment=canceled",
             metadata={"user_id": str(user["id"])},
         )
         return {"checkout_url": session.url}
@@ -79,7 +101,7 @@ def create_checkout(request: Request):
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
-    """Handle Stripe webhook events (subscription lifecycle)."""
+    """Handle Stripe webhook events (subscription lifecycle). Idempotent."""
     stripe = _get_stripe()
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
@@ -90,15 +112,21 @@ async def stripe_webhook(request: Request):
         logger.error(f"[Stripe] Webhook verification failed: {e}")
         raise HTTPException(400, "Invalid webhook signature")
 
+    # Idempotency: skip duplicate events
+    event_id = event.get("id", "")
+    if _is_duplicate_event(event_id):
+        logger.info(f"[Stripe] Duplicate event skipped: {event_id}")
+        return {"received": True, "duplicate": True}
+
     etype = event["type"]
     data = event["data"]["object"]
-    logger.info(f"[Stripe] Webhook: {etype}")
+    logger.info(f"[Stripe] Webhook: {etype} (event_id={event_id})")
 
-    if etype == "checkout.session.completed":
-        user_id = int(data["metadata"].get("user_id", 0))
-        sub_id = data.get("subscription")
-        if user_id and sub_id:
-            try:
+    try:
+        if etype == "checkout.session.completed":
+            user_id = int(data["metadata"].get("user_id", 0))
+            sub_id = data.get("subscription")
+            if user_id and sub_id:
                 sub = stripe.Subscription.retrieve(sub_id)
                 create_subscription(
                     user_id=user_id,
@@ -107,24 +135,42 @@ async def stripe_webhook(request: Request):
                     period_end=str(sub.get("current_period_end", "")),
                 )
                 update_user_tier(user_id, "pro")
-                logger.info(f"[Stripe] User {user_id} upgraded to Pro")
-            except Exception as e:
-                logger.error(f"[Stripe] Subscription creation error: {e}")
+                logger.info(f"[Stripe] User {user_id} upgraded to Pro (checkout)")
 
-    elif etype in ("customer.subscription.updated", "customer.subscription.deleted"):
-        sub_id = data.get("id")
-        status = data.get("status", "canceled")
-        period_end = str(data.get("current_period_end", ""))
-        update_subscription_status(sub_id, status, period_end)
+        elif etype == "invoice.paid":
+            # Recurring payment success → ensure user stays Pro
+            sub_id = data.get("subscription")
+            if sub_id:
+                sub_record = get_subscription_by_stripe_id(sub_id)
+                if sub_record:
+                    update_user_tier(sub_record["user_id"], "pro")
+                    period_end = str(data.get("lines", {}).get("data", [{}])[0].get("period", {}).get("end", ""))
+                    update_subscription_status(sub_id, "active", period_end)
+                    logger.info(f"[Stripe] Invoice paid: user {sub_record['user_id']} renewed Pro")
 
-        if status in ("canceled", "unpaid", "past_due"):
-            sub_record = get_subscription_by_stripe_id(sub_id)
-            if sub_record:
-                update_user_tier(sub_record["user_id"], "free")
-                logger.info(f"[Stripe] User {sub_record['user_id']} downgraded to free")
+        elif etype in ("customer.subscription.updated", "customer.subscription.deleted"):
+            sub_id = data.get("id")
+            status = data.get("status", "canceled")
+            period_end = str(data.get("current_period_end", ""))
+            update_subscription_status(sub_id, status, period_end)
 
-    elif etype == "invoice.payment_failed":
-        logger.warning(f"[Stripe] Payment failed for customer {data.get('customer')}")
+            if status in ("canceled", "unpaid", "past_due", "incomplete_expired"):
+                sub_record = get_subscription_by_stripe_id(sub_id)
+                if sub_record:
+                    update_user_tier(sub_record["user_id"], "free")
+                    logger.info(f"[Stripe] User {sub_record['user_id']} downgraded to free (status={status})")
+
+        elif etype == "invoice.payment_failed":
+            sub_id = data.get("subscription")
+            customer_id = data.get("customer")
+            logger.warning(f"[Stripe] Payment failed: customer={customer_id}, sub={sub_id}")
+            # Grace period: don't immediately downgrade. Stripe retries automatically.
+            # If all retries fail, subscription.deleted event will fire.
+
+    except Exception as e:
+        logger.error(f"[Stripe] Webhook processing error ({etype}): {e}", exc_info=True)
+        # Still return 200 to prevent Stripe retry storm
+        return {"received": True, "error": str(e)}
 
     return {"received": True}
 
@@ -170,3 +216,33 @@ def get_portal(request: Request):
     except Exception as e:
         logger.error(f"[Stripe] Portal error: {e}")
         raise HTTPException(500, "Failed to create portal session")
+
+
+@router.post("/start-trial")
+def start_trial(request: Request):
+    """Start a 7-day Pro trial (no credit card required). One-time only."""
+    user_data = get_current_user(request)
+    if not user_data:
+        raise HTTPException(401, "Login required")
+
+    user = get_user_by_id(int(user_data["sub"]))
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user["tier"] == "pro":
+        raise HTTPException(400, "Already a Pro subscriber")
+    if user.get("trial_used"):
+        raise HTTPException(400, "Free trial already used")
+
+    # Activate trial
+    update_user_tier(user["id"], "pro")
+    mark_user_trial_used(user["id"])
+
+    # Send welcome email
+    try:
+        from app.core.email import send_trial_welcome_email
+        send_trial_welcome_email(user["email"], user.get("display_name", ""))
+    except Exception as e:
+        logger.warning(f"[Trial] Welcome email failed: {e}")
+
+    logger.info(f"[Trial] User {user['id']} ({user['email']}) started {PRO_TRIAL_DAYS}-day Pro trial")
+    return {"status": "ok", "message": f"Pro trial activated! {PRO_TRIAL_DAYS} days free.", "trial_days": PRO_TRIAL_DAYS}

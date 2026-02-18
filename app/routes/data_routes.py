@@ -2,6 +2,7 @@
 Ryzm Terminal — Data API Routes
 All market/news/onchain/scanner data endpoints.
 """
+import os
 import time
 from datetime import datetime, timezone
 
@@ -12,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from app.core.logger import logger
 from app.core.config import CACHE_TTL, MUSEUM_OF_SCARS
 from app.core.cache import cache, build_api_meta
-from app.core.database import get_risk_history, db_session, get_risk_component_changes, get_component_sparklines
+from app.core.database import get_risk_history, db_session, get_risk_component_changes, get_component_sparklines, subscribe_briefing as db_subscribe_briefing
 from app.core.http_client import get_api_health
 from app.services.market_service import fetch_multi_timeframe
 from app.services.onchain_service import (
@@ -31,20 +32,47 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
-# ── Static Pages ──
+# ── Site Pages ──
 @router.get("/")
-async def read_index(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+async def read_home(request: Request):
+    """Landing page — public website homepage."""
+    return templates.TemplateResponse(request=request, name="home.html", context={"request": request, "active_page": "home"})
+
+@router.get("/features")
+async def read_features(request: Request):
+    return templates.TemplateResponse(request=request, name="features.html", context={"request": request, "active_page": "features"})
+
+@router.get("/pricing")
+async def read_pricing(request: Request):
+    return templates.TemplateResponse(request=request, name="pricing.html", context={"request": request, "active_page": "pricing"})
+
+@router.get("/about")
+async def read_about(request: Request):
+    return templates.TemplateResponse(request=request, name="about.html", context={"request": request, "active_page": "about"})
+
+# ── App (Dashboard) — always serve fresh HTML, never cache ──
+@router.get("/app")
+async def read_app(request: Request):
+    """Serve the main trading dashboard."""
+    response = templates.TemplateResponse(request=request, name="index.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @router.get("/verify-email")
 async def verify_email_page(request: Request):
     """Serve index.html — frontend JS handles email verification via URL params."""
-    return templates.TemplateResponse(request=request, name="index.html")
+    response = templates.TemplateResponse(request=request, name="index.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 @router.get("/reset-password")
 async def reset_password_page(request: Request):
     """Serve index.html — frontend JS handles password reset via URL params."""
-    return templates.TemplateResponse(request=request, name="index.html")
+    response = templates.TemplateResponse(request=request, name="index.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 @router.get("/manifest.json")
 async def get_manifest():
@@ -60,7 +88,20 @@ async def get_sw():
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ok", "ryzm_os": "online"}
+    import os
+    from datetime import datetime, timezone
+    _start_time = getattr(health_check, '_start_time', None)
+    if _start_time is None:
+        health_check._start_time = time.time()
+        _start_time = health_check._start_time
+    uptime_sec = round(time.time() - _start_time)
+    return {
+        "status": "ok",
+        "ryzm_os": "online",
+        "version": os.getenv("APP_VERSION", "1.0.0"),
+        "time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "uptime_sec": uptime_sec,
+    }
 
 
 # ── Data Endpoints ──
@@ -69,6 +110,10 @@ async def get_long_short():
     try:
         data = cache["long_short_ratio"]["data"]
         resp = dict(data) if isinstance(data, dict) else {"ratio": data}
+        # Include L/S history if available
+        hist = cache.get("long_short_history", {}).get("data", {})
+        if hist:
+            resp["history"] = hist
         resp["_meta"] = build_api_meta("long_short_ratio", sources=["fapi.binance.com"])
         return resp
     except Exception as e:
@@ -238,6 +283,8 @@ async def health_check_sources():
             s["age"] = -1
     return {
         "sources": sources, "active": active, "total": len(sources),
+        "status": "ok" if active >= len(sources) // 2 else "degraded",
+        "version": os.getenv("APP_VERSION", "1.0.0"),
         "_meta": {"fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
     }
 
@@ -391,3 +438,34 @@ def get_liq_zones():
     except Exception as e:
         logger.error(f"[API] LiqZones error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch liquidation zones")
+
+
+# ── Public App Config (for frontend to detect beta mode, etc.) ──
+@router.get("/api/config")
+def get_public_config():
+    """Return non-secret app configuration flags for frontend."""
+    beta_code = os.getenv("BETA_INVITE_CODE", "")
+    stripe_configured = bool(os.getenv("STRIPE_SECRET_KEY", ""))
+    return {
+        "beta_mode": bool(beta_code),
+        "stripe_configured": stripe_configured,
+        "version": os.getenv("APP_VERSION", "1.0.0"),
+    }
+
+
+# ── Daily Briefing Subscription ──
+@router.post("/api/subscribe-briefing")
+async def subscribe_briefing_endpoint(request: Request):
+    """Store email subscription for daily briefing."""
+    import re
+    try:
+        body = await request.json()
+        email = (body.get("email") or "").strip().lower()
+        if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return {"status": "error", "message": "Please enter a valid email address."}
+        result = db_subscribe_briefing(email)
+        logger.info(f"[Briefing] Subscription: {email} → {result['status']}")
+        return result
+    except Exception as e:
+        logger.error(f"[Briefing] Subscribe error: {e}")
+        return {"status": "error", "message": "Subscription failed. Please try again."}

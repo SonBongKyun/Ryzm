@@ -7,20 +7,134 @@
   <title>{% block title %}Ryzm Terminal{% endblock %}</title>
   <meta name="description" content="{% block description %}Ryzm Terminal: Professional cryptocurrency trading dashboard{% endblock %}" />
 
-  <!-- Google Fonts (shared) -->
+  <!-- Open Graph / SNS Preview -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="{% block og_title %}Ryzm - AI Powered Crypto Intelligence{% endblock %}" />
+  <meta property="og:description" content="{% block og_desc %}AI Council이 분석한 실시간 비트코인 매매 전략 & 온체인 데이터.{% endblock %}" />
+  <meta property="og:image" content="/static/og-ryzm.png" />
+  <meta property="og:site_name" content="Ryzm" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Google Fonts — Ryzm Brand Kit -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
 
+  <!-- Site-wide CSS -->
+  <link rel="stylesheet" href="/static/site.css?v=2.2" />
   {% block extra_head %}{% endblock %}
 </head>
 
-<body>
-  {% block body %}{% endblock %}
+<body class="{% block body_class %}site-page{% endblock %}">
 
+  <!-- ── Site Navigation ── -->
+  <nav class="site-nav">
+    <div class="site-nav-inner">
+      <a href="/" class="site-nav-logo">
+        <span class="logo-text">RYZM</span>
+      </a>
+      <button class="site-nav-hamburger" id="nav-hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="site-nav-links" id="nav-links">
+        <li><a href="/" class="{% if active_page == 'home' %}active{% endif %}">Home</a></li>
+        <li><a href="/features" class="{% if active_page == 'features' %}active{% endif %}">Features</a></li>
+        <li><a href="/pricing" class="{% if active_page == 'pricing' %}active{% endif %}">Pricing</a></li>
+        <li><a href="/about" class="{% if active_page == 'about' %}active{% endif %}">About</a></li>
+      </ul>
+      <div class="site-nav-actions">
+        <a href="/app" class="site-btn site-btn-outline">Login</a>
+        <a href="/app" class="site-btn site-btn-primary">Launch Terminal</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main Content ── -->
+  <main class="site-main">
+    {% block body %}{% endblock %}
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <div class="footer-brand">
+        <span class="footer-logo">RYZM</span>
+        <p class="footer-tagline">macro · charts · reality checks</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <h4>Product</h4>
+          <a href="/features">Features</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/app">Terminal</a>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <a href="/about">About</a>
+          <a href="mailto:support@ryzm.io">Contact</a>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <a href="#">Terms of Service</a>
+          <a href="#">Privacy Policy</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 RYZM. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Terminal Launch Transition Overlay -->
+  <div id="terminal-transition" class="tt-overlay">
+    <div class="tt-scanlines"></div>
+    <div class="tt-content">
+      <div class="tt-logo">RYZM</div>
+      <div class="tt-line" id="tt-line"></div>
+      <div class="tt-status">INITIALIZING TERMINAL<span class="tt-dots"></span></div>
+      <div class="tt-bar-wrap"><div class="tt-bar" id="tt-bar"></div></div>
+    </div>
+  </div>
+
+  <script>
+    // Mobile hamburger toggle
+    const hamburger = document.getElementById('nav-hamburger');
+    const navLinks = document.getElementById('nav-links');
+    if (hamburger) {
+      hamburger.addEventListener('click', () => {
+        hamburger.classList.toggle('open');
+        navLinks.classList.toggle('open');
+      });
+    }
+    // Init lucide icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Terminal launch transition
+    (function() {
+      const overlay = document.getElementById('terminal-transition');
+      const bar = document.getElementById('tt-bar');
+      if (!overlay) return;
+
+      document.addEventListener('click', function(e) {
+        const link = e.target.closest('a[href="/app"]');
+        if (!link) return;
+        e.preventDefault();
+        overlay.classList.add('tt-active');
+        // Animate progress bar
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += Math.random() * 18 + 5;
+          if (progress >= 100) { progress = 100; clearInterval(interval); }
+          bar.style.width = progress + '%';
+        }, 120);
+        // Navigate after animation
+        setTimeout(() => { window.location.href = '/app'; }, 1400);
+      });
+    })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

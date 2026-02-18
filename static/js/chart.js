@@ -1,7 +1,7 @@
-/* ═══════════════════════════════════════════════════════════
-   Ryzm Terminal — Chart Engine v4.2
+/* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
+   Ryzm Terminal ??Chart Engine v4.2
    TradingView Lightweight Charts + Binance Data Feed
-   ═══════════════════════════════════════════════════════════
+   ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
    Features:
    [1]  Bollinger Bands (BB 20,2)
    [2]  RSI Sub-chart (14)
@@ -16,14 +16,14 @@
    [11] Order Book Depth Chart
    [12] Backtest / Journal Visualization
    [13] Symbol Comparison Mode
-   ═══════════════════════════════════════════════════════════ */
+   ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
 
 const RyzmChart = (() => {
   'use strict';
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §0  STATE
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   let _chart = null;
   let _candleSeries = null;
   let _volumeSeries = null;
@@ -53,7 +53,7 @@ const RyzmChart = (() => {
   let _nextDrawId = 1;
 
   // Alert lines
-  let _alertLines = {};          // alertId → priceLine
+  let _alertLines = {};          // alertId ??priceLine
 
   // AI signal markers
   let _signalMarkers = [];
@@ -85,26 +85,26 @@ const RyzmChart = (() => {
   let _lineSeries = null;
   let _areaSeries = null;
 
-  // ── Constants ──
+  // ?�?� Constants ?�?�
   const BINANCE_REST = 'https://api.binance.com/api/v3/klines';
   const BINANCE_WS   = 'wss://stream.binance.com:9443/ws';  // kept for comparison/sub-chart WS
   const INTERVALS = { '1m':'1m','5m':'5m','15m':'15m','1H':'1h','4H':'4h','1D':'1d','1W':'1w' };
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §1  THEME
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function getTheme() {
     const d = document.documentElement.getAttribute('data-theme') !== 'light';
     return d ? {
-      bg:'rgba(5,8,18,0)', textColor:'rgba(140,160,190,0.65)',
-      gridColor:'rgba(30,45,70,0.35)', crosshair:'rgba(6,182,212,0.35)',
+      bg:'rgba(13,13,15,0)', textColor:'rgba(140,160,190,0.65)',
+      gridColor:'rgba(30,45,70,0.35)', crosshair:'rgba(201,169,110,0.35)',
       borderColor:'rgba(30,45,70,0.5)',
       upColor:'#06d6a0', downColor:'#ef476f', upWick:'#06d6a0', downWick:'#ef476f',
       volUp:'rgba(6,214,160,0.18)', volDown:'rgba(239,71,111,0.18)',
-      ema7:'#06b6d4', ema25:'#f59e0b', ema99:'#a855f7',
-      bbColor:'rgba(6,182,212,0.25)', bbFill:'rgba(6,182,212,0.04)',
-      rsiColor:'#06b6d4', macdUp:'#06d6a0', macdDown:'#ef476f', macdLine:'#06b6d4', macdSignal:'#f59e0b',
-      watermark:'rgba(6,182,212,0.06)',
+      ema7:'#C9A96E', ema25:'#f59e0b', ema99:'#a855f7',
+      bbColor:'rgba(201,169,110,0.25)', bbFill:'rgba(201,169,110,0.04)',
+      rsiColor:'#C9A96E', macdUp:'#06d6a0', macdDown:'#ef476f', macdLine:'#C9A96E', macdSignal:'#f59e0b',
+      watermark:'rgba(201,169,110,0.06)',
       fundingUp:'rgba(6,214,160,0.55)', fundingDown:'rgba(239,71,111,0.55)',
       compColor:'#f59e0b',
       alertLine:'#f59e0b',
@@ -116,9 +116,9 @@ const RyzmChart = (() => {
       borderColor:'rgba(0,0,0,0.08)',
       upColor:'#059669', downColor:'#dc2626', upWick:'#059669', downWick:'#dc2626',
       volUp:'rgba(5,150,105,0.15)', volDown:'rgba(220,38,38,0.15)',
-      ema7:'#0891b2', ema25:'#d97706', ema99:'#7c3aed',
+      ema7:'#a37e3a', ema25:'#d97706', ema99:'#a37e3a',
       bbColor:'rgba(8,145,178,0.25)', bbFill:'rgba(8,145,178,0.04)',
-      rsiColor:'#0891b2', macdUp:'#059669', macdDown:'#dc2626', macdLine:'#0891b2', macdSignal:'#d97706',
+      rsiColor:'#a37e3a', macdUp:'#059669', macdDown:'#dc2626', macdLine:'#a37e3a', macdSignal:'#d97706',
       watermark:'rgba(0,0,0,0.03)',
       fundingUp:'rgba(5,150,105,0.55)', fundingDown:'rgba(220,38,38,0.55)',
       compColor:'#d97706',
@@ -128,9 +128,9 @@ const RyzmChart = (() => {
     };
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §2  CREATE / DESTROY CHART
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function createChart(containerId) {
     _containerId = containerId || _containerId;
     const container = document.getElementById(_containerId);
@@ -149,8 +149,8 @@ const RyzmChart = (() => {
       grid: { vertLines: { color: t.gridColor }, horzLines: { color: t.gridColor } },
       crosshair: {
         mode: LightweightCharts.CrosshairMode.Normal,
-        vertLine: { color: t.crosshair, width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: 'rgba(6,182,212,0.9)' },
-        horzLine: { color: t.crosshair, width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: 'rgba(6,182,212,0.9)' },
+        vertLine: { color: t.crosshair, width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: 'rgba(201,169,110,0.9)' },
+        horzLine: { color: t.crosshair, width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: 'rgba(201,169,110,0.9)' },
       },
       rightPriceScale: { borderColor: t.borderColor, scaleMargins: { top: 0.08, bottom: 0.22 } },
       timeScale: { borderColor: t.borderColor, timeVisible: true, secondsVisible: false, barSpacing: 8 },
@@ -158,7 +158,7 @@ const RyzmChart = (() => {
       handleScroll: { vertTouchDrag: false },
     });
 
-    // ── Candlestick ──
+    // ?�?� Candlestick ?�?�
     _candleSeries = _chart.addCandlestickSeries({
       upColor: t.upColor, downColor: t.downColor,
       wickUpColor: t.upWick, wickDownColor: t.downWick,
@@ -166,12 +166,12 @@ const RyzmChart = (() => {
       priceFormat: { type: 'price', precision: getPrecision(_currentSymbol), minMove: getMinMove(_currentSymbol) },
     });
 
-    // ── Volume ──
+    // ?�?� Volume ?�?�
     _volumeSeries = _chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'volume' });
     _chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     if (!_indicators.vol) _volumeSeries.applyOptions({ visible: false });
 
-    // ── EMA ──
+    // ?�?� EMA ?�?�
     const emaOpts = (color, dash) => ({
       color, lineWidth: 1, lineStyle: dash ? LightweightCharts.LineStyle.Dashed : LightweightCharts.LineStyle.Solid,
       priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
@@ -181,14 +181,14 @@ const RyzmChart = (() => {
     _ema25 = _chart.addLineSeries(emaOpts(t.ema25, false));
     _ema99 = _chart.addLineSeries(emaOpts(t.ema99, true));
 
-    // ── Bollinger Bands ──
+    // ?�?� Bollinger Bands ?�?�
     const bbOpts = { color: t.bbColor, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid,
       priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, visible: _indicators.bb };
     _bbUpper  = _chart.addLineSeries({ ...bbOpts });
     _bbMiddle = _chart.addLineSeries({ ...bbOpts, lineStyle: LightweightCharts.LineStyle.Dashed });
     _bbLower  = _chart.addLineSeries({ ...bbOpts });
 
-    // ── MACD (on main pane as histogram) ──
+    // ?�?� MACD (on main pane as histogram) ?�?�
     _macdHist = _chart.addHistogramSeries({
       priceScaleId: 'macd', priceFormat: { type: 'price', precision: 2 },
       visible: _indicators.macd,
@@ -205,7 +205,7 @@ const RyzmChart = (() => {
     });
     _chart.priceScale('macd').applyOptions({ scaleMargins: { top: 0.75, bottom: 0.02 }, visible: _indicators.macd });
 
-    // ── Crosshair legend ──
+    // ?�?� Crosshair legend ?�?�
     _legendEl = document.getElementById('ryzm-chart-legend');
     if (_legendEl) {
       _chart.subscribeCrosshairMove(param => {
@@ -216,7 +216,7 @@ const RyzmChart = (() => {
       });
     }
 
-    // ── Click handler for drawings ──
+    // ?�?� Click handler for drawings ?�?�
     _chart.subscribeClick(param => {
       if (!param.time || !param.point) return;
       const price = _candleSeries.coordinateToPrice(param.point.y);
@@ -240,7 +240,7 @@ const RyzmChart = (() => {
       }
     });
 
-    // ── Resize ──
+    // ?�?� Resize ?�?�
     const ro = new ResizeObserver(() => {
       if (_chart) _chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
     });
@@ -260,9 +260,9 @@ const RyzmChart = (() => {
     });
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §2B CHART TYPE SWITCH
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function setChartType(type) {
     if (!_chart || type === _chartType) return;
     _chartType = type;
@@ -289,7 +289,7 @@ const RyzmChart = (() => {
       } else if (type === 'area') {
         _areaSeries = _chart.addAreaSeries({
           lineColor: t.upColor, lineWidth: 2,
-          topColor: 'rgba(6,182,212,0.28)', bottomColor: 'rgba(6,182,212,0.02)',
+          topColor: 'rgba(201,169,110,0.28)', bottomColor: 'rgba(201,169,110,0.02)',
           priceFormat: { type: 'price', precision: getPrecision(_currentSymbol), minMove: getMinMove(_currentSymbol) },
           lastValueVisible: true, crosshairMarkerVisible: true,
         });
@@ -298,9 +298,9 @@ const RyzmChart = (() => {
     }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §3  LOAD HISTORICAL DATA
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   async function loadKlines(symbol, interval, limit = 500) {
     const binInt = INTERVALS[interval] || interval;
     const url = `${BINANCE_REST}?symbol=${symbol}&interval=${binInt}&limit=${limit}`;
@@ -342,9 +342,9 @@ const RyzmChart = (() => {
     } catch (err) { console.error('[RyzmChart] loadKlines:', err); }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §4  WEBSOCKET REAL-TIME + REST FALLBACK
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   let _wsRetry = 0;
   let _wsReconnectTimer = null;
   let _restPollTimer = null;
@@ -468,11 +468,11 @@ const RyzmChart = (() => {
     if (_ws) { _ws.onmessage = null; _ws.onerror = null; _ws.onclose = null; _ws.close(); _ws = null; }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §5  INDICATOR CALCULATIONS
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
 
-  // ── EMA ──
+  // ?�?� EMA ?�?�
   function calcEMA(prices, period, times) {
     if (prices.length < period) return [];
     const k = 2 / (period + 1);
@@ -501,7 +501,7 @@ const RyzmChart = (() => {
     _liveEma99 = closes.length >= 99 ? make(99) : null;
   }
 
-  // ── Bollinger Bands (20, 2) ──
+  // ?�?� Bollinger Bands (20, 2) ?�?�
   function calcBB(prices, period, mult, times) {
     if (prices.length < period) return { upper: [], middle: [], lower: [] };
     const upper = [], middle = [], lower = [];
@@ -527,7 +527,7 @@ const RyzmChart = (() => {
     if (_bbLower) _bbLower.setData(bb.lower);
   }
 
-  // ── RSI (14) — rendered in external div ──
+  // ?�?� RSI (14) ??rendered in external div ?�?�
   function calcRSI(prices, period) {
     if (prices.length < period + 1) return [];
     const result = [];
@@ -562,7 +562,7 @@ const RyzmChart = (() => {
       grid: { vertLines: { color: t.gridColor }, horzLines: { color: t.gridColor } },
       rightPriceScale: { borderColor: t.borderColor, scaleMargins: { top: 0.05, bottom: 0.05 } },
       timeScale: { visible: false },
-      crosshair: { vertLine: { visible: false }, horzLine: { color: t.crosshair, labelBackgroundColor: 'rgba(6,182,212,0.9)' } },
+      crosshair: { vertLine: { visible: false }, horzLine: { color: t.crosshair, labelBackgroundColor: 'rgba(201,169,110,0.9)' } },
       handleScroll: false, handleScale: false,
     });
 
@@ -593,7 +593,7 @@ const RyzmChart = (() => {
     _resizeObservers.push(ro);
   }
 
-  // ── MACD (12, 26, 9) ──
+  // ?�?� MACD (12, 26, 9) ?�?�
   function calcMACD(prices, fast, slow, signal) {
     const emaFast = calcEMA(prices, fast, prices.map((_,i) => i));
     const emaSlow = calcEMA(prices, slow, prices.map((_,i) => i));
@@ -634,9 +634,9 @@ const RyzmChart = (() => {
     if (_macdSignal) _macdSignal.setData(sigData);
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §6  INDICATOR TOGGLE
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function toggleIndicator(name) {
     _indicators[name] = !_indicators[name];
     const v = _indicators[name];
@@ -682,9 +682,9 @@ const RyzmChart = (() => {
 
   function getIndicators() { return { ..._indicators }; }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §7  DRAWING TOOLS
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function setDrawingMode(mode) {
     _drawingMode = mode;
     _drawingPoints = [];
@@ -696,7 +696,7 @@ const RyzmChart = (() => {
   function addHorizontalLine(price, opts = {}) {
     if (!_candleSeries) return;
     const id = _nextDrawId++;
-    const color = opts.color || 'rgba(6,182,212,0.7)';
+    const color = opts.color || 'rgba(201,169,110,0.7)';
     const line = _candleSeries.createPriceLine({
       price, color, lineWidth: 1,
       lineStyle: LightweightCharts.LineStyle.Dashed,
@@ -710,7 +710,7 @@ const RyzmChart = (() => {
   function addTrendLine(p1, p2) {
     if (!_chart) return;
     const series = _chart.addLineSeries({
-      color: 'rgba(6,182,212,0.6)', lineWidth: 1,
+      color: 'rgba(201,169,110,0.6)', lineWidth: 1,
       lineStyle: LightweightCharts.LineStyle.LargeDashed,
       priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
     });
@@ -726,7 +726,7 @@ const RyzmChart = (() => {
   function addFibonacci(highPrice, lowPrice) {
     if (!_candleSeries) return;
     const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-    const colors = ['#ef476f','#f59e0b','#06b6d4','#a855f7','#06d6a0','#f59e0b','#ef476f'];
+    const colors = ['#ef476f','#f59e0b','#C9A96E','#a855f7','#06d6a0','#f59e0b','#ef476f'];
     const diff = highPrice - lowPrice;
     const lines = levels.map((lvl, i) => {
       const price = highPrice - diff * lvl;
@@ -752,9 +752,9 @@ const RyzmChart = (() => {
     _nextDrawId = 1;
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §8  AI SIGNAL MARKERS
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function addSignalMarker(time, position, text, color) {
     _signalMarkers.push({
       time, position: position === 'LONG' ? 'belowBar' : 'aboveBar',
@@ -799,9 +799,9 @@ const RyzmChart = (() => {
     } catch (e) { console.warn('[RyzmChart] Council signals:', e); }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §9  ALERT PRICE LINES
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function syncAlertLines() {
     Object.values(_alertLines).forEach(l => { try { _candleSeries.removePriceLine(l); } catch {} });
     _alertLines = {};
@@ -816,7 +816,7 @@ const RyzmChart = (() => {
               price: +a.target_price, color: t.alertLine, lineWidth: 1,
               lineStyle: LightweightCharts.LineStyle.SparseDotted,
               axisLabelVisible: true,
-              title: `⚡ ${a.direction} $${Number(a.target_price).toLocaleString()}`,
+              title: `??${a.direction} $${Number(a.target_price).toLocaleString()}`,
             });
             _alertLines[a.id] = line;
           }
@@ -824,9 +824,9 @@ const RyzmChart = (() => {
       }).catch(() => {});
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §10  FUNDING RATE OVERLAY
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   let _fundingSeries = null;
 
   async function fetchFundingOverlay() {
@@ -849,9 +849,9 @@ const RyzmChart = (() => {
     if (_fundingSeries && _chart) { try { _chart.removeSeries(_fundingSeries); } catch {} _fundingSeries = null; }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §11  LIQUIDATION HEATMAP OVERLAY
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   let _liqLines = [];
 
   async function fetchLiqOverlay() {
@@ -880,9 +880,9 @@ const RyzmChart = (() => {
     _liqLines = [];
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §12  ORDER BOOK DEPTH CHART
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   let _depthChart = null;
 
   async function fetchDepthChart() {
@@ -934,20 +934,24 @@ const RyzmChart = (() => {
     if (_depthChart) { _depthChart.remove(); _depthChart = null; }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §13  SNAPSHOT + SHARE
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   async function takeSnapshot() {
     const container = document.getElementById(_containerId);
     if (!container || typeof html2canvas === 'undefined') return null;
     try {
       const canvas = await html2canvas(container, { backgroundColor: null, scale: 2, useCORS: true });
       const ctx = canvas.getContext('2d');
+      const siteUrl = location.origin || 'ryzm.io';
       ctx.font = 'bold 14px Share Tech Mono';
-      ctx.fillStyle = 'rgba(6,182,212,0.6)';
+      ctx.fillStyle = 'rgba(201,169,110,0.7)';
       ctx.textAlign = 'right';
-      ctx.fillText('Ryzm Terminal', canvas.width - 20, canvas.height - 15);
-      ctx.fillText(`${_currentSymbol.replace('USDT','/USDT')} | ${_currentInterval}`, canvas.width - 20, canvas.height - 35);
+      ctx.fillText('Ryzm Terminal', canvas.width - 20, canvas.height - 50);
+      ctx.fillText(`${_currentSymbol.replace('USDT','/USDT')} | ${_currentInterval}`, canvas.width - 20, canvas.height - 33);
+      ctx.font = '11px Share Tech Mono';
+      ctx.fillStyle = 'rgba(201,169,110,0.5)';
+      ctx.fillText(siteUrl, canvas.width - 20, canvas.height - 15);
       return canvas.toDataURL('image/png');
     } catch (e) { console.error('[RyzmChart] Snapshot:', e); return null; }
   }
@@ -960,7 +964,7 @@ const RyzmChart = (() => {
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], `ryzm-${_currentSymbol}-${Date.now()}.png`, { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ title: `Ryzm Terminal — ${_currentSymbol.replace('USDT','/USDT')}`, files: [file] });
+          await navigator.share({ title: `Ryzm Terminal ??${_currentSymbol.replace('USDT','/USDT')}`, files: [file] });
           return;
         }
       } catch {}
@@ -971,9 +975,9 @@ const RyzmChart = (() => {
     link.click();
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §14  JOURNAL / BACKTEST VISUALIZATION
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   async function loadJournalOnChart() {
     try {
       const data = await apiFetch('/api/journal?limit=50', { silent: true });
@@ -1003,9 +1007,9 @@ const RyzmChart = (() => {
     } catch (e) { console.warn('[RyzmChart] Journal:', e); }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §15  SYMBOL COMPARISON MODE
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   async function enableComparison(symbol2) {
     disableComparison();
     _compSymbol = symbol2;
@@ -1036,9 +1040,9 @@ const RyzmChart = (() => {
     _compSymbol = null;
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §16  MULTI-CHART LAYOUT
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function setLayout(mode) {
     _layoutMode = mode;
     const wrapper = document.getElementById('chart-layout-wrapper');
@@ -1111,9 +1115,9 @@ const RyzmChart = (() => {
     document.querySelectorAll('.layout-btn').forEach(b => b.classList.toggle('active', b.dataset.layout === mode));
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §17  SWITCH SYMBOL / INTERVAL
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   async function switchSymbol(symbol, interval) {
     _currentSymbol = symbol;
     _currentInterval = interval || _currentInterval;
@@ -1146,9 +1150,9 @@ const RyzmChart = (() => {
     if (_indicators.funding) fetchFundingOverlay();
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §18  THEME UPDATE
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function updateTheme() {
     if (!_chart) return;
     const t = getTheme();
@@ -1174,9 +1178,9 @@ const RyzmChart = (() => {
     }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §19  LEGEND
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function updateLegend(candle, vol) {
     if (!_legendEl) return;
     const chg = candle.close - candle.open;
@@ -1184,7 +1188,7 @@ const RyzmChart = (() => {
     const clr = chg >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
     const sign = chg >= 0 ? '+' : '';
     const t = getTheme();
-    const vs = vol ? formatVolume(vol.value) : '—';
+    const vs = vol ? formatVolume(vol.value) : '--';
 
     _legendEl.innerHTML =
       `<span style="color:var(--text-muted)">O</span> <span style="color:${clr}">${fmtPrice(candle.open)}</span> ` +
@@ -1208,9 +1212,9 @@ const RyzmChart = (() => {
     if (el) { el.textContent = `$${fmtPrice(price)}`; el.style.color = isUp ? 'var(--neon-green)' : 'var(--neon-red)'; }
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §20  HELPERS
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
   function rd(v) { return Math.round(v * 100) / 100; }
   function getPrecision(s) { return s.includes('XRP') ? 4 : s.includes('DOGE') ? 5 : 2; }
   function getMinMove(s) { return s.includes('XRP') ? 0.0001 : s.includes('DOGE') ? 0.00001 : 0.01; }
@@ -1223,9 +1227,9 @@ const RyzmChart = (() => {
     if (v >= 1e3) return (v/1e3).toFixed(1)+'K'; return v.toFixed(0);
   }
 
-  /* ═══════════════════════════════════════
+  /* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
      §21  PUBLIC API
-     ═══════════════════════════════════════ */
+     ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
 
   /** Disconnect all ResizeObservers (M-3 cleanup) */
   function destroyResizeObservers() {

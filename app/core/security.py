@@ -4,6 +4,7 @@ Rate limiter, admin auth, input sanitization, AI response parsing/validation.
 """
 import re
 import json
+import os
 import time
 import uuid
 from collections import defaultdict
@@ -17,6 +18,13 @@ from app.core.config import (
     CouncilResponse, ValidatorResponse, ChatResponse,
 )
 from app.core.logger import logger
+
+# ── Pro Rate Limits (per min, per UID) for cost defence ──
+PRO_RATE_LIMITS = {
+    "council": int(os.getenv("RATE_LIMIT_COUNCIL_PER_MIN", "30")),
+    "chat": int(os.getenv("RATE_LIMIT_CHAT_PER_MIN", "60")),
+    "validate": int(os.getenv("RATE_LIMIT_VALIDATOR_PER_MIN", "20")),
+}
 
 
 # ── Rate Limiter (in-memory, per-IP) ──
@@ -144,10 +152,13 @@ def get_or_create_uid(request: Request, response: Response) -> str:
 
 # ── Pro Feature Gating ──
 def get_user_tier(uid: str) -> str:
-    """Return 'free' or 'pro' based on DB lookup."""
+    """Return 'free' or 'pro' based on DB lookup. Admin emails always get 'pro'."""
     from app.core.database import get_user_by_uid
+    from app.core.config import ADMIN_EMAILS
     user = get_user_by_uid(uid)
     if user:
+        if user.get("email", "").lower() in ADMIN_EMAILS:
+            return "pro"
         return user.get("tier", "free")
     return "free"
 
@@ -157,3 +168,15 @@ def check_pro(uid: str, feature: str) -> bool:
     if feature not in PRO_FEATURES:
         return True
     return get_user_tier(uid) == "pro"
+
+
+def check_pro_rate_limit(uid: str, endpoint: str) -> bool:
+    """Per-UID rate limit for Pro users (cost defence). Returns True if allowed."""
+    limit = PRO_RATE_LIMITS.get(endpoint, 60)
+    key = f"pro:{uid}:{endpoint}"
+    now = time.time()
+    _rate_limits[key] = [t for t in _rate_limits[key] if now - t < 60]
+    if len(_rate_limits[key]) >= limit:
+        return False
+    _rate_limits[key].append(now)
+    return True

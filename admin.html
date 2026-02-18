@@ -1,382 +1,351 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8">
     <title>Ryzm Operator Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700;900&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
-        :root {
-            --bg: #05050a;
-            --panel: #0f0f15;
-            --cyan: #06b6d4;
-            --pink: #ec4899;
-            --text: #e2e8f0;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Inter', sans-serif;
-            display: flex;
-            gap: 20px;
-            padding: 20px;
-            height: 100vh;
-            margin: 0;
-        }
-
-        /* Layout */
-        .sidebar {
-            width: 320px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            flex-shrink: 0;
-        }
-
-        .main-area {
-            flex: 1;
-            background: var(--panel);
-            border-radius: 12px;
-            border: 1px solid #222;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Components */
-        .card {
-            background: var(--panel);
-            border: 1px solid #222;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        h2 {
-            margin: 0 0 15px 0;
-            font-size: 1.1rem;
-            color: var(--cyan);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        input,
-        textarea {
-            width: 100%;
-            background: #000;
-            border: 1px solid #333;
-            color: #fff;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            font-family: 'Inter', monospace;
-            font-size: 0.9rem;
-        }
-
-        textarea {
-            height: 150px;
-            resize: vertical;
-        }
-
-        input:focus,
-        textarea:focus {
-            outline: none;
-            border-color: var(--cyan);
-            box-shadow: 0 0 8px rgba(6, 182, 212, 0.2);
-        }
-
-        button {
-            width: 100%;
-            background: linear-gradient(135deg, var(--cyan), #0891b2);
-            color: #000;
-            border: none;
-            padding: 12px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-size: 0.9rem;
-        }
-
-        button:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        button.secondary {
-            background: linear-gradient(135deg, #333, #222);
-            color: #fff;
-        }
-
-        button.secondary:hover {
-            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
-        }
-
-        /* SVG Preview */
-        #svg-preview {
-            flex: 1;
-            background: #000;
-            border: 1px dashed #333;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-            min-height: 300px;
-        }
-
-        #svg-preview svg {
-            max-width: 100%;
-            max-height: 100%;
-        }
-
-        .status {
-            font-size: 0.8rem;
-            color: #666;
-            margin-top: 8px;
-            text-align: center;
-        }
-
-        .status.success {
-            color: var(--cyan);
-        }
-
-        .status.error {
-            color: var(--pink);
-        }
-
-        /* Logo */
-        .logo-title {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 900;
-            color: var(--cyan);
-            font-size: 1.5rem;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #222;
-        }
-
-        .logo-title span {
-            color: #fff;
-        }
+        :root{--bg:#05050a;--panel:#0c0c14;--panel2:#111119;--cyan:#C9A96E;--pink:#ec4899;--green:#22c55e;--red:#ef4444;--yellow:#facc15;--text:#e2e8f0;--dim:#64748b;--border:#1e1e2e}
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;display:flex;height:100vh;overflow:hidden}
+        .sidebar{width:220px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+        .sidebar-logo{padding:20px 16px;font-family:'Orbitron',sans-serif;font-weight:900;font-size:1.2rem;color:var(--cyan);border-bottom:1px solid var(--border)}
+        .sidebar-logo span{color:#fff;font-size:0.7rem;margin-left:4px;opacity:0.6}
+        .sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+        .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--dim);font-size:0.85rem;font-weight:500;transition:all 0.2s}
+        .nav-item:hover{background:rgba(201,169,110,0.08);color:var(--text)}
+        .nav-item.active{background:rgba(201,169,110,0.12);color:var(--cyan);border:1px solid rgba(201,169,110,0.2)}
+        .nav-item i{width:18px;height:18px}
+        .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:0.7rem;color:var(--dim)}
+        .token-section{padding:12px 16px;border-top:1px solid var(--border)}
+        .token-section input{width:100%;background:#000;border:1px solid var(--border);color:#fff;padding:8px 10px;border-radius:6px;font-size:0.75rem;font-family:'JetBrains Mono',monospace}
+        .token-section input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 6px rgba(201,169,110,0.2)}
+        .token-label{font-size:0.65rem;color:var(--dim);margin-bottom:4px;display:flex;align-items:center;gap:4px}
+        .token-dot{width:6px;height:6px;border-radius:50%;background:var(--red)}
+        .token-dot.ok{background:var(--green)}
+        .main{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px}
+        .page{display:none}.page.active{display:flex;flex-direction:column;gap:20px}
+        .page-header{display:flex;align-items:center;justify-content:space-between}
+        .page-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:1.1rem;color:var(--cyan);display:flex;align-items:center;gap:8px}
+        .page-title i{width:20px;height:20px}
+        .stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+        .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;overflow:hidden}
+        .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+        .stat-card.cyan::before{background:var(--cyan)}.stat-card.pink::before{background:var(--pink)}
+        .stat-card.green::before{background:var(--green)}.stat-card.yellow::before{background:var(--yellow)}
+        .stat-label{font-size:0.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+        .stat-value{font-size:1.6rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .stat-sub{font-size:0.7rem;color:var(--dim);margin-top:4px}
+        .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+        .table-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+        .table-header h3{font-size:0.9rem;color:var(--cyan);display:flex;align-items:center;gap:6px}
+        .search-box{display:flex;gap:8px}
+        .search-box input{background:#000;border:1px solid var(--border);color:#fff;padding:6px 12px;border-radius:6px;font-size:0.8rem;width:220px}
+        .search-box input:focus{outline:none;border-color:var(--cyan)}
+        table{width:100%;border-collapse:collapse}
+        th{padding:10px 14px;text-align:left;font-size:0.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);background:var(--panel2)}
+        td{padding:10px 14px;font-size:0.8rem;border-bottom:1px solid rgba(30,30,46,0.5)}
+        tr:hover td{background:rgba(201,169,110,0.04)}
+        .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.65rem;font-weight:600;text-transform:uppercase}
+        .badge.pro{background:rgba(236,72,153,0.15);color:var(--pink);border:1px solid rgba(236,72,153,0.3)}
+        .badge.free{background:rgba(100,116,139,0.15);color:var(--dim);border:1px solid rgba(100,116,139,0.3)}
+        .badge.verified{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
+        .badge.unverified{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+        .badge.info{background:rgba(201,169,110,0.15);color:var(--cyan);border:1px solid rgba(201,169,110,0.3)}
+        .badge.warning{background:rgba(250,204,21,0.15);color:var(--yellow);border:1px solid rgba(250,204,21,0.3)}
+        .badge.critical{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+        .pagination{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px}
+        .pagination button{background:var(--panel2);border:1px solid var(--border);color:var(--dim);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.75rem;width:auto}
+        .pagination button:hover:not(:disabled){border-color:var(--cyan);color:var(--cyan)}
+        .pagination button:disabled{opacity:0.3;cursor:default}
+        .pagination button.active{background:rgba(201,169,110,0.15);color:var(--cyan);border-color:var(--cyan)}
+        .pagination .info{font-size:0.7rem;color:var(--dim)}
+        .btn{padding:6px 12px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:0.75rem;font-weight:500;display:inline-flex;align-items:center;gap:4px;transition:all 0.2s;width:auto;background:transparent;color:var(--text)}
+        .btn:hover{transform:translateY(-1px)}
+        .btn-cyan{background:rgba(201,169,110,0.15);color:var(--cyan);border-color:rgba(201,169,110,0.3)}
+        .btn-cyan:hover{background:rgba(201,169,110,0.25);box-shadow:0 2px 8px rgba(201,169,110,0.2)}
+        .btn-pink{background:rgba(236,72,153,0.15);color:var(--pink);border-color:rgba(236,72,153,0.3)}
+        .btn-pink:hover{background:rgba(236,72,153,0.25)}
+        .btn-green{background:rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.3)}
+        .btn-green:hover{background:rgba(34,197,94,0.25)}
+        .btn-red{background:rgba(239,68,68,0.15);color:var(--red);border-color:rgba(239,68,68,0.3)}
+        .btn-red:hover{background:rgba(239,68,68,0.25)}
+        .btn-primary{background:linear-gradient(135deg,var(--cyan),#0891b2);color:#000;border:none;padding:8px 16px;font-weight:600}
+        .btn-primary:hover{box-shadow:0 4px 12px rgba(201,169,110,0.3)}
+        .btn-sm{padding:4px 8px;font-size:0.7rem}
+        .chart-container{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+        .chart-title{font-size:0.8rem;color:var(--cyan);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+        .bar-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding-top:8px}
+        .bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+        .bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height 0.5s}
+        .bar.cyan{background:var(--cyan)}.bar.pink{background:var(--pink)}.bar.green{background:var(--green)}
+        .bar-label{font-size:0.55rem;color:var(--dim);white-space:nowrap}
+        .bar-val{font-size:0.6rem;color:var(--text);font-family:'JetBrains Mono',monospace}
+        .form-group{display:flex;flex-direction:column;gap:4px}
+        .form-group label{font-size:0.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px}
+        .form-group input,.form-group textarea,.form-group select{background:#000;border:1px solid var(--border);color:#fff;padding:10px;border-radius:6px;font-family:'Inter',monospace;font-size:0.85rem;width:100%;margin:0}
+        .form-group textarea{height:120px;resize:vertical}
+        .form-group input:focus,.form-group textarea:focus,.form-group select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8px rgba(201,169,110,0.2)}
+        .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        @media(max-width:1200px){.grid-2{grid-template-columns:1fr}}
+        .cache-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+        .cache-item{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px}
+        .cache-key{font-size:0.75rem;font-family:'JetBrains Mono',monospace;color:var(--cyan);margin-bottom:6px}
+        .cache-meta{font-size:0.65rem;color:var(--dim);display:flex;flex-direction:column;gap:2px}
+        .cache-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+        .cache-dot.live{background:var(--green)}.cache-dot.stale{background:var(--yellow)}.cache-dot.dead{background:var(--red)}
+        .svg-preview{flex:1;background:#000;border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:300px}
+        .svg-preview svg{max-width:100%;max-height:100%}
+        ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--dim)}
+        .toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;font-size:0.8rem;z-index:9999;transform:translateX(400px);transition:transform 0.3s;backdrop-filter:blur(10px)}
+        .toast.show{transform:translateX(0)}
+        .toast.success{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
+        .toast.error{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+        .trend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+        .trend-item{text-align:center;padding:8px;background:var(--panel2);border-radius:6px;border:1px solid var(--border)}
+        .trend-item .ep{font-size:0.65rem;color:var(--cyan);text-transform:uppercase;margin-bottom:4px}
+        .trend-item .cnt{font-size:1.2rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .ann-list{display:flex;flex-direction:column;gap:8px}
+        .ann-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel2);border:1px solid var(--border);border-radius:8px}
+        .ann-item .ann-body{flex:1}
+        .ann-item .ann-title{font-size:0.8rem;font-weight:600}
+        .ann-item .ann-content{font-size:0.7rem;color:var(--dim);margin-top:2px}
+        .ann-item .ann-meta{font-size:0.6rem;color:var(--dim);margin-top:4px}
+        .ann-item .ann-actions{display:flex;gap:4px}
+        .spin{animation:spin 1s linear infinite}
+        @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
     </style>
 </head>
-
 <body>
+<div class="sidebar">
+    <div class="sidebar-logo">RYZM <span>OPERATOR</span></div>
+    <div class="sidebar-nav">
+        <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')"><i data-lucide="layout-dashboard"></i> Dashboard</div>
+        <div class="nav-item" data-page="users" onclick="switchPage('users')"><i data-lucide="users"></i> Users</div>
+        <div class="nav-item" data-page="system" onclick="switchPage('system')"><i data-lucide="cpu"></i> System</div>
+        <div class="nav-item" data-page="announcements" onclick="switchPage('announcements')"><i data-lucide="megaphone"></i> Announce</div>
+        <div class="nav-item" data-page="tools" onclick="switchPage('tools')"><i data-lucide="wrench"></i> Tools</div>
+    </div>
+    <div class="token-section">
+        <div class="token-label"><span class="token-dot" id="token-dot"></span> Admin Token</div>
+        <input type="password" id="admin-token" placeholder="Enter token...">
+    </div>
+    <div class="sidebar-footer">Ryzm Terminal ??Admin Console v1.0</div>
+</div>
+<div class="main">
+    <div class="toast" id="toast"></div>
 
-    <div class="sidebar">
-        <div class="logo-title">
-            RYZM <span>OP_MODE</span>
+    <!-- Dashboard -->
+    <div class="page active" id="page-dashboard">
+        <div class="page-header">
+            <div class="page-title"><i data-lucide="layout-dashboard"></i> Dashboard Overview</div>
+            <button class="btn btn-cyan" onclick="loadDashboard()"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh</button>
         </div>
-
-        <div class="card">
-            <h2><i data-lucide="shield"></i> Admin Token</h2>
-            <input type="password" id="admin-token" placeholder="X-Admin-Token">
-            <div class="status" id="token-status">Not set</div>
+        <div class="stats-row" id="stats-cards">
+            <div class="stat-card cyan"><div class="stat-label">Total Users</div><div class="stat-value" id="s-total">??/div></div>
+            <div class="stat-card pink"><div class="stat-label">Pro Users</div><div class="stat-value" id="s-pro">??/div><div class="stat-sub" id="s-pro-pct"></div></div>
+            <div class="stat-card green"><div class="stat-label">Active Today</div><div class="stat-value" id="s-active">??/div></div>
+            <div class="stat-card yellow"><div class="stat-label">Signups Today</div><div class="stat-value" id="s-signups">??/div></div>
+            <div class="stat-card cyan"><div class="stat-label">Active 7D</div><div class="stat-value" id="s-active7d">??/div></div>
+            <div class="stat-card pink"><div class="stat-label">Councils</div><div class="stat-value" id="s-councils">??/div></div>
+            <div class="stat-card green"><div class="stat-label">Journals</div><div class="stat-value" id="s-journals">??/div></div>
+            <div class="stat-card yellow"><div class="stat-label">Subscriptions</div><div class="stat-value" id="s-subs">??/div></div>
         </div>
-
-        <div class="card">
-            <h2><i data-lucide="image"></i> Visual Generator</h2>
-            <input type="text" id="img-topic" placeholder="ex) Yield Curve Inversion">
-            <button id="btn-gen-img"><i data-lucide="zap"></i> Generate SVG</button>
-            <div id="img-status" class="status">Ready</div>
+        <div class="grid-2">
+            <div class="chart-container">
+                <div class="chart-title"><i data-lucide="bar-chart-3" style="width:16px;height:16px"></i> AI Usage Today</div>
+                <div class="trend-grid" id="usage-today"><div style="color:var(--dim);font-size:0.8rem">Loading...</div></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title"><i data-lucide="trending-up" style="width:16px;height:16px"></i> Signup Trend (14D)</div>
+                <div class="bar-chart" id="signup-chart"></div>
+            </div>
         </div>
-
-        <div class="card" style="flex:1;">
-            <h2><i data-lucide="send"></i> Briefing Publisher</h2>
-            <input type="text" id="brief-title" placeholder="Title (ex: Market Update)">
-            <textarea id="brief-content" placeholder="Write your insight here..."></textarea>
-            <button id="btn-publish" class="secondary"><i data-lucide="rss"></i> Publish to Discord</button>
-            <div id="pub-status" class="status">Ready</div>
+        <div class="chart-container">
+            <div class="chart-title"><i data-lucide="calendar" style="width:16px;height:16px"></i> 7-Day Usage Breakdown</div>
+            <div id="usage-7d-chart" style="overflow-x:auto"></div>
         </div>
     </div>
 
-    <div class="main-area">
-        <h2><i data-lucide="monitor"></i> Output Preview</h2>
-        <div id="svg-preview">
-            <span style="color:#444;">Generated Image will appear here</span>
-        </div>
-        <div style="margin-top:10px; display:flex; gap:10px;">
-            <button class="secondary" onclick="copySVG()"><i data-lucide="copy"></i> Copy SVG Code</button>
-            <button class="secondary" onclick="downloadSVG()"><i data-lucide="download"></i> Download .svg</button>
+    <!-- Users -->
+    <div class="page" id="page-users">
+        <div class="page-header"><div class="page-title"><i data-lucide="users"></i> User Management</div></div>
+        <div class="table-wrap">
+            <div class="table-header">
+                <h3><i data-lucide="database" style="width:16px;height:16px"></i> Registered Users</h3>
+                <div class="search-box">
+                    <input type="text" id="user-search" placeholder="Search email, name, uid..." onkeydown="if(event.key==='Enter')loadUsers()">
+                    <button class="btn btn-cyan" onclick="loadUsers()"><i data-lucide="search" style="width:12px;height:12px"></i> Search</button>
+                </div>
+            </div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Tier</th><th>Verified</th><th>Stripe</th><th>Created</th><th>Last Login</th><th>Actions</th></tr></thead>
+                    <tbody id="users-tbody"></tbody>
+                </table>
+            </div>
+            <div class="pagination" id="users-pagination"></div>
         </div>
     </div>
 
-    <script>
-        lucide.createIcons();
+    <!-- System -->
+    <div class="page" id="page-system">
+        <div class="page-header">
+            <div class="page-title"><i data-lucide="cpu"></i> System Monitor</div>
+            <button class="btn btn-cyan" onclick="loadSystem()"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Refresh</button>
+        </div>
+        <div class="stats-row"><div class="stat-card cyan"><div class="stat-label">DB Size</div><div class="stat-value" id="sys-db-size">??/div></div></div>
+        <div class="chart-container">
+            <div class="chart-title"><i data-lucide="hard-drive" style="width:16px;height:16px"></i> Cache Status</div>
+            <div class="cache-grid" id="cache-grid"></div>
+        </div>
+    </div>
 
-        // Admin token handling (local only)
-        const tokenInput = document.getElementById('admin-token');
-        const tokenStatus = document.getElementById('token-status');
-        if (tokenInput && tokenStatus) {
-            const saved = localStorage.getItem('adminToken');
-            if (saved) {
-                tokenInput.value = saved;
-                tokenStatus.innerText = 'Saved';
-                tokenStatus.className = 'status success';
-            }
-            tokenInput.addEventListener('input', () => {
-                const val = tokenInput.value.trim();
-                if (val) {
-                    localStorage.setItem('adminToken', val);
-                    tokenStatus.innerText = 'Saved';
-                    tokenStatus.className = 'status success';
-                } else {
-                    localStorage.removeItem('adminToken');
-                    tokenStatus.innerText = 'Not set';
-                    tokenStatus.className = 'status';
-                }
-            });
-        }
+    <!-- Announcements -->
+    <div class="page" id="page-announcements">
+        <div class="page-header"><div class="page-title"><i data-lucide="megaphone"></i> Announcements</div></div>
+        <div class="grid-2">
+            <div class="chart-container">
+                <div class="chart-title"><i data-lucide="plus-circle" style="width:16px;height:16px"></i> New Announcement</div>
+                <div class="form-group" style="margin-bottom:10px"><label>Title</label><input type="text" id="ann-title" placeholder="Title..."></div>
+                <div class="form-group" style="margin-bottom:10px"><label>Content</label><textarea id="ann-content" placeholder="Announcement body..."></textarea></div>
+                <div class="form-group" style="margin-bottom:12px"><label>Level</label>
+                    <select id="ann-level"><option value="info">?πÔ∏è Info</option><option value="warning">?†Ô∏è Warning</option><option value="critical">?î¥ Critical</option></select>
+                </div>
+                <button class="btn btn-primary" onclick="createAnnouncement()" style="width:100%"><i data-lucide="send" style="width:14px;height:14px"></i> Publish</button>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title"><i data-lucide="list" style="width:16px;height:16px"></i> Active Announcements</div>
+                <div class="ann-list" id="ann-list"><div style="color:var(--dim);font-size:0.8rem">Loading...</div></div>
+            </div>
+        </div>
+    </div>
 
-        // 1. Image generation logic
-        document.getElementById('btn-gen-img').addEventListener('click', async () => {
-            const topic = document.getElementById('img-topic').value;
-            const status = document.getElementById('img-status');
-            const preview = document.getElementById('svg-preview');
-            const btn = document.getElementById('btn-gen-img');
-            const adminToken = localStorage.getItem('adminToken');
+    <!-- Tools -->
+    <div class="page" id="page-tools">
+        <div class="page-header"><div class="page-title"><i data-lucide="wrench"></i> Operator Tools</div></div>
+        <div class="grid-2">
+            <div class="chart-container">
+                <div class="chart-title"><i data-lucide="image" style="width:16px;height:16px"></i> SVG Infographic Generator</div>
+                <div class="form-group" style="margin-bottom:10px"><label>Topic</label><input type="text" id="img-topic" placeholder="ex) Yield Curve Inversion"></div>
+                <button class="btn btn-primary" id="btn-gen-img" onclick="generateSVG()" style="width:100%"><i data-lucide="zap" style="width:14px;height:14px"></i> Generate SVG</button>
+                <div style="font-size:0.7rem;color:var(--dim);margin-top:6px;text-align:center" id="img-status">Ready</div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title"><i data-lucide="rss" style="width:16px;height:16px"></i> Briefing Publisher</div>
+                <div class="form-group" style="margin-bottom:10px"><label>Title</label><input type="text" id="brief-title" placeholder="Market Update"></div>
+                <div class="form-group" style="margin-bottom:10px"><label>Content</label><textarea id="brief-content" placeholder="Write your insight here..."></textarea></div>
+                <button class="btn btn-cyan" onclick="publishBriefing()" style="width:100%"><i data-lucide="send" style="width:14px;height:14px"></i> Publish to Discord</button>
+                <div style="font-size:0.7rem;color:var(--dim);margin-top:6px;text-align:center" id="pub-status">Ready</div>
+            </div>
+        </div>
+        <div class="chart-container" style="flex:1">
+            <div class="chart-title"><i data-lucide="monitor" style="width:16px;height:16px"></i> SVG Preview</div>
+            <div class="svg-preview" id="svg-preview"><span style="color:var(--dim)">Generated image will appear here</span></div>
+            <div style="margin-top:10px;display:flex;gap:8px">
+                <button class="btn btn-cyan" onclick="copySVG()"><i data-lucide="copy" style="width:12px;height:12px"></i> Copy SVG</button>
+                <button class="btn btn-cyan" onclick="downloadSVG()"><i data-lucide="download" style="width:12px;height:12px"></i> Download</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-            if (!topic) return alert("Please enter a topic!");
+<script>
+lucide.createIcons();
+const tokenInput=document.getElementById('admin-token'), tokenDot=document.getElementById('token-dot');
+const saved=localStorage.getItem('adminToken');
+if(saved){tokenInput.value=saved;tokenDot.classList.add('ok')}
+tokenInput.addEventListener('input',()=>{const v=tokenInput.value.trim();if(v){localStorage.setItem('adminToken',v);tokenDot.classList.add('ok')}else{localStorage.removeItem('adminToken');tokenDot.classList.remove('ok')}});
+function getToken(){return localStorage.getItem('adminToken')||''}
+function adminFetch(url,opts={}){return fetch(url,{...opts,headers:{'X-Admin-Token':getToken(),'Content-Type':'application/json',...(opts.headers||{})}})}
+function toast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast ${type} show`;setTimeout(()=>t.classList.remove('show'),3000)}
+function switchPage(page){document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(`page-${page}`).classList.add('active');if(page==='dashboard')loadDashboard();else if(page==='users')loadUsers();else if(page==='system')loadSystem();else if(page==='announcements')loadAnnouncements();lucide.createIcons()}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
-            btn.disabled = true;
-            btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Generating...';
-            status.innerText = "Gemini is drawing...";
-            status.className = "status";
-            preview.innerHTML = '<span style="color:var(--cyan)">‚ö° Generating...</span>';
-            lucide.createIcons();
+async function loadDashboard(){
+    try{
+        const res=await adminFetch('/api/admin/stats');
+        if(!res.ok){toast('Failed to load stats','error');return}
+        const d=await res.json();
+        document.getElementById('s-total').textContent=d.total_users??'??;
+        document.getElementById('s-pro').textContent=d.pro_users??'??;
+        document.getElementById('s-pro-pct').textContent=d.total_users?`${((d.pro_users/d.total_users)*100).toFixed(1)}% conversion`:'';
+        document.getElementById('s-active').textContent=d.active_today??'??;
+        document.getElementById('s-signups').textContent=d.signups_today??'??;
+        document.getElementById('s-active7d').textContent=d.active_7d??'??;
+        document.getElementById('s-councils').textContent=d.total_councils??'??;
+        document.getElementById('s-journals').textContent=d.total_journals??'??;
+        document.getElementById('s-subs').textContent=d.active_subscriptions??'??;
+        const ut=d.usage_today||{};
+        const utEl=document.getElementById('usage-today');
+        utEl.innerHTML=Object.keys(ut).length===0?'<div style="color:var(--dim);font-size:0.8rem">No usage today</div>':Object.entries(ut).map(([ep,cnt])=>`<div class="trend-item"><div class="ep">${ep}</div><div class="cnt">${cnt}</div></div>`).join('');
+        const trend=d.signup_trend||[];
+        const chartEl=document.getElementById('signup-chart');
+        if(!trend.length){chartEl.innerHTML='<div style="color:var(--dim);font-size:0.8rem;width:100%;text-align:center">No data</div>'}
+        else{const mx=Math.max(...trend.map(t=>t.count),1);chartEl.innerHTML=trend.map(t=>{const h=Math.max(4,(t.count/mx)*100);return`<div class="bar-col"><div class="bar-val">${t.count}</div><div class="bar cyan" style="height:${h}%"></div><div class="bar-label">${t.day.slice(5)}</div></div>`}).join('')}
+        const u7d=d.usage_7d||{};const u7dEl=document.getElementById('usage-7d-chart');const days=Object.keys(u7d).sort();
+        if(!days.length){u7dEl.innerHTML='<div style="color:var(--dim);font-size:0.8rem">No data</div>'}
+        else{const allEps=new Set();days.forEach(d=>Object.keys(u7d[d]).forEach(e=>allEps.add(e)));const eps=[...allEps].sort();let h='<table style="width:100%;font-size:0.75rem"><thead><tr><th>Date</th>';eps.forEach(e=>h+=`<th style="text-align:center">${e}</th>`);h+='<th style="text-align:center">Total</th></tr></thead><tbody>';days.forEach(day=>{h+=`<tr><td style="font-family:\'JetBrains Mono\',monospace;font-size:0.7rem">${day.slice(5)}</td>`;let t=0;eps.forEach(e=>{const v=u7d[day][e]||0;t+=v;h+=`<td style="text-align:center">${v||'-'}</td>`});h+=`<td style="text-align:center;font-weight:600;color:var(--cyan)">${t}</td></tr>`});h+='</tbody></table>';u7dEl.innerHTML=h}
+    }catch(e){console.error(e);toast('Connection error','error')}
+}
 
-            try {
-                const res = await fetch('/api/admin/generate-infographic', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Admin-Token': adminToken || ''
-                    },
-                    body: JSON.stringify({ topic })
-                });
-                const data = await res.json();
+let currentUserPage=1;
+async function loadUsers(page=1){
+    currentUserPage=page;const search=document.getElementById('user-search').value;
+    try{
+        const res=await adminFetch(`/api/admin/users?search=${encodeURIComponent(search)}&page=${page}&per_page=15`);
+        if(!res.ok){toast('Failed to load users','error');return}
+        const d=await res.json();const tbody=document.getElementById('users-tbody');
+        if(!d.users.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--dim);padding:30px">No users found</td></tr>'}
+        else{tbody.innerHTML=d.users.map(u=>`<tr>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:0.75rem">${u.id}</td>
+            <td style="font-size:0.78rem">${esc(u.email)}</td>
+            <td>${esc(u.display_name||'??)}</td>
+            <td><span class="badge ${u.tier}">${u.tier.toUpperCase()}</span></td>
+            <td><span class="badge ${u.email_verified?'verified':'unverified'}">${u.email_verified?'YES':'NO'}</span></td>
+            <td style="font-size:0.7rem;color:var(--dim)">${u.stripe_customer_id?'??:'??}</td>
+            <td style="font-size:0.7rem;font-family:'JetBrains Mono',monospace">${(u.created_at_utc||'').slice(0,10)}</td>
+            <td style="font-size:0.7rem;font-family:'JetBrains Mono',monospace">${(u.last_login_utc||'??).slice(0,16)}</td>
+            <td><div style="display:flex;gap:4px">
+                <button class="btn btn-sm ${u.tier==='pro'?'btn-cyan':'btn-pink'}" onclick="toggleTier(${u.id},'${u.tier==='pro'?'free':'pro'}')">${u.tier==='pro'?'?íFREE':'?íPRO'}</button>
+                <button class="btn btn-sm btn-red" onclick="deleteUser(${u.id},'${esc(u.email)}')">DEL</button>
+            </div></td></tr>`).join('')}
+        const pg=document.getElementById('users-pagination');
+        let ph=`<span class="info">${d.total} users ¬∑ page ${d.page}/${d.pages}</span><button ${d.page<=1?'disabled':''} onclick="loadUsers(${d.page-1})">??Prev</button>`;
+        for(let i=1;i<=d.pages&&i<=10;i++)ph+=`<button class="${i===d.page?'active':''}" onclick="loadUsers(${i})">${i}</button>`;
+        ph+=`<button ${d.page>=d.pages?'disabled':''} onclick="loadUsers(${d.page+1})">Next ??/button>`;pg.innerHTML=ph;
+    }catch(e){console.error(e);toast('Connection error','error')}
+}
+async function toggleTier(userId,newTier){if(!confirm(`Change user #${userId} to ${newTier.toUpperCase()}?`))return;try{const res=await adminFetch(`/api/admin/users/${userId}/tier`,{method:'POST',body:JSON.stringify({tier:newTier})});if(res.ok){toast(`User #${userId} ??${newTier.toUpperCase()}`);loadUsers(currentUserPage)}else toast('Failed to change tier','error')}catch{toast('Connection error','error')}}
+async function deleteUser(userId,email){if(!confirm(`?†Ô∏è Delete user #${userId} (${email})?\nAll associated data will be removed!`))return;try{const res=await adminFetch(`/api/admin/users/${userId}`,{method:'DELETE'});if(res.ok){toast(`User #${userId} deleted`);loadUsers(currentUserPage)}else toast('Failed to delete user','error')}catch{toast('Connection error','error')}}
 
-                if (data.status === 'success') {
-                    // Sanitize SVG: remove script tags and event handlers
-                    const sanitized = data.svg
-                      .replace(/<script[\s\S]*?<\/script>/gi, '')
-                      .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
-                    preview.innerHTML = sanitized;
-                    status.innerText = "‚úì Done!";
-                    status.className = "status success";
-                } else {
-                    preview.innerHTML = '<span style="color:var(--pink)">Error generating image</span>';
-                    status.innerText = data.message;
-                    status.className = "status error";
-                }
-            } catch (e) {
-                console.error(e);
-                status.innerText = "Connection Error";
-                status.className = "status error";
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i data-lucide="zap"></i> Generate SVG';
-                lucide.createIcons();
-            }
-        });
+async function loadSystem(){
+    try{
+        const res=await adminFetch('/api/admin/system');if(!res.ok){toast('Failed','error');return}
+        const d=await res.json();
+        document.getElementById('sys-db-size').textContent=d.db_size_mb!=null?`${d.db_size_mb} MB`:'??;
+        const grid=document.getElementById('cache-grid');const entries=Object.entries(d.cache||{});
+        if(!entries.length){grid.innerHTML='<div style="color:var(--dim);font-size:0.8rem">No cache data</div>';return}
+        grid.innerHTML=entries.map(([key,info])=>{const age=info.age_seconds;let dc='dead',at='No data';if(age!==null){dc=age<120?'live':age<600?'stale':'dead';at=age<60?`${age}s ago`:age<3600?`${Math.floor(age/60)}m ago`:`${Math.floor(age/3600)}h ago`}return`<div class="cache-item"><div class="cache-key"><span class="cache-dot ${dc}"></span>${key}</div><div class="cache-meta"><span>Data: ${info.has_data?'??:'??}</span><span>Updated: ${at}</span></div></div>`}).join('');
+    }catch(e){console.error(e);toast('Connection error','error')}
+}
 
-        // 2. Briefing publish logic
-        document.getElementById('btn-publish').addEventListener('click', async () => {
-            const title = document.getElementById('brief-title').value;
-            const content = document.getElementById('brief-content').value;
-            const status = document.getElementById('pub-status');
-            const btn = document.getElementById('btn-publish');
-            const adminToken = localStorage.getItem('adminToken');
+async function loadAnnouncements(){
+    try{const res=await adminFetch('/api/admin/announcements?all=true');if(!res.ok)return;const list=await res.json();const el=document.getElementById('ann-list');
+    if(!list.length){el.innerHTML='<div style="color:var(--dim);font-size:0.8rem">No announcements yet</div>';return}
+    el.innerHTML=list.map(a=>`<div class="ann-item" style="opacity:${a.active?1:0.4}"><div class="ann-body"><div class="ann-title"><span class="badge ${a.level}">${a.level}</span> ${esc(a.title)}</div><div class="ann-content">${esc(a.content).slice(0,120)}${a.content.length>120?'...':''}</div><div class="ann-meta">${a.created_at_utc} ¬∑ ${a.active?'Active':'Inactive'}</div></div><div class="ann-actions"><button class="btn btn-sm ${a.active?'btn-red':'btn-green'}" onclick="toggleAnn(${a.id},${!a.active})">${a.active?'Hide':'Show'}</button></div></div>`).join('')}catch{toast('Connection error','error')}
+}
+async function createAnnouncement(){const title=document.getElementById('ann-title').value.trim(),content=document.getElementById('ann-content').value.trim(),level=document.getElementById('ann-level').value;if(!title||!content){toast('Title and content required','error');return}try{const res=await adminFetch('/api/admin/announcements',{method:'POST',body:JSON.stringify({title,content,level})});if(res.ok){toast('Announcement published!');document.getElementById('ann-title').value='';document.getElementById('ann-content').value='';loadAnnouncements()}else toast('Failed','error')}catch{toast('Connection error','error')}}
+async function toggleAnn(id,active){try{const res=await adminFetch(`/api/admin/announcements/${id}/toggle`,{method:'POST',body:JSON.stringify({active})});if(res.ok){toast(`Announcement ${active?'activated':'hidden'}`);loadAnnouncements()}else toast('Failed','error')}catch{toast('Connection error','error')}}
 
-            if (!title || !content) return alert("Please enter title and content!");
+async function generateSVG(){const topic=document.getElementById('img-topic').value,status=document.getElementById('img-status'),preview=document.getElementById('svg-preview'),btn=document.getElementById('btn-gen-img');if(!topic){toast('Enter a topic','error');return}btn.disabled=true;status.textContent='Gemini is drawing...';status.style.color='var(--cyan)';preview.innerHTML='<span style="color:var(--cyan)">??Generating...</span>';try{const res=await adminFetch('/api/admin/generate-infographic',{method:'POST',body:JSON.stringify({topic})});const data=await res.json();if(data.status==='success'){preview.innerHTML=data.svg.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/\bon\w+\s*=\s*["'][^"']*["']/gi,'');status.textContent='??Done!';status.style.color='var(--green)'}else{preview.innerHTML='<span style="color:var(--pink)">Error</span>';status.textContent=data.message||'Error';status.style.color='var(--pink)'}}catch{status.textContent='Connection Error';status.style.color='var(--red)'}finally{btn.disabled=false}}
+async function publishBriefing(){const title=document.getElementById('brief-title').value,content=document.getElementById('brief-content').value,status=document.getElementById('pub-status');if(!title||!content){toast('Enter title and content','error');return}status.textContent='Sending...';status.style.color='var(--cyan)';try{const res=await adminFetch('/api/admin/publish-briefing',{method:'POST',body:JSON.stringify({title,content})});const data=await res.json();status.textContent=data.message;status.style.color=data.status==='success'?'var(--green)':'var(--pink)';if(data.status==='success')toast('Briefing published!')}catch{status.textContent='Connection Error';status.style.color='var(--red)'}}
+function copySVG(){const svg=document.getElementById('svg-preview').innerHTML;if(!svg.includes('<svg')){toast('No image','error');return}navigator.clipboard.writeText(svg).then(()=>toast('SVG copied!'))}
+function downloadSVG(){const svg=document.getElementById('svg-preview').innerHTML;if(!svg.includes('<svg')){toast('No image','error');return}const b=new Blob([svg],{type:'image/svg+xml'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='ryzm_infographic.svg';a.click();URL.revokeObjectURL(u)}
 
-            btn.disabled = true;
-            status.innerText = "Sending...";
-            status.className = "status";
-
-            try {
-                const res = await fetch('/api/admin/publish-briefing', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Admin-Token': adminToken || ''
-                    },
-                    body: JSON.stringify({ title, content })
-                });
-                const data = await res.json();
-                status.innerText = data.message;
-                status.className = data.status === 'success' ? "status success" : "status error";
-            } catch (e) {
-                status.innerText = "Connection Error";
-                status.className = "status error";
-            } finally {
-                btn.disabled = false;
-            }
-        });
-
-        // Utility: Copy SVG
-        function copySVG() {
-            const svgContent = document.getElementById('svg-preview').innerHTML;
-            if (!svgContent.includes('<svg')) return alert("No image to copy");
-            navigator.clipboard.writeText(svgContent).then(() => {
-                alert("SVG code copied!");
-            });
-        }
-
-        // Utility: Download SVG
-        function downloadSVG() {
-            const svgContent = document.getElementById('svg-preview').innerHTML;
-            if (!svgContent.includes('<svg')) return alert("No image to download");
-            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'ryzm_infographic.svg';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-    </script>
-
-    <style>
-        .spin {
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-
-            to {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
+loadDashboard();
+</script>
 </body>
-
 </html>

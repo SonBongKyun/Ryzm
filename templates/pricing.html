@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing — Ryzm Terminal{% endblock %}
+{% block description %}Simple, transparent pricing. Start free, upgrade to Pro for $20/month with unlimited access.{% endblock %}
+
+{% block body %}
+
+<!-- ── Pricing Hero ── -->
+<section class="page-hero">
+  <div class="page-hero-inner anim-fade-up">
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      SIMPLE PRICING
+    </div>
+    <h1>Start Free,<br/><span class="hero-highlight">Upgrade When Ready</span></h1>
+    <p>No hidden fees. Cancel anytime. Full access to Pro features for one flat rate.</p>
+  </div>
+</section>
+
+<!-- ── Pricing Toggle ── -->
+<section class="section pricing-section">
+  <div class="section-inner">
+    <div class="pricing-toggle anim-fade-up">
+      <span class="pt-label pt-active" id="pt-monthly">Monthly</span>
+      <button class="pt-switch" id="pt-switch" aria-label="Toggle billing period">
+        <span class="pt-knob"></span>
+      </button>
+      <span class="pt-label" id="pt-yearly">Yearly <span class="pt-save">Save 17%</span></span>
+    </div>
+
+    <div class="pricing-grid anim-fade-up anim-delay-1">
+      <!-- Free Plan -->
+      <div class="pricing-card">
+        <div class="pricing-header">
+          <h3>Free</h3>
+          <div class="pricing-price">
+            <span class="price-amount">$0</span>
+            <span class="price-period">/month</span>
+          </div>
+          <p class="pricing-desc">Perfect for getting started with crypto analytics</p>
+        </div>
+        <ul class="pricing-features">
+          <li><i data-lucide="check" class="feat-check"></i> AI Council — 10 runs/day</li>
+          <li><i data-lucide="check" class="feat-check"></i> Trade Validator — 3/day</li>
+          <li><i data-lucide="check" class="feat-check"></i> Ask Ryzm Chat — 20/day</li>
+          <li><i data-lucide="check" class="feat-check"></i> Basic Panels (12+)</li>
+          <li><i data-lucide="check" class="feat-check"></i> TradingView Charts</li>
+          <li><i data-lucide="check" class="feat-check"></i> 5 Price Alerts</li>
+          <li><i data-lucide="check" class="feat-check"></i> 7-Day Council History</li>
+          <li><i data-lucide="check" class="feat-check"></i> 20 Journal Entries</li>
+          <li class="feat-disabled"><i data-lucide="x" class="feat-x"></i> Pro Panels</li>
+          <li class="feat-disabled"><i data-lucide="x" class="feat-x"></i> Data Export</li>
+        </ul>
+        <a href="/app" class="site-btn site-btn-outline pricing-cta">Get Started Free</a>
+      </div>
+
+      <!-- Pro Plan -->
+      <div class="pricing-card featured">
+        <div class="pricing-popular">MOST POPULAR</div>
+        <div class="pricing-header">
+          <h3>Pro</h3>
+          <div class="pricing-price">
+            <span class="price-amount" id="pro-price">$20</span>
+            <span class="price-period" id="pro-period">/month</span>
+          </div>
+          <p class="pricing-desc" id="pro-desc">Full power for professional traders</p>
+        </div>
+        <ul class="pricing-features">
+          <li><i data-lucide="check" class="feat-check pro"></i> AI Council — <strong>Unlimited</strong></li>
+          <li><i data-lucide="check" class="feat-check pro"></i> Trade Validator — <strong>Unlimited</strong></li>
+          <li><i data-lucide="check" class="feat-check pro"></i> Ask Ryzm Chat — <strong>Unlimited</strong></li>
+          <li><i data-lucide="check" class="feat-check pro"></i> <strong>All 20+ Panels</strong></li>
+          <li><i data-lucide="check" class="feat-check pro"></i> TradingView Charts</li>
+          <li><i data-lucide="check" class="feat-check pro"></i> <strong>100</strong> Price Alerts</li>
+          <li><i data-lucide="check" class="feat-check pro"></i> <strong>90-Day</strong> Council History</li>
+          <li><i data-lucide="check" class="feat-check pro"></i> <strong>500</strong> Journal Entries</li>
+          <li><i data-lucide="check" class="feat-check pro"></i> CSV Export</li>
+          <li><i data-lucide="check" class="feat-check pro"></i> Priority Support</li>
+        </ul>
+        <a href="/app" class="site-btn site-btn-primary pricing-cta hero-btn-glow">Upgrade to Pro</a>
+      </div>
+    </div>
+
+    <!-- Money-back guarantee -->
+    <div class="pricing-guarantee anim-fade-up anim-delay-2">
+      <i data-lucide="shield-check" style="width:20px;height:20px;color:var(--ryzm-gold);"></i>
+      <div>
+        <strong>7-Day Money-Back Guarantee</strong>
+        <p>Not satisfied? Get a full refund within 7 days of your Pro subscription. No questions asked.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Comparison Table ── -->
+<section class="section compare-section alt">
+  <div class="section-inner anim-fade-up">
+    <h2 class="section-title">Detailed Comparison</h2>
+    <p class="section-subtitle">See exactly what you get with each plan</p>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Free</th>
+            <th class="pro-col">Pro — $20/mo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>AI Council</td><td>10/day</td><td>Unlimited</td></tr>
+          <tr><td>Trade Validator</td><td>3/day</td><td>Unlimited</td></tr>
+          <tr><td>Ask Ryzm Chat</td><td>20/day</td><td>Unlimited</td></tr>
+          <tr><td>Dashboard Panels</td><td>12+ Basic</td><td>20+ All Panels</td></tr>
+          <tr><td>Multi-TF Analysis</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Kimchi Premium</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Liquidation Kill Zone</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Correlation Matrix</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Alpha Scanner</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Whale Tracking</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>On-Chain Radar</td><td>—</td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Price Alerts</td><td>5</td><td>100</td></tr>
+          <tr><td>Data Export</td><td>—</td><td>CSV</td></tr>
+          <tr><td>Council History</td><td>7 days</td><td>90 days</td></tr>
+          <tr><td>Signal Journal</td><td>20 entries</td><td>500 entries</td></tr>
+          <tr><td>Custom Layout</td><td><i data-lucide="check" class="feat-check"></i></td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+          <tr><td>Dark / Light Mode</td><td><i data-lucide="check" class="feat-check"></i></td><td><i data-lucide="check" class="feat-check pro"></i></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section class="section faq-section">
+  <div class="section-inner narrow anim-fade-up">
+    <div class="section-header">
+      <h2 class="section-title">Frequently Asked Questions</h2>
+      <p class="section-subtitle">Everything you need to know about Ryzm pricing</p>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary>Can I use Ryzm for free?</summary>
+        <p>Yes! The Free plan gives you access to core features including AI Council (10/day), Trade Validator (3/day), basic panels, and TradingView charts. No credit card required.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What payment methods do you accept?</summary>
+        <p>We use Stripe for secure payment processing. All major credit cards, debit cards, and select local payment methods are supported.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I cancel anytime?</summary>
+        <p>Absolutely. Cancel your subscription at any time from your profile. You'll retain Pro access until the end of your billing period.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Is there a yearly discount?</summary>
+        <p>Yes! Choose the yearly plan and save 17% — just $200/year instead of $240. That's $16.67/month for full Pro access.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What happens to my data if I downgrade?</summary>
+        <p>Your data is preserved. You'll just lose access to Pro-only panels and features, but all journal entries and history remain available within Free limits.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Do you offer refunds?</summary>
+        <p>Yes. We offer a full 7-day money-back guarantee on all Pro subscriptions. If you're not satisfied, just reach out and we'll process your refund — no questions asked.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="section cta-banner">
+  <div class="cta-banner-inner anim-fade-up">
+    <h2>Start trading smarter today</h2>
+    <p>No credit card required to get started.</p>
+    <div class="cta-actions">
+      <a href="/app" class="site-btn site-btn-primary site-btn-lg hero-btn-glow">
+        <i data-lucide="rocket" style="width:18px;height:18px;"></i>
+        Launch Terminal Free
+      </a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  /* Scroll animations */
+  const animEls = document.querySelectorAll('.anim-fade-up');
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('anim-visible'); obs.unobserve(e.target); } });
+    }, { threshold: 0.15 });
+    animEls.forEach(el => obs.observe(el));
+  } else { animEls.forEach(el => el.classList.add('anim-visible')); }
+
+  /* Pricing toggle (Monthly ↔ Yearly) */
+  const sw = document.getElementById('pt-switch');
+  const lblM = document.getElementById('pt-monthly');
+  const lblY = document.getElementById('pt-yearly');
+  const priceEl = document.getElementById('pro-price');
+  const periodEl = document.getElementById('pro-period');
+  const descEl = document.getElementById('pro-desc');
+  let isYearly = false;
+  if (sw) {
+    sw.addEventListener('click', () => {
+      isYearly = !isYearly;
+      sw.classList.toggle('active', isYearly);
+      lblM.classList.toggle('pt-active', !isYearly);
+      lblY.classList.toggle('pt-active', isYearly);
+      if (isYearly) {
+        priceEl.textContent = '$200';
+        periodEl.textContent = '/year';
+        descEl.textContent = '$16.67/month — Save 17%';
+      } else {
+        priceEl.textContent = '$20';
+        periodEl.textContent = '/month';
+        descEl.textContent = 'Full power for professional traders';
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

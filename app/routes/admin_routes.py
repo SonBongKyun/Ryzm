@@ -1,18 +1,26 @@
 """
 Ryzm Terminal — Admin API Routes
-Infographic generation, briefing publishing, admin page.
+Infographic generation, briefing publishing, admin page, user management, system monitoring.
 """
 import json
 from datetime import datetime, timezone
+from typing import Optional
 
 import requests
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.templating import Jinja2Templates
 
 from app.core.logger import logger
-from app.core.config import DISCORD_WEBHOOK_URL, InfographicRequest, BriefingRequest, SetTierRequest
+from app.core.config import (
+    DISCORD_WEBHOOK_URL, InfographicRequest, BriefingRequest, SetTierRequest,
+    AdminChangeTierRequest, AdminAnnouncementRequest, AdminToggleAnnouncementRequest,
+)
 from app.core.cache import cache
-from app.core.database import db_session, utc_now_str, update_user_tier, get_user_by_uid
+from app.core.database import (
+    db_session, utc_now_str, update_user_tier, get_user_by_uid,
+    admin_get_users, admin_get_stats, admin_get_system_info, admin_delete_user,
+    admin_create_announcement, admin_get_announcements, admin_toggle_announcement,
+)
 from app.core.security import require_admin
 from app.core.ai_client import call_gemini
 
@@ -122,3 +130,86 @@ def admin_set_tier(request: Request, body: SetTierRequest):
     update_user_tier(user["id"], body.tier)
     logger.info(f"[Admin] Set tier for uid={body.uid[:8]}... → {body.tier}")
     return {"status": "ok", "uid": body.uid, "tier": body.tier}
+
+
+# ───────────────────────────────────────
+# Phase 1: Admin Dashboard APIs
+# ───────────────────────────────────────
+
+@router.get("/api/admin/users")
+def api_admin_users(
+    request: Request,
+    search: str = Query("", max_length=200),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+):
+    """Paginated user list with search."""
+    require_admin(request)
+    return admin_get_users(search=search, page=page, per_page=per_page)
+
+
+@router.get("/api/admin/stats")
+def api_admin_stats(request: Request):
+    """Dashboard statistics — user counts, usage, trends."""
+    require_admin(request)
+    return admin_get_stats()
+
+
+@router.get("/api/admin/system")
+def api_admin_system(request: Request):
+    """System monitoring — cache status, DB size."""
+    require_admin(request)
+    return admin_get_system_info()
+
+
+@router.post("/api/admin/users/{user_id}/tier")
+def api_admin_change_tier(user_id: int, body: AdminChangeTierRequest, request: Request):
+    """Change user tier by user_id."""
+    require_admin(request)
+    update_user_tier(user_id, body.tier)
+    logger.info(f"[Admin] User {user_id} tier → {body.tier}")
+    return {"status": "ok", "user_id": user_id, "tier": body.tier}
+
+
+@router.delete("/api/admin/users/{user_id}")
+def api_admin_delete_user(user_id: int, request: Request):
+    """Delete a user and all associated data."""
+    require_admin(request)
+    ok = admin_delete_user(user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "deleted", "user_id": user_id}
+
+
+@router.get("/api/admin/announcements")
+def api_admin_announcements(request: Request, all: bool = Query(False)):
+    """Get announcements (active only by default)."""
+    require_admin(request)
+    return admin_get_announcements(active_only=not all)
+
+
+@router.post("/api/admin/announcements")
+def api_admin_create_announcement(body: AdminAnnouncementRequest, request: Request):
+    """Create announcement."""
+    require_admin(request)
+    ann_id = admin_create_announcement(body.title, body.content, body.level)
+    if not ann_id:
+        raise HTTPException(status_code=500, detail="Failed to create announcement")
+    return {"status": "created", "id": ann_id}
+
+
+@router.post("/api/admin/announcements/{ann_id}/toggle")
+def api_admin_toggle_announcement(ann_id: int, body: AdminToggleAnnouncementRequest, request: Request):
+    """Toggle announcement active/inactive."""
+    require_admin(request)
+    ok = admin_toggle_announcement(ann_id, body.active)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return {"status": "ok", "id": ann_id, "active": body.active}
+
+
+# ── Public: Get active announcements (no admin token required) ──
+@router.get("/api/announcements")
+def api_public_announcements():
+    """Get active announcements for all users."""
+    return admin_get_announcements(active_only=True)

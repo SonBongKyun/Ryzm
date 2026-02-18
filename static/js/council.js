@@ -1,22 +1,22 @@
-/* â•â•â• 3. AI Council (Neural Command Center v5.5) â•â•â• */
+/* ?â•??3. AI Council ??Multi-Framework Analysis Engine v6.0 ?â•??*/
 
-/* â”€â”€ Agent Avatar SVGs â”€â”€ */
+/* ?€?€ Framework Avatar SVGs ?€?€ */
 const _AGENT_AVATARS = {
-  grok: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
-  gpt: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3 1.5 5.5 4 7v3h8v-3c2.5-1.5 4-4 4-7a8 8 0 0 0-8-8z"/><line x1="10" y1="22" x2="14" y2="22"/></svg>',
-  vision: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
-  claude: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M3 12l4-4v8l-4-4z"/><path d="M21 12l-4-4v8l4-4z"/><circle cx="12" cy="3" r="1" fill="currentColor"/></svg>'
+  macro: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+  onchain: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  technical: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>',
+  synthesis: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M3 12l4-4v8l-4-4z"/><path d="M21 12l-4-4v8l4-4z"/><circle cx="12" cy="3" r="1" fill="currentColor"/></svg>'
 };
 function _agentClass(name) {
   const n = name.toLowerCase();
-  if (n.includes('grok')) return 'grok';
-  if (n.includes('gpt')) return 'gpt';
-  if (n.includes('vision')) return 'vision';
-  if (n.includes('claude')) return 'claude';
+  if (n.includes('macro')) return 'macro';
+  if (n.includes('onchain') || n.includes('on-chain')) return 'onchain';
+  if (n.includes('technical')) return 'technical';
+  if (n.includes('synthesis')) return 'synthesis';
   return 'sys';
 }
 
-/* â”€â”€ Loading Steps Controller â”€â”€ */
+/* ?€?€ Loading Steps Controller ?€?€ */
 let _councilLoadTimers = [];
 function showLoadingSteps() {
   const div = document.getElementById('council-steps');
@@ -46,7 +46,7 @@ function hideLoadingSteps() {
   if (div) div.style.display = 'none';
 }
 
-/* â”€â”€ Consensus Gauge â”€â”€ */
+/* ?€?€ Consensus Gauge ?€?€ */
 function updateConsensusGauge(score) {
   const arc = document.getElementById('cg-value');
   const txt = document.getElementById('cg-score');
@@ -63,7 +63,7 @@ function updateConsensusGauge(score) {
   }
 }
 
-/* â”€â”€ Auto Analysis Status Bar â”€â”€ */
+/* ?€?€ Auto Analysis Status Bar ?€?€ */
 let _autoBarInterval = null;
 function startAutoBar() {
   updateAutoBar();
@@ -103,12 +103,12 @@ function drawAutoSparkline(scores) {
     const y = H - (s / 100) * H;
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = 'rgba(2,132,199,0.5)';
+  ctx.strokeStyle = 'rgba(163,126,58,0.5)';
   ctx.lineWidth = 1;
   ctx.stroke();
 }
 
-/* â•â•â• setupEventListeners â•â•â• */
+/* ?â•??setupEventListeners ?â•??*/
 function setupEventListeners() {
   const btnCouncil = document.getElementById('btn-council-start');
   const btnCopy = document.getElementById('btn-copy-report');
@@ -197,10 +197,10 @@ function setupEventListeners() {
           if (name !== 'SYSTEM') {
             const msg = card.querySelector('.ac-msg')?.innerText.replace(/"/g, '') || '';
             let icon = '\uD83E\uDD16';
-            if (name.includes('Grok')) icon = '\uD83D\uDE80';
-            if (name.includes('GPT')) icon = '\uD83D\uDCC9';
-            if (name.includes('Vision')) icon = '\uD83D\uDC41\uFE0F';
-            if (name.includes('Claude')) icon = '\u2696\uFE0F';
+            if (name.includes('Macro')) icon = '\uD83C\uDF10';
+            if (name.includes('OnChain')) icon = '\u26D3\uFE0F';
+            if (name.includes('Technical')) icon = '\uD83D\uDCC8';
+            if (name.includes('Synthesis')) icon = '\u2696\uFE0F';
             debateLog += `${icon} **${name}**: ${msg}\n`;
           }
         }
@@ -224,7 +224,7 @@ function setupEventListeners() {
   startAutoBar();
 }
 
-/* â•â•â• renderCouncil â•â•â• */
+/* ?â•??renderCouncil ?â•??*/
 function renderCouncil(data) {
   // Vibe
   if (data.vibe) {
@@ -310,7 +310,7 @@ function renderCouncil(data) {
       const isBear = agent.status.includes('BEAR');
       const stanceClass = isBull ? 'bull' : isBear ? 'bear' : 'neutral';
       const agentKey = _agentClass(agent.name);
-      const avatarSvg = _AGENT_AVATARS[agentKey] || _AGENT_AVATARS.grok;
+      const avatarSvg = _AGENT_AVATARS[agentKey] || _AGENT_AVATARS.macro;
 
       setTimeout(() => {
         const div = document.createElement('div');
@@ -351,7 +351,7 @@ function renderCouncil(data) {
   }
 }
 
-/* â•â•â• Narrative Radar Chart â•â•â• */
+/* ?â•??Narrative Radar Chart ?â•??*/
 function renderRadarChart(narratives) {
   const canvas = document.getElementById('radar-canvas');
   const wrap = document.getElementById('narrative-radar');
@@ -410,11 +410,11 @@ function renderRadarChart(narratives) {
   ctx.closePath();
   // Gradient fill
   const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-  grd.addColorStop(0, 'rgba(2,132,199,0.2)');
+  grd.addColorStop(0, 'rgba(163,126,58,0.2)');
   grd.addColorStop(1, 'rgba(219,39,119,0.08)');
   ctx.fillStyle = grd;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(2,132,199,0.6)';
+  ctx.strokeStyle = 'rgba(163,126,58,0.6)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
@@ -428,7 +428,7 @@ function renderRadarChart(narratives) {
     // Glow
     ctx.beginPath();
     ctx.arc(x, y, 5, 0, Math.PI * 2);
-    const ptColor = nd.trend === 'UP' ? '#059669' : nd.trend === 'DOWN' ? '#dc2626' : '#0284c7';
+    const ptColor = nd.trend === 'UP' ? '#059669' : nd.trend === 'DOWN' ? '#dc2626' : '#a37e3a';
     ctx.fillStyle = ptColor + '30';
     ctx.fill();
     // Dot
@@ -454,11 +454,11 @@ function renderRadarChart(narratives) {
   });
 }
 
-/* â”€â”€â”€ Matrix Rain Effect (disabled â€” canvas hidden, saves CPU/battery) â”€â”€â”€ */
+/* ?€?€?€ Matrix Rain Effect (disabled ??canvas hidden, saves CPU/battery) ?€?€?€ */
 // Matrix rain is visually hidden via CSS (#matrix-bg { display: none; })
 // No canvas rendering runs to save CPU and battery life.
 
-/* â”€â”€â”€ Snapshot Export â”€â”€â”€ */
+/* ?€?€?€ Snapshot Export ?€?€?€ */
 const btnSnapshot = document.getElementById('btn-snapshot');
 if (btnSnapshot) {
   btnSnapshot.addEventListener('click', () => {
@@ -481,7 +481,7 @@ if (btnSnapshot) {
   });
 }
 
-/* â”€â”€â”€ Trade Validator â”€â”€â”€ */
+/* ?€?€?€ Trade Validator ?€?€?€ */
 function initValidator() {
   const btnValidate = document.getElementById('btn-validate');
   if (!btnValidate) return;
@@ -492,7 +492,7 @@ function initValidator() {
     const position = document.getElementById('val-position').value;
 
     if (!symbol || !price || price <= 0) {
-      showToast('warning', 'âš  Invalid Input', 'Please fill all fields correctly!');
+      showToast('warning', '??Invalid Input', 'Please fill all fields correctly!');
       return;
     }
 
@@ -517,18 +517,18 @@ function initValidator() {
 
       displayValidationResult(data);
       playSound('alert');
-      showToast('success', 'âœ“ Validation Complete', `Trade analyzed by 5 AI personas. Score: ${data.overall_score}/100`);
+      showToast('success', '??Validation Complete', `Trade analyzed by 5 AI personas. Score: ${data.overall_score}/100`);
 
     } catch (e) {
       if (e.status === 403) {
-        showToast('warning', 'âš¡ Limit Reached', e.data?.detail || 'Daily free validations used up. Upgrade to Pro!');
+        showToast('warning', '??Limit Reached', e.data?.detail || 'Daily free validations used up. Upgrade to Pro!');
         loadValidatorCredits();
         return;
       }
       console.error(e);
-      resultDiv.innerHTML = '<div style="color:var(--neon-red); font-size:0.8rem;">âš  Validation Failed. Try again.</div>';
+      resultDiv.innerHTML = '<div style="color:var(--neon-red); font-size:0.8rem;">??Validation Failed. Try again.</div>';
       resultDiv.style.display = 'block';
-      showToast('error', 'âš  Validation Failed', 'Please try again or contact support.');
+      showToast('error', '??Validation Failed', 'Please try again or contact support.');
     } finally {
       btnValidate.disabled = false;
       btnValidate.innerHTML = '<i data-lucide="zap"></i> VALIDATE TRADE';
@@ -550,14 +550,14 @@ function loadValidatorCredits() {
       updateCreditsDisplay();
     })
     .catch(() => {
-      // Server unreachable â€” display stale value, don't block
+      // Server unreachable ??display stale value, don't block
       updateCreditsDisplay();
     });
 }
 
 let _serverCreditLimit = 3;
 
-// saveValidatorCredits removed â€” server is the source of truth (PR-4)
+// saveValidatorCredits removed ??server is the source of truth (PR-4)
 
 function updateCreditsDisplay() {
   const creditsEl = document.getElementById('val-credits');
@@ -602,14 +602,14 @@ function displayValidationResult(data) {
       Win Rate: <strong>${escapeHtml(data.win_rate)}</strong>
     </div>
     <div class="val-personas">${personasHTML}</div>
-    <div class="val-summary">ğŸ“Š ${escapeHtml(data.summary)}</div>
+    <div class="val-summary">?“Š ${escapeHtml(data.summary)}</div>
   `;
 
   resultDiv.style.display = 'block';
   lucide.createIcons();
 }
 
-/* â”€â”€â”€ Ask Ryzm Chat â”€â”€â”€ */
+/* ?€?€?€ Ask Ryzm Chat ?€?€?€ */
 function initChat() {
   const chatFloatBtn = document.getElementById('chat-float-btn');
   const chatOverlay = document.getElementById('chat-overlay');
@@ -668,12 +668,12 @@ function initChat() {
       const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
       if (thinkingEl) thinkingEl.remove();
       if (e.status === 403) {
-        addChatMessage('ai', 'âš¡ ' + (e.data?.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
+        addChatMessage('ai', '??' + (e.data?.detail || 'Daily free chat limit reached. Upgrade to Pro!'));
         refreshAllQuotas();
         return;
       }
       console.error(e);
-      addChatMessage('ai', 'âš  Connection lost. Try again.');
+      addChatMessage('ai', '??Connection lost. Try again.');
     }
   };
 
@@ -707,7 +707,7 @@ function addChatMessage(type, text, id = null, confidence = null) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-/* â”€â”€ Quota Refresh (called after any 403) â”€â”€ */
+/* ?€?€ Quota Refresh (called after any 403) ?€?€ */
 function refreshAllQuotas() {
   apiFetch('/api/me', { silent: true })
     .then(data => {

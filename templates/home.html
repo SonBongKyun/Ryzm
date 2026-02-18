@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Ryzm Terminal — AI-Powered Crypto Trading Intelligence{% endblock %}
+{% block description %}Ryzm Terminal: AI-powered crypto trading intelligence. Real-time analytics, multi-framework analysis council, trade validation and 20+ professional panels.{% endblock %}
+
+{% block body %}
+
+<!-- ── Hero Section ── -->
+<section class="hero">
+  <div class="hero-bg-grid"></div>
+  <!-- Gold ambient glow -->
+  <div class="hero-glow hero-glow-1"></div>
+  <div class="hero-glow hero-glow-2"></div>
+
+  <div class="hero-content anim-fade-up">
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      AI-POWERED CRYPTO INTELLIGENCE
+    </div>
+    <h1 class="hero-title">
+      Trade Smarter with<br/>
+      <span class="hero-highlight">AI-Powered</span><br/>
+      <span class="hero-highlight">Intelligence</span>
+    </h1>
+    <p class="hero-subtitle">
+      Real-time analytics, 5 AI analysis frameworks, trade validation,
+      and 20+ professional panels — your unfair edge in the crypto market.
+    </p>
+    <div class="hero-actions">
+      <a href="/app" class="site-btn site-btn-primary site-btn-lg hero-btn-glow">
+        <i data-lucide="rocket" style="width:18px;height:18px;"></i>
+        Launch Terminal
+      </a>
+      <a href="/features" class="site-btn site-btn-outline site-btn-lg">
+        Explore Features
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat" data-count="20" data-suffix="+">
+        <span class="hero-stat-num">20+</span>
+        <span class="hero-stat-label">Pro Panels</span>
+      </div>
+      <div class="hero-stat" data-count="5">
+        <span class="hero-stat-num">5</span>
+        <span class="hero-stat-label">AI Frameworks</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num">24/7</span>
+        <span class="hero-stat-label">Real-time Data</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-num hero-stat-live" id="hero-btc">—</span>
+        <span class="hero-stat-label">BTC Live</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-visual anim-fade-up anim-delay-1">
+    <div class="hero-mockup">
+      <div class="mockup-header">
+        <span class="mockup-dot red"></span>
+        <span class="mockup-dot yellow"></span>
+        <span class="mockup-dot green"></span>
+        <span class="mockup-title">RYZM TERMINAL v7.0</span>
+        <span class="mockup-status">● LIVE</span>
+      </div>
+      <div class="mockup-body-v2">
+        <!-- Row 1: Ticker bar -->
+        <div class="mock-ticker">
+          <span class="mock-tk"><b>BTC</b> <em class="mock-up">$67,501</em></span>
+          <span class="mock-tk"><b>ETH</b> <em class="mock-up">$3,241</em></span>
+          <span class="mock-tk"><b>SOL</b> <em class="mock-dn">$142.8</em></span>
+          <span class="mock-tk"><b>XRP</b> <em class="mock-up">$0.621</em></span>
+        </div>
+        <!-- Row 2: Chart + Council -->
+        <div class="mock-row">
+          <div class="mock-chart-area">
+            <div class="mock-chart-label">BTC/USDT · 4H</div>
+            <svg class="mock-chart-svg" viewBox="0 0 200 60" preserveAspectRatio="none">
+              <polyline points="0,45 15,42 30,38 45,40 60,35 75,28 90,30 105,22 120,25 135,18 150,20 165,15 180,12 200,8"
+                fill="none" stroke="#C9A96E" stroke-width="1.5" opacity="0.9"/>
+              <polyline points="0,45 15,42 30,38 45,40 60,35 75,28 90,30 105,22 120,25 135,18 150,20 165,15 180,12 200,8"
+                fill="url(#chartGrad)" stroke="none" opacity="0.3"/>
+              <defs>
+                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#C9A96E"/>
+                  <stop offset="100%" stop-color="transparent"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="mock-council">
+            <div class="mock-council-title">AI COUNCIL</div>
+            <div class="mock-verdict mock-verdict-bullish">
+              <span class="mock-verdict-dot"></span> BULLISH 72%
+            </div>
+            <div class="mock-lens">Macro <span class="mock-up">▲</span></div>
+            <div class="mock-lens">On-Chain <span class="mock-up">▲</span></div>
+            <div class="mock-lens">Technical <span class="mock-up">▲</span></div>
+            <div class="mock-lens">Sentiment <span class="mock-dn">▼</span></div>
+            <div class="mock-lens">Risk <span class="mock-neutral">—</span></div>
+          </div>
+        </div>
+        <!-- Row 3: Mini panels -->
+        <div class="mock-row-bottom">
+          <div class="mock-mini"><span class="mock-mini-label">Fear & Greed</span><span class="mock-mini-val mock-up">72</span></div>
+          <div class="mock-mini"><span class="mock-mini-label">Funding</span><span class="mock-mini-val">0.012%</span></div>
+          <div class="mock-mini"><span class="mock-mini-label">Liquidations</span><span class="mock-mini-val mock-dn">$48M</span></div>
+          <div class="mock-mini"><span class="mock-mini-label">Whale Flow</span><span class="mock-mini-val mock-up">+1,240 BTC</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- Floating badges around mockup -->
+    <div class="hero-float hero-float-1 anim-float">
+      <i data-lucide="shield-check" style="width:14px;height:14px;"></i> Trade Validated
+    </div>
+    <div class="hero-float hero-float-2 anim-float anim-delay-2">
+      <i data-lucide="bell-ring" style="width:14px;height:14px;"></i> Alert Triggered
+    </div>
+  </div>
+</section>
+
+<!-- ── Live Ticker Strip ── -->
+<section class="home-ticker-strip">
+  <div class="home-ticker-inner" id="home-ticker-track">
+    <span class="home-tk">BTC <em>$67,501.35</em></span>
+    <span class="home-tk">ETH <em>$3,241.20</em></span>
+    <span class="home-tk">SOL <em>$142.80</em></span>
+    <span class="home-tk">XRP <em>$0.621</em></span>
+    <span class="home-tk">DOGE <em>$0.0812</em></span>
+    <span class="home-tk">ADA <em>$0.452</em></span>
+    <span class="home-tk">AVAX <em>$38.90</em></span>
+    <span class="home-tk">LINK <em>$18.42</em></span>
+    <!-- duplicate for seamless scroll -->
+    <span class="home-tk">BTC <em>$67,501.35</em></span>
+    <span class="home-tk">ETH <em>$3,241.20</em></span>
+    <span class="home-tk">SOL <em>$142.80</em></span>
+    <span class="home-tk">XRP <em>$0.621</em></span>
+    <span class="home-tk">DOGE <em>$0.0812</em></span>
+    <span class="home-tk">ADA <em>$0.452</em></span>
+    <span class="home-tk">AVAX <em>$38.90</em></span>
+    <span class="home-tk">LINK <em>$18.42</em></span>
+  </div>
+</section>
+
+<!-- ── Feature Highlights ── -->
+<section class="section highlights">
+  <div class="section-inner">
+    <div class="section-header anim-fade-up">
+      <div class="hero-badge" style="margin-bottom:16px;">
+        <span class="hero-badge-dot"></span>
+        CORE FEATURES
+      </div>
+      <h2 class="section-title">Why Traders Choose Ryzm</h2>
+      <p class="section-subtitle">Professional-grade tools once reserved for institutional desks — now accessible to you</p>
+    </div>
+    <div class="highlight-grid">
+      <div class="highlight-card anim-fade-up">
+        <div class="highlight-icon"><i data-lucide="brain"></i></div>
+        <h3>Analysis Council</h3>
+        <p>5 specialized AI frameworks (Macro, On-Chain, Technical, Sentiment, Risk) analyze markets from different angles simultaneously.</p>
+      </div>
+      <div class="highlight-card anim-fade-up anim-delay-1">
+        <div class="highlight-icon"><i data-lucide="shield-check"></i></div>
+        <h3>Trade Validator</h3>
+        <p>Submit your trade idea and get instant AI-powered risk scoring and analysis before you execute.</p>
+      </div>
+      <div class="highlight-card anim-fade-up anim-delay-2">
+        <div class="highlight-icon"><i data-lucide="activity"></i></div>
+        <h3>20+ Live Panels</h3>
+        <p>Fear & Greed, Liquidation Heatmap, Whale Tracking, Correlation Matrix, On-Chain Metrics, and more.</p>
+      </div>
+      <div class="highlight-card anim-fade-up">
+        <div class="highlight-icon"><i data-lucide="bar-chart-3"></i></div>
+        <h3>TradingView Charts</h3>
+        <p>Integrated TradingView charts with multi-timeframe analysis, custom indicators, and real-time data.</p>
+      </div>
+      <div class="highlight-card anim-fade-up anim-delay-1">
+        <div class="highlight-icon"><i data-lucide="bell-ring"></i></div>
+        <h3>Smart Alerts</h3>
+        <p>Set price alerts on any coin with custom triggers. Get instant notifications when conditions are met.</p>
+      </div>
+      <div class="highlight-card anim-fade-up anim-delay-2">
+        <div class="highlight-icon"><i data-lucide="notebook-pen"></i></div>
+        <h3>Signal Journal</h3>
+        <p>Log trades, track P&L, and review your strategy performance over time with detailed analytics.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How It Works ── -->
+<section class="section alt how-it-works">
+  <div class="section-inner">
+    <div class="section-header anim-fade-up">
+      <div class="hero-badge" style="margin-bottom:16px;">
+        <span class="hero-badge-dot"></span>
+        GET STARTED
+      </div>
+      <h2 class="section-title">How It Works</h2>
+      <p class="section-subtitle">From signup to smarter trading in 3 simple steps</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card anim-fade-up">
+        <div class="step-number">01</div>
+        <div class="step-icon"><i data-lucide="user-plus" style="width:24px;height:24px;"></i></div>
+        <h3>Create Account</h3>
+        <p>Sign up in 30 seconds. Free tier gives you access to core panels and real-time market data.</p>
+      </div>
+      <div class="step-connector anim-fade-up anim-delay-1">
+        <div class="step-line"></div>
+        <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--ryzm-gold);"></i>
+      </div>
+      <div class="step-card anim-fade-up anim-delay-1">
+        <div class="step-number">02</div>
+        <div class="step-icon"><i data-lucide="brain" style="width:24px;height:24px;"></i></div>
+        <h3>AI Analyzes</h3>
+        <p>5 AI frameworks simultaneously analyze on-chain data, technicals, sentiment, macro, and risk in real-time.</p>
+      </div>
+      <div class="step-connector anim-fade-up anim-delay-2">
+        <div class="step-line"></div>
+        <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--ryzm-gold);"></i>
+      </div>
+      <div class="step-card anim-fade-up anim-delay-2">
+        <div class="step-number">03</div>
+        <div class="step-icon"><i data-lucide="trending-up" style="width:24px;height:24px;"></i></div>
+        <h3>Trade Smarter</h3>
+        <p>Make data-driven decisions with validated trade ideas, real-time alerts, and comprehensive market intelligence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Social Proof ── -->
+<section class="section social-proof">
+  <div class="section-inner">
+    <div class="proof-stats anim-fade-up">
+      <div class="proof-stat">
+        <span class="proof-num" data-count="500">0</span><span class="proof-suffix">+</span>
+        <span class="proof-label">Active Traders</span>
+      </div>
+      <div class="proof-divider"></div>
+      <div class="proof-stat">
+        <span class="proof-num" data-count="50000">0</span><span class="proof-suffix">+</span>
+        <span class="proof-label">Trades Analyzed</span>
+      </div>
+      <div class="proof-divider"></div>
+      <div class="proof-stat">
+        <span class="proof-num" data-count="99">0</span><span class="proof-suffix">.9%</span>
+        <span class="proof-label">Uptime</span>
+      </div>
+      <div class="proof-divider"></div>
+      <div class="proof-stat">
+        <span class="proof-num" data-count="24">0</span><span class="proof-suffix">/7</span>
+        <span class="proof-label">Real-time Feed</span>
+      </div>
+    </div>
+
+    <div class="testimonials anim-fade-up anim-delay-1">
+      <div class="testimonial-card">
+        <div class="testimonial-quote">"The AI Council's multi-framework approach gives me conviction I can't get anywhere else. Finally, data-driven trading that actually works."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">K</div>
+          <div>
+            <div class="testimonial-name">Kang M.</div>
+            <div class="testimonial-role">Crypto Trader · Seoul</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-quote">"20+ panels in one dashboard with whale tracking and liquidation data — this replaced 5 different tools for me."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">J</div>
+          <div>
+            <div class="testimonial-name">James R.</div>
+            <div class="testimonial-role">DeFi Researcher · Singapore</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-quote">"Trade Validator has saved me from impulsive entries more times than I can count. The risk scoring is incredibly accurate."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">S</div>
+          <div>
+            <div class="testimonial-name">Sarah L.</div>
+            <div class="testimonial-role">Swing Trader · London</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA Banner ── -->
+<section class="section cta-banner">
+  <div class="cta-banner-inner anim-fade-up">
+    <h2>Ready to level up your trading?</h2>
+    <p>Join 500+ traders who trust Ryzm Terminal for professional-grade crypto intelligence.</p>
+    <div class="cta-actions">
+      <a href="/app" class="site-btn site-btn-primary site-btn-lg hero-btn-glow">
+        <i data-lucide="rocket" style="width:18px;height:18px;"></i>
+        Start Free
+      </a>
+      <a href="/pricing" class="site-btn site-btn-ghost site-btn-lg">View Pricing</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  /* ── Intersection Observer for scroll animations ── */
+  const animEls = document.querySelectorAll('.anim-fade-up');
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('anim-visible'); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.15 });
+    animEls.forEach(el => obs.observe(el));
+  } else {
+    animEls.forEach(el => el.classList.add('anim-visible'));
+  }
+
+  /* ── Count-up animation for proof numbers ── */
+  const countEls = document.querySelectorAll('.proof-num[data-count]');
+  if ('IntersectionObserver' in window) {
+    const cObs = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const target = +e.target.dataset.count;
+          let current = 0;
+          const step = Math.max(1, Math.floor(target / 60));
+          const iv = setInterval(() => {
+            current += step;
+            if (current >= target) { current = target; clearInterval(iv); }
+            e.target.textContent = current.toLocaleString();
+          }, 20);
+          cObs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    countEls.forEach(el => cObs.observe(el));
+  }
+
+  /* ── Simple BTC live fetch for hero ── */
+  async function fetchHeroBTC() {
+    try {
+      const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+      const d = await r.json();
+      const el = document.getElementById('hero-btc');
+      if (el && d.price) el.textContent = '$' + Number(d.price).toLocaleString(undefined, {maximumFractionDigits:0});
+    } catch(e) {}
+  }
+  fetchHeroBTC();
+  setInterval(fetchHeroBTC, 15000);
+})();
+</script>
+{% endblock %}

@@ -1,4 +1,4 @@
-/* ─── Toast Notification System ─── */
+/*  Toast Notification System  */
 function showToast(type, title, message) {
   // Remove existing toast
   const existingToast = document.querySelector('.toast');
@@ -7,9 +7,9 @@ function showToast(type, title, message) {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
 
-  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : '⚠';
+  const icon = type === 'success' ? '\u2714' : type === 'error' ? '\u2716' : '\u2139';
 
-  // PR-3: XSS-safe — use textContent instead of innerHTML for user-facing strings
+  // PR-3: XSS-safe ??use textContent instead of innerHTML for user-facing strings
   const iconDiv = document.createElement('div');
   iconDiv.className = 'toast-icon';
   iconDiv.textContent = icon;
@@ -37,14 +37,14 @@ function showToast(type, title, message) {
   }, 4000);
 }
 
-/* ─── Enhanced Kimchi Premium Display ─── */
-// Kimchi display is now unified in data.js fetchKimchi() — no duplicate needed.
+/*  Enhanced Kimchi Premium Display  */
+// Kimchi display is now unified in data.js fetchKimchi() ??no duplicate needed.
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    UI/UX ENHANCEMENTS v2.0
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 
-/* ─── Quick Actions Toolbar ─── */
+/*  Quick Actions Toolbar  */
 document.addEventListener('DOMContentLoaded', () => {
   initQuickActions();
   initStatusBar();
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSectionNav();
 });
 
-/* ─── Section Navigation (scroll-to + active highlight) ─── */
+/*  Section Navigation (scroll-to + active highlight)  */
 function initSectionNav() {
   const nav = document.getElementById('section-nav');
   if (!nav) return;
@@ -64,7 +64,7 @@ function initSectionNav() {
     if (el) sections.push({ item, el });
   });
 
-  /* Click → smooth scroll to section */
+  /* Click ??smooth scroll to section */
   let _navClicking = false;
   let _navClickTimer = null;
 
@@ -91,7 +91,7 @@ function initSectionNav() {
     });
   });
 
-  /* Scroll → auto-highlight nearest section in viewport */
+  /* Scroll ??auto-highlight nearest section in viewport */
   let ticking = false;
   window.addEventListener('scroll', () => {
     if (_navClicking || ticking) return;
@@ -136,7 +136,7 @@ function initQuickActions() {
 
       icon.style.animation = '';
       btnRefresh.classList.remove('scanning');
-      showToast('success', '✓ Refreshed', 'All market data updated successfully!');
+      showToast('success', 'Refreshed', 'All market data updated successfully!');
     });
   }
 
@@ -147,10 +147,10 @@ function initQuickActions() {
       playSound('click');
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen();
-        showToast('success', '⛶ Fullscreen', 'Entered fullscreen mode');
+        showToast('success', 'Fullscreen', 'Entered fullscreen mode');
       } else {
         document.exitFullscreen();
-        showToast('success', '⛶ Windowed', 'Exited fullscreen mode');
+        showToast('success', 'Windowed', 'Exited fullscreen mode');
       }
     });
   }
@@ -160,14 +160,92 @@ function initQuickActions() {
   if (btnNotifications) {
     btnNotifications.addEventListener('click', () => {
       playSound('click');
-      showToast('warning', '🔔 Coming Soon', 'Notification settings will be available in v2.0!');
+      openNotificationSettings();
     });
   }
 }
 
-/* ─── Refresh All Data ─── */
+/* ── Notification Settings Panel ── */
+function openNotificationSettings() {
+  // Remove existing if open
+  const existing = document.getElementById('notification-settings-panel');
+  if (existing) { existing.remove(); return; }
 
-/* ── Alpha Scanner ── */
+  const soundOn = localStorage.getItem('ryzm_sound') !== 'off';
+  const browserNotif = localStorage.getItem('ryzm_browser_notif') === 'on';
+
+  const panel = document.createElement('div');
+  panel.id = 'notification-settings-panel';
+  panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10001;background:var(--bg-panel);border:1px solid var(--border-bright);border-radius:12px;padding:24px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-family:var(--font-head);font-size:0.95rem;color:var(--text-main);margin:0;">Notification Settings</h3>
+      <button onclick="document.getElementById('notification-settings-panel').remove();document.getElementById('notif-backdrop')?.remove();" style="background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;">&times;</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <label style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;">
+        <div>
+          <div style="font-size:0.82rem;color:var(--text-main);font-weight:600;">Sound Effects</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);">UI click & alert sounds</div>
+        </div>
+        <input type="checkbox" id="notif-sound-toggle" ${soundOn ? 'checked' : ''} onchange="toggleNotifSound(this.checked)" style="width:18px;height:18px;accent-color:var(--neon-cyan);">
+      </label>
+      <label style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;">
+        <div>
+          <div style="font-size:0.82rem;color:var(--text-main);font-weight:600;">Browser Notifications</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);">Price alert push notifications</div>
+        </div>
+        <input type="checkbox" id="notif-browser-toggle" ${browserNotif ? 'checked' : ''} onchange="toggleBrowserNotif(this.checked)" style="width:18px;height:18px;accent-color:var(--neon-cyan);">
+      </label>
+      <div style="padding:8px 12px;background:rgba(201,169,110,0.06);border:1px solid rgba(201,169,110,0.15);border-radius:8px;">
+        <div style="font-size:0.72rem;color:var(--text-muted);">
+          <strong style="color:var(--neon-cyan);">Tip:</strong> Price alerts are managed in the Alerts panel. Set target prices and get notified when triggered.
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Backdrop
+  const backdrop = document.createElement('div');
+  backdrop.id = 'notif-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);';
+  backdrop.onclick = () => { panel.remove(); backdrop.remove(); };
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(panel);
+}
+
+function toggleNotifSound(on) {
+  localStorage.setItem('ryzm_sound', on ? 'on' : 'off');
+  if (typeof showToast === 'function') showToast('success', 'Sound', on ? 'Sound effects enabled' : 'Sound effects disabled');
+}
+
+function toggleBrowserNotif(on) {
+  if (on) {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') {
+          localStorage.setItem('ryzm_browser_notif', 'on');
+          if (typeof showToast === 'function') showToast('success', 'Notifications', 'Browser notifications enabled');
+        } else {
+          localStorage.setItem('ryzm_browser_notif', 'off');
+          document.getElementById('notif-browser-toggle').checked = false;
+          if (typeof showToast === 'function') showToast('warning', 'Blocked', 'Please allow notifications in browser settings');
+        }
+      });
+    } else {
+      if (typeof showToast === 'function') showToast('warning', 'Not Supported', 'Browser notifications not supported');
+      document.getElementById('notif-browser-toggle').checked = false;
+    }
+  } else {
+    localStorage.setItem('ryzm_browser_notif', 'off');
+    if (typeof showToast === 'function') showToast('success', 'Notifications', 'Browser notifications disabled');
+  }
+}
+
+/*  Refresh All Data  */
+
+/*  Alpha Scanner  */
 async function fetchScanner() {
   try {
     const data = await apiFetch('/api/scanner', { silent: true });
@@ -187,7 +265,7 @@ async function fetchScanner() {
           'VOL_SPIKE': t('scanner_vol')
         }[a.type] || escapeHtml(a.type);
 
-        const icon = a.type === 'PUMP_ALERT' ? '🚀' : a.type === 'OVERSOLD_BOUNCE' ? '🎯' : '💥';
+        const icon = a.type === 'PUMP_ALERT' ? '\u{1F680}' : a.type === 'OVERSOLD_BOUNCE' ? '\u{1F4C8}' : '\u{26A1}';
 
         return `<div class="scanner-alert" style="border-left-color:${safeColor(a.color)};">
           <div class="scanner-alert-left">
@@ -213,7 +291,7 @@ async function fetchScanner() {
   }
 }
 
-/* ── Regime Detector ── */
+/*  Regime Detector  */
 async function fetchRegime() {
   try {
     const data = await apiFetch('/api/regime', { silent: true });
@@ -236,7 +314,7 @@ async function fetchRegime() {
   } catch (e) { console.error('Regime Error:', e); }
 }
 
-/* ── Correlation Matrix ── */
+/*  Correlation Matrix  */
 async function fetchCorrelation() {
   try {
     const data = await apiFetch('/api/correlation', { silent: true });
@@ -261,7 +339,7 @@ async function fetchCorrelation() {
         else if (v <= -0.3) bg = `rgba(220,38,38,${0.1 + intensity * 0.3})`;
         else if (v <= -0.7) bg = `rgba(220,38,38,${0.3 + intensity * 0.5})`;
         else bg = 'rgba(128,128,128,0.1)';
-        html += `<td class="corr-cell" style="background:${bg};" title="${escapeHtml(row)}↔${escapeHtml(col)}: ${val}">${val}</td>`;
+        html += `<td class="corr-cell" style="background:${bg};" title="${escapeHtml(row)}??{escapeHtml(col)}: ${val}">${val}</td>`;
       });
       html += '</tr>';
     });
@@ -270,7 +348,7 @@ async function fetchCorrelation() {
   } catch (e) { console.error('Correlation Error:', e); }
 }
 
-/* ── Whale Wallet Tracker ── */
+/*  Whale Wallet Tracker  */
 async function fetchWhaleWallets() {
   try {
     const data = await apiFetch('/api/whale-wallets', { silent: true });
@@ -279,12 +357,12 @@ async function fetchWhaleWallets() {
 
     if (data.transactions && data.transactions.length > 0) {
       feed.innerHTML = data.transactions.map(tx => {
-        const icon = tx.type === 'INFLOW' ? '📥' : '📤';
+        const icon = tx.type === 'INFLOW' ? '\u25B2' : '\u25BC';
         const color = tx.type === 'INFLOW' ? 'var(--neon-green)' : 'var(--neon-red)';
         return `<div class="whale-tx-item">
           <span class="whale-tx-icon">${icon}</span>
           <span class="whale-tx-amount" style="color:${color}">${(Number(tx.btc) || 0).toFixed(2)} BTC</span>
-          <span class="whale-tx-usd">≈ $${(Number(tx.usd || 0)/1e6).toFixed(1)}M</span>
+          <span class="whale-tx-usd">??$${(Number(tx.usd || 0)/1e6).toFixed(1)}M</span>
           <span class="whale-tx-time">${new Date(tx.time * 1000).toLocaleTimeString()}</span>
         </div>`;
       }).join('');
@@ -294,7 +372,7 @@ async function fetchWhaleWallets() {
   } catch (e) { console.error('Whale Wallets Error:', e); }
 }
 
-/* ── Liquidation Kill Zone ── */
+/*  Liquidation Kill Zone  */
 async function fetchLiqZones() {
   try {
     const data = await apiFetch('/api/liq-zones', { silent: true });
@@ -308,10 +386,10 @@ async function fetchLiqZones() {
       html += '<div class="liq-bar-container">';
 
       data.zones.forEach(z => {
-        // Long liq (price drop) — show as green bar below
+        // Long liq (price drop) ??show as green bar below
         const longDist = ((z.long_liq_price - price) / price * 100).toFixed(1);
         const longWidth = Math.min(Math.abs(longDist) * 3, 80);
-        // Short liq (price rise) — show as red bar above
+        // Short liq (price rise) ??show as red bar above
         const shortDist = ((z.short_liq_price - price) / price * 100).toFixed(1);
         const shortWidth = Math.min(Math.abs(shortDist) * 3, 80);
 
@@ -337,7 +415,7 @@ async function fetchLiqZones() {
   } catch (e) { console.error('LiqZones Error:', e); }
 }
 
-/* ── Chart Modal (Price Card Click) ── */
+/*  Chart Modal (Price Card Click)  */
 let _modalChart = null;
 let _modalResizeObserver = null;
 
@@ -360,7 +438,7 @@ function initTradingViewModal() {
   document.addEventListener('click', (e) => {
     const card = e.target.closest('.price-card');
     if (!card) return;
-    const symbol = card.querySelector('.coin-name')?.textContent?.trim();
+    const symbol = card.querySelector('.price-symbol')?.textContent?.trim();
     if (!symbol) return;
     openRyzmModalChart(symbol);
   });
@@ -396,13 +474,13 @@ function openRyzmModalChart(symbol) {
     },
     grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
     crosshair: {
-      vertLine: { color: t.cross, labelBackgroundColor: 'rgba(6,182,212,0.9)' },
-      horzLine: { color: t.cross, labelBackgroundColor: 'rgba(6,182,212,0.9)' },
+      vertLine: { color: t.cross, labelBackgroundColor: 'rgba(201,169,110,0.9)' },
+      horzLine: { color: t.cross, labelBackgroundColor: 'rgba(201,169,110,0.9)' },
     },
     rightPriceScale: { borderColor: t.border },
     timeScale: { borderColor: t.border, timeVisible: true, secondsVisible: false },
     watermark: { visible: true, fontSize: 36, horzAlign: 'center', vertAlign: 'center',
-      color: isDark ? 'rgba(6,182,212,0.06)' : 'rgba(0,0,0,0.03)', text: `${symbol}/USDT` },
+      color: isDark ? 'rgba(201,169,110,0.06)' : 'rgba(0,0,0,0.03)', text: `${symbol}/USDT` },
   });
 
   const candleSeries = _modalChart.addCandlestickSeries({
@@ -439,7 +517,7 @@ function openRyzmModalChart(symbol) {
   _modalResizeObserver.observe(container);
 }
 
-/* ── PWA Service Worker Registration ── */
+/*  PWA Service Worker Registration  */
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
@@ -452,7 +530,7 @@ function registerServiceWorker() {
   }
 }
 
-/* ── Mini Heatmap (Upgraded) ── */
+/*  Mini Heatmap (Upgraded)  */
 let _hmPeriod = '24h';
 let _hmLastData = null;
 
@@ -479,7 +557,7 @@ function _hmColorSolid(pct) {
 }
 
 function _hmFmtMcap(v) {
-  if (!v) return '—';
+  if (!v) return '--';
   if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
   if (v >= 1e9)  return '$' + (v / 1e9).toFixed(1) + 'B';
   if (v >= 1e6)  return '$' + (v / 1e6).toFixed(1) + 'M';
@@ -487,7 +565,7 @@ function _hmFmtMcap(v) {
 }
 
 function _hmFmtVol(v) {
-  if (!v) return '—';
+  if (!v) return '--';
   if (v >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
   if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
   return '$' + (v / 1e3).toFixed(0) + 'K';
@@ -690,7 +768,7 @@ async function fetchHeatmap() {
   } catch (e) { console.error('Heatmap Error:', e); }
 }
 
-/* ── Health Check / Connection Status ── */
+/*  Health Check / Connection Status  */
 async function fetchHealthCheck() {
   try {
     const data = await apiFetch('/api/health-check', { silent: true });
@@ -709,7 +787,7 @@ async function fetchHealthCheck() {
     }
     if (tooltip) {
       tooltip.innerHTML = data.sources.map(s => {
-        const icon = s.status === 'ok' ? '🟢' : '🔴';
+        const icon = s.status === 'ok' ? '\u2705' : '\u274C';
         return `<div class="src-row">${icon} ${escapeHtml(s.name)}</div>`;
       }).join('');
     }
@@ -761,14 +839,14 @@ async function refreshAllData() {
     // Update last refresh time
     updateLastRefreshTime();
 
-    showToast('success', '✓ Refreshed', 'All panels updated');
+    showToast('success', 'Refreshed', 'All panels updated');
   } catch (e) {
     console.error('Refresh error:', e);
-    showToast('error', '⚠ Refresh Failed', 'Could not update data sources');
+    showToast('error', 'Refresh Failed', 'Could not update data sources');
   }
 }
 
-/* ─── Pulse Indicators ─── */
+/*  Pulse Indicators  */
 function initPulseIndicators() {
   // Auto-pulse when data updates
   setInterval(() => {
@@ -793,7 +871,7 @@ function pulsePanels(panelIds) {
   });
 }
 
-/* ─── Status Bar Updates ─── */
+/*  Status Bar Updates  */
 function initStatusBar() {
   updateConnectionStatus();
   updateLastRefreshTime();
@@ -814,9 +892,9 @@ function updateConnectionStatus() {
     });
 }
 
-/* updateLastRefreshTime — see "Live Time Ago" section at bottom */
+/* updateLastRefreshTime ??see "Live Time Ago" section at bottom */
 
-/* ─── Add spin animation keyframe ─── */
+/*  Add spin animation keyframe  */
 if (!document.getElementById('spin-animation-style')) {
   const style = document.createElement('style');
   style.id = 'spin-animation-style';
@@ -829,7 +907,7 @@ if (!document.getElementById('spin-animation-style')) {
   document.head.appendChild(style);
 }
 
-/* ─── Keyboard Shortcuts ─── */
+/*  Keyboard Shortcuts  */
 document.addEventListener('keydown', (e) => {
   // Ctrl/Cmd + R: Refresh all data
   if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
@@ -865,7 +943,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
-      showToast('success', '⛶ Fullscreen', 'Press F or F11 to exit');
+      showToast('success', 'Fullscreen', 'Press F or F11 to exit');
     } else {
       document.exitFullscreen();
     }
@@ -876,7 +954,7 @@ document.addEventListener('keydown', (e) => {
     setTimeout(() => {
       const isFullscreen = !!document.fullscreenElement;
       if (isFullscreen) {
-        showToast('success', '⛶ Fullscreen', 'Press F or F11 to exit');
+        showToast('success', '??Fullscreen', 'Press F or F11 to exit');
       }
     }, 100);
   }
@@ -909,7 +987,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-/* ─── AI Council Prediction History ─── */
+/*  AI Council Prediction History  */
 async function fetchCouncilHistory() {
   try {
     const data = await apiFetch('/api/council/history?limit=30', { silent: true });
@@ -928,7 +1006,7 @@ function renderCouncilHistory(data) {
   const elHits = document.getElementById('ch-hits');
   if (elTotal) elTotal.textContent = stats.total_sessions;
   if (elAccuracy) {
-    elAccuracy.textContent = stats.accuracy_pct !== null ? `${stats.accuracy_pct}%` : '—';
+    elAccuracy.textContent = stats.accuracy_pct !== null ? `${stats.accuracy_pct}%` : '--';
     if (stats.accuracy_pct !== null) {
       elAccuracy.style.color = stats.accuracy_pct >= 60 ? 'var(--neon-green)' :
         stats.accuracy_pct >= 40 ? 'var(--neon-cyan)' : 'var(--neon-red)';
@@ -955,7 +1033,7 @@ function renderCouncilHistory(data) {
             (hz.avg_return_pct !== null ? ` | avg ${hz.avg_return_pct > 0 ? '+' : ''}${hz.avg_return_pct}%` : '') +
             covStr + highStr;
         } else {
-          el.textContent = '—';
+          el.textContent = '--';
           el.title = 'Not enough data';
         }
       }
@@ -1005,20 +1083,20 @@ function renderCouncilHistory(data) {
   container.innerHTML = records.slice(0, 15).map(r => {
     const scoreColor = r.consensus_score > 60 ? 'var(--neon-green)' :
       r.consensus_score < 40 ? 'var(--neon-red)' : 'var(--text-main)';
-    const hitIcon = r.hit === 1 ? '<span class="ch-hit">✓</span>' :
-      r.hit === 0 ? '<span class="ch-miss">✗</span>' :
-      '<span class="ch-pending">⏳</span>';
-    const time = r.timestamp ? r.timestamp.split(' ')[1] || r.timestamp : '—';
+    const hitIcon = r.hit === 1 ? '<span class="ch-hit">??/span>' :
+      r.hit === 0 ? '<span class="ch-miss">??/span>' :
+      '<span class="ch-pending">??/span>';
+    const time = r.timestamp ? r.timestamp.split(' ')[1] || r.timestamp : '--';
     return `<div class="ch-record-row">
       <span class="ch-record-time">${escapeHtml(time)}</span>
       <span class="ch-record-score" style="color:${scoreColor}">${parseInt(r.consensus_score) || 0}</span>
-      <span class="ch-record-vibe">${escapeHtml(r.vibe_status || '—')}</span>
+      <span class="ch-record-vibe">${escapeHtml(r.vibe_status || '--')}</span>
       <span class="ch-record-hit">${hitIcon}</span>
     </div>`;
   }).join('');
 }
 
-/* ═══ Council Score vs BTC Price Overlay Chart ═══ */
+/* ═Council Score vs BTC Price Overlay Chart ═*/
 function drawScoreVsBtcOverlay(records) {
   const canvas = document.getElementById('ch-overlay-canvas');
   if (!canvas || !records.length) return;
@@ -1073,7 +1151,7 @@ function drawScoreVsBtcOverlay(records) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // BTC Price line (right axis — orange)
+  // BTC Price line (right axis ??orange)
   ctx.beginPath();
   prices.forEach((p, i) => {
     const x = pad.left + i * step;
@@ -1086,14 +1164,14 @@ function drawScoreVsBtcOverlay(records) {
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  // Council Score line (left axis — cyan)
+  // Council Score line (left axis ??cyan)
   ctx.beginPath();
   scores.forEach((s, i) => {
     const x = pad.left + i * step;
     const y = yScore(s);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = '#0284c7';
+  ctx.strokeStyle = '#a37e3a';
   ctx.lineWidth = 2;
   ctx.stroke();
 
@@ -1104,13 +1182,13 @@ function drawScoreVsBtcOverlay(records) {
     ctx.beginPath();
     ctx.arc(x, y, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = (r.consensus_score >= 70) ? '#059669' :
-                    (r.consensus_score <= 30) ? '#dc2626' : '#0284c7';
+                    (r.consensus_score <= 30) ? '#dc2626' : '#a37e3a';
     ctx.fill();
   });
 
   // Left Y-axis labels (Score)
   ctx.font = '7px monospace';
-  ctx.fillStyle = '#0284c7';
+  ctx.fillStyle = '#a37e3a';
   ctx.textAlign = 'right';
   [0, 30, 50, 70, 100].forEach(v => {
     ctx.fillText(v.toString(), pad.left - 3, yScore(v) + 3);
@@ -1128,7 +1206,7 @@ function drawScoreVsBtcOverlay(records) {
 
   // Legend
   ctx.font = '6px sans-serif';
-  ctx.fillStyle = '#0284c7';
+  ctx.fillStyle = '#a37e3a';
   ctx.textAlign = 'left';
   ctx.fillRect(pad.left + 2, pad.top, 8, 2);
   ctx.fillText('Score', pad.left + 12, pad.top + 3);
@@ -1171,7 +1249,7 @@ function drawCouncilSparkline(records) {
   // Gradient fill
   const gradient = ctx.createLinearGradient(0, 0, 0, h);
   gradient.addColorStop(0, 'rgba(5,150,105,0.2)');
-  gradient.addColorStop(0.5, 'rgba(2,132,199,0.08)');
+  gradient.addColorStop(0.5, 'rgba(163,126,58,0.08)');
   gradient.addColorStop(1, 'rgba(220,38,38,0.2)');
 
   ctx.beginPath();
@@ -1195,7 +1273,7 @@ function drawCouncilSparkline(records) {
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan').trim() || '#0284c7';
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan').trim() || '#a37e3a';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
@@ -1214,21 +1292,21 @@ function drawCouncilSparkline(records) {
 setTimeout(() => fetchCouncilHistory(), 3000);
 
 
-/* ─── Page Visibility API - Pause/Resume polling via RyzmScheduler ─── */
+/*  Page Visibility API - Pause/Resume polling via RyzmScheduler  */
 let isPageVisible = true;
 document.addEventListener('visibilitychange', () => {
   isPageVisible = !document.hidden;
   if (typeof RyzmScheduler === 'undefined') return;
   if (isPageVisible) {
-    console.log('[Visibility] Page visible — resuming scheduler');
+    console.log('[Visibility] Page visible ??resuming scheduler');
     RyzmScheduler.resumeAll();
   } else {
-    console.log('[Visibility] Page hidden — pausing scheduler');
+    console.log('[Visibility] Page hidden ??pausing scheduler');
     RyzmScheduler.pauseAll();
   }
 });
 
-/* ─── Performance Monitor (Debug Only) ─── */
+/*  Performance Monitor (Debug Only)  */
 // Disabled in production. Uncomment for debugging:
 // if (window.performance && window.performance.memory) {
 //   setInterval(() => {
@@ -1239,31 +1317,31 @@ document.addEventListener('visibilitychange', () => {
 //   }, 60000);
 // }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    #3 Fear & Greed Index (Upgraded v2)
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 
-// ── Helpers ──
+//  Helpers 
 
-/** Score → zone color */
+/** Score ??zone color */
 function _fgColor(score) {
   if (score < 25) return '#dc2626';
   if (score < 45) return '#f97316';
   if (score < 55) return '#eab308';
-  if (score < 75) return '#06b6d4';
+  if (score < 75) return '#C9A96E';
   return '#059669';
 }
 
-/** Score → emoji + short comment (EN / KO) */
+/** Score ??emoji + short comment (EN / KO) */
 function _fgMood(score, lang) {
   const moods = [
-    { max: 12, emoji: '😱', en: 'Extreme panic. Blood on the streets.',      ko: '극도의 패닉. 시장이 공포에 빠졌어요.' },
-    { max: 25, emoji: '😰', en: 'Heavy fear lingers in the market.',         ko: '강한 공포가 시장을 지배합니다.' },
-    { max: 40, emoji: '😟', en: 'Traders remain cautious and uneasy.',       ko: '불안감이 퍼져 있는 상태입니다.' },
-    { max: 55, emoji: '😐', en: 'Market sentiment is balanced, neutral.',    ko: '중립적 분위기. 관망세가 이어지네요.' },
-    { max: 70, emoji: '🙂', en: 'Optimism is building slowly.',              ko: '낙관론이 서서히 고개를 듭니다.' },
-    { max: 85, emoji: '🤑', en: 'Greed is rising — stay vigilant.',          ko: '탐욕이 퍼지고 있어요. 경계하세요.' },
-    { max: 101, emoji: '🚀', en: 'Extreme greed! Possible overheating.',     ko: '극단적 탐욕! 과열 신호입니다.' }
+    { max: 12, emoji: '\u{1F631}', en: 'Extreme panic. Blood on the streets.', ko: '극도의 패닉. 시장이 공포에 빠졌어요.' },
+    { max: 25, emoji: '\u{1F628}', en: 'Heavy fear lingers in the market.', ko: '강한 공포가 시장을 지배합니다.' },
+    { max: 40, emoji: '\u{1F61F}', en: 'Traders remain cautious and uneasy.', ko: '불안감이 퍼져 있는 상태입니다.' },
+    { max: 55, emoji: '\u{1F610}', en: 'Market sentiment is balanced, neutral.', ko: '중립적 분위기, 관망세가 이어지고 있어요.' },
+    { max: 70, emoji: '\u{1F60A}', en: 'Optimism is building slowly.', ko: '낙관론이 조심스레 고개를 들고 있어요.' },
+    { max: 85, emoji: '\u{1F929}', en: 'Greed is rising \u2014 stay vigilant.', ko: '탐욕이 상승 중! 경계하세요.' },
+    { max: 101, emoji: '\u{1F525}', en: 'Extreme greed! Possible overheating.', ko: '극단적 탐욕! 과열 신호입니다.' }
   ];
   const m = moods.find(m => score < m.max) || moods[moods.length - 1];
   return { emoji: m.emoji, comment: lang === 'ko' ? m.ko : m.en };
@@ -1303,7 +1381,7 @@ function _drawFGGauge(score) {
     { from: 0,    to: 0.25,  color: '#dc2626' },
     { from: 0.25, to: 0.45,  color: '#f97316' },
     { from: 0.45, to: 0.55,  color: '#eab308' },
-    { from: 0.55, to: 0.75,  color: '#06b6d4' },
+    { from: 0.55, to: 0.75,  color: '#C9A96E' },
     { from: 0.75, to: 1,     color: '#059669' }
   ];
   segs.forEach(s => {
@@ -1317,14 +1395,14 @@ function _drawFGGauge(score) {
     ctx.globalAlpha = 1;
   });
 
-  // Active arc (0→score)
+  // Active arc (0score)
   const pct = Math.min(Math.max(score / 100, 0), 1);
   const activeEnd = startAngle + pct * Math.PI;
   const activeGrad = ctx.createConicGradient(startAngle, cx, cy);
   activeGrad.addColorStop(0, '#dc2626');
   activeGrad.addColorStop(0.25, '#f97316');
   activeGrad.addColorStop(0.45, '#eab308');
-  activeGrad.addColorStop(0.65, '#06b6d4');
+  activeGrad.addColorStop(0.65, '#C9A96E');
   activeGrad.addColorStop(1, '#059669');
 
   ctx.beginPath();
@@ -1381,7 +1459,7 @@ function _drawFGHistoryChart(history, period) {
   // Zone backgrounds
   const zones = [
     { lo: 75, hi: 100, color: 'rgba(5,150,105,0.08)' },
-    { lo: 55, hi: 75,  color: 'rgba(6,182,212,0.06)' },
+    { lo: 55, hi: 75,  color: 'rgba(201,169,110,0.06)' },
     { lo: 45, hi: 55,  color: 'rgba(234,179,8,0.06)' },
     { lo: 25, hi: 45,  color: 'rgba(249,115,22,0.06)' },
     { lo: 0,  hi: 25,  color: 'rgba(220,38,38,0.08)' }
@@ -1542,7 +1620,7 @@ async function fetchFearGreedChart() {
     if (deltaEl && data.delta !== undefined && data.delta !== null) {
       const d = data.delta;
       deltaEl.className = 'fg-delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : 'flat');
-      if (arrowEl) arrowEl.textContent = d > 0 ? '▲' : d < 0 ? '▼' : '─';
+      if (arrowEl) arrowEl.textContent = d > 0 ? '\u25B2' : d < 0 ? '\u25BC' : '-';
       if (valEl) valEl.textContent = (d > 0 ? '+' : '') + d;
     }
 
@@ -1551,7 +1629,7 @@ async function fetchFearGreedChart() {
     set('fg-avg-7d', data.avg_7d ?? '--');
     set('fg-avg-14d', data.avg_14d ?? '--');
     set('fg-avg-30d', data.avg_30d ?? '--');
-    if (data.min_30d != null && data.max_30d != null) set('fg-range-30d', `${data.min_30d}–${data.max_30d}`);
+    if (data.min_30d != null && data.max_30d != null) set('fg-range-30d', `${data.min_30d}??{data.max_30d}`);
 
     // 6) Chart
     if (data.history && data.history.length > 0) {
@@ -1562,7 +1640,7 @@ async function fetchFearGreedChart() {
   }
 }
 
-/** Period toggle click handler — attached once via event delegation */
+/** Period toggle click handler ??attached once via event delegation */
 (function _initFGPeriodTabs() {
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.fg-period-btn');
@@ -1578,9 +1656,9 @@ async function fetchFearGreedChart() {
   });
 })();
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    #4 Multi-Timeframe Analysis
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 async function fetchMultiTimeframe() {
   try {
     const data = await apiFetch('/api/multi-timeframe', { silent: true });
@@ -1606,28 +1684,28 @@ function renderMultiTimeframe(data) {
     if (!d) return '';
 
     const rsiColor = d.rsi > 70 ? '#dc2626' : d.rsi < 30 ? '#059669' : 'var(--text-main)';
-    const emaStatus = d.ema20 > d.ema50 ? '🟢' : d.ema20 < d.ema50 ? '🔴' : '⚪';
+    const emaStatus = d.ema20 > d.ema50 ? '\u25B2' : d.ema20 < d.ema50 ? '\u25BC' : '-';
 
     const signalColors = {
       'BUY': '#059669', 'SELL': '#dc2626', 'HOLD': '#eab308', 'N/A': 'var(--text-muted)'
     };
     const signalEmoji = {
-      'BUY': '▲', 'SELL': '▼', 'HOLD': '—', 'N/A': '?'
+      'BUY': '+', 'SELL': '-', 'HOLD': '=', 'N/A': '?'
     };
     const sc = signalColors[d.signal] || 'var(--text-muted)';
 
     return `<tr>
       <td style="font-weight:700;font-family:var(--font-mono);">${labels[key]}</td>
       <td style="color:${rsiColor};font-family:var(--font-mono);">${d.rsi}</td>
-      <td>${emaStatus} <span style="font-size:0.65rem;color:var(--text-muted);">${d.ema20 > d.ema50 ? 'Bull' : d.ema20 < d.ema50 ? 'Bear' : '—'}</span></td>
+      <td>${emaStatus} <span style="font-size:0.65rem;color:var(--text-muted);">${d.ema20 > d.ema50 ? 'Bull' : d.ema20 < d.ema50 ? 'Bear' : '--'}</span></td>
       <td style="color:${sc};font-weight:700;">${signalEmoji[d.signal] || ''} ${d.signal}</td>
     </tr>`;
   }).join('');
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    #8 On-Chain Data Panel
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 async function fetchOnChainData() {
   try {
     const data = await apiFetch('/api/onchain', { silent: true });
@@ -1654,7 +1732,7 @@ function _renderOI(data) {
     const oiStr = o.oi_usd >= 1e9 ? `$${(o.oi_usd/1e9).toFixed(2)}B` : `$${(o.oi_usd/1e6).toFixed(0)}M`;
     const chg = o.change_pct || 0;
     const dir = chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat';
-    const arrow = chg > 0 ? '▲' : chg < 0 ? '▼' : '—';
+    const arrow = chg > 0 ? '\u25B2' : chg < 0 ? '\u25BC' : '-';
     const barW = Math.min(Math.abs(chg) * 5, 100);
     const barColor = dir === 'up' ? 'var(--neon-green)' : dir === 'down' ? 'var(--neon-red)' : 'var(--text-muted)';
     return `<div class="oc-oi-item">
@@ -1694,10 +1772,10 @@ function _renderMempool(data) {
   const el30m = document.getElementById('oc-fee-30m');
   const el1h = document.getElementById('oc-fee-1h');
   const elEco = document.getElementById('oc-fee-eco');
-  if (elFast) elFast.textContent = fm.fastest || '—';
-  if (el30m) el30m.textContent = fm.half_hour || '—';
-  if (el1h) el1h.textContent = fm.hour || '—';
-  if (elEco) elEco.textContent = fm.economy || '—';
+  if (elFast) elFast.textContent = fm.fastest || '--';
+  if (el30m) el30m.textContent = fm.half_hour || '--';
+  if (el1h) el1h.textContent = fm.hour || '--';
+  if (elEco) elEco.textContent = fm.economy || '--';
 
   // Congestion bar
   const fill = document.getElementById('oc-congestion-fill');
@@ -1740,14 +1818,14 @@ function _renderHashrate(data) {
     const y = h - 2 - ((v - mn) / range) * (h - 4);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan').trim() || '#06b6d4';
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-cyan').trim() || '#C9A96E';
   ctx.lineWidth = 1.5;
   ctx.stroke();
   // fill
   ctx.lineTo(w, h);
   ctx.lineTo(0, h);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(6,182,212,0.1)';
+  ctx.fillStyle = 'rgba(201,169,110,0.1)';
   ctx.fill();
 }
 
@@ -1761,9 +1839,9 @@ function _renderLiqZones(data) {
     return;
   }
   const fmtUsd = v => v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(0)}M` : `$${v.toLocaleString()}`;
-  const biasLabel = lz.bias === 'LONG_HEAVY' ? '🔴 LONG HEAVY' : lz.bias === 'SHORT_HEAVY' ? '🟢 SHORT HEAVY' : '⚖ BALANCED';
+  const biasLabel = lz.bias === 'LONG_HEAVY' ? 'LONG HEAVY' : lz.bias === 'SHORT_HEAVY' ? 'SHORT HEAVY' : 'BALANCED';
   let html = `<div class="oc-liq-header">
-    <span class="oc-liq-price">BTC $${lz.current_price?.toLocaleString() || '—'}</span>
+    <span class="oc-liq-price">BTC $${lz.current_price?.toLocaleString() || '--'}</span>
     <span class="oc-liq-bias" style="background:${lz.bias_color || '#888'}22;color:${lz.bias_color || '#888'}">${biasLabel}</span>
   </div>`;
   html += lz.zones.slice(0, 4).map(z => `<div class="oc-liq-zone-row">
@@ -1804,9 +1882,9 @@ function _initOCSectionToggles() {
   });
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    #11 Panel Drag & Drop Customization
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 function initPanelDragDrop() {
   const panels = ['panel-left', 'panel-center', 'panel-right'];
 
@@ -1814,7 +1892,7 @@ function initPanelDragDrop() {
     const container = document.getElementById(panelId);
     if (!container || typeof Sortable === 'undefined') return;
 
-    // Restore saved order — only reorder children that actually belong to this container
+    // Restore saved order ??only reorder children that actually belong to this container
     const savedOrder = JSON.parse(localStorage.getItem(`ryzm_panel_order_${panelId}`) || '[]');
     if (savedOrder.length > 0) {
       const childMap = {};
@@ -1854,9 +1932,9 @@ function initPanelDragDrop() {
   });
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    #12 Multi-Language Support (i18n)
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 const _translations = {
   en: {
     // Header
@@ -1937,8 +2015,8 @@ const _translations = {
     no_whale: "No whale activity detected",
     no_events: "No upcoming events",
     connection_failed: "CONNECTION FAILED",
-    summoning: "SUMMONING AGENTS...",
-    accessing: "ACCESSING NEURAL NET...",
+    summoning: "RUNNING FRAMEWORKS...",
+    accessing: "MULTI-LENS ANALYSIS...",
     // Scanner
     alpha_scanner: "Alpha Scanner (15m)",
     scanner_pump: "PUMP ALERT",
@@ -1967,102 +2045,170 @@ const _translations = {
     val_invalid_input: "Please fill all fields correctly!",
     val_scanning: "SCANNING...",
     val_complete: "Validation Complete",
-    val_failed: "Validation Failed"
+    val_failed: "Validation Failed",
+    // Help modal
+    help_title: "Help & FAQ",
+    help_faq1_q: "\u{1F4B3} I paid but Pro isn't working",
+    help_faq1_a: "It may take up to 1 minute after payment to activate. Try refreshing the page.<br>If it still doesn't work, log out and log back in.<br>If the problem persists, contact us at the email below.",
+    help_faq2_q: "\u{1F504} How do I cancel or change my card?",
+    help_faq2_a: "Go to Profile menu \u2192 <b>Manage Subscription</b> \u2192 You can change your card, cancel, or view receipts directly in the Stripe portal.<br>If you cancel, you can use Pro until the end of the current billing cycle.",
+    help_faq3_q: "\u{1F4E1} Data is delayed or blank",
+    help_faq3_a: "This may be due to a temporary outage from external data sources (Binance, CoinGecko, etc.).<br>It usually recovers automatically within a few minutes. Check the connection status indicator at the bottom of the screen.",
+    help_faq4_q: "\u{1F916} Is AI analysis investment advice?",
+    help_faq4_a: "No. Ryzm's AI analysis is for informational purposes only and is not investment advice.<br>All investment decisions are the user's responsibility.",
+    help_faq5_q: "\u{1F9E0} How does the Analysis Council work?",
+    help_faq5_a: "A single AI engine analyzes markets through <b>5 specialized frameworks</b> (Macro, On-Chain, Technical, Sentiment, Risk).<br>Each framework focuses on different data and perspectives, producing independent analysis results.<br>Think of it as one analyst running 5 different checklists \u2014 multi-angle analysis in a single pass.",
+    help_contact: "Contact",
+    // Daily Report modal
+    dr_title: "Daily Market Briefing",
+    dr_desc: "Get a daily market analysis report every morning at 9 AM (KST).",
+    dr_or: "or",
+    dr_placeholder: "Enter email address",
+    dr_subscribe: "Subscribe",
+    dr_email_error: "Please enter a valid email address.",
+    // Price Alerts
+    price_alerts: "Price Alerts",
+    pa_current: "Current",
+    pa_invalid_price: "Invalid Price",
+    pa_enter_valid: "Enter a valid target price.",
+    pa_alert_set: "Alert Set",
+    pa_limit_reached: "Limit Reached",
+    pa_upgrade_msg: "Free alert limit reached. Upgrade to Pro.",
+    pa_create_fail: "Could not create alert.",
+    pa_no_alerts: "No active alerts",
+    pa_alerts_used: "alerts",
+    pa_above: "\u25B2 Above",
+    pa_below: "\u25BC Below",
+    pa_memo: "\uD83D\uDCDD Memo (optional)"
   },
   ko: {
-    market_vibe: "시장 분위기:",
-    risk_gauge: "시스템 리스크 게이지",
-    museum_scars: "상흔의 박물관",
-    fg_chart: "공포 & 탐욕 지수",
-    mtf_analysis: "멀티 타임프레임 분석",
-    kimchi_premium: "김치 프리미엄",
-    econ_calendar: "경제 캘린더",
-    realtime_prices: "실시간 시세",
-    long_short: "롱/숏 비율",
-    whale_alert: "고래 알림",
-    onchain_radar: "온체인 레이더",
-    live_wire: "뉴스 피드",
-    ai_tracker: "AI 예측 추적기",
-    market_heatmap: "시장 히트맵",
-    hm_total_mcap: "총 시가총액",
-    hm_top_gainers: "상승 TOP",
-    hm_top_losers: "하락 TOP",
-    execute_analysis: "분석 프로토콜 실행",
-    copy_report: "X용 리포트 복사",
-    export_snapshot: "스냅샷 내보내기",
-    refresh_all: "전체 새로고침",
-    fullscreen: "전체화면",
-    notifications: "알림",
-    re_run: "분석 재실행",
-    system_online: "시스템 온라인",
-    last_update: "마지막 업데이트",
-    sources: "데이터 소스",
-    ask_ryzm: "Ryzm에게 물어보기",
-    chat_placeholder: "시장에 대해 무엇이든 물어보세요...",
-    tf: "주기", rsi: "RSI", ema: "EMA", signal: "시그널",
-    open_interest: "미결제약정",
-    funding_rates: "펀딩비율",
-    mempool_fees: "BTC 멤풀 수수료 (sat/vB)",
-    network_hashrate: "네트워크 해시레이트",
-    liq_zones: "청산 존",
-    sessions: "세션", hit_rate: "적중률", hits: "적중",
-    strategic_narrative: "전략적 내러티브",
-    rc_sentiment: "심리지수",
-    rc_volatility: "변동성",
-    rc_leverage: "레버리지",
-    rc_funding: "펀딩비",
-    rc_kimchi: "김프",
-    rc_oi: "미결제약정",
-    rc_stablecoin: "USDT 점유",
+    market_vibe: "\uc2DC\uC7A5 \uBD84\uC704\uAE30",
+    risk_gauge: "\uC2DC\uC2A4\uD15C \uB9AC\uC2A4\uD06C \uAC8C\uC774\uC9C0",
+    museum_scars: "\uD754\uC801\uC758 \uBC15\uBB3C\uAD00",
+    fg_chart: "\uACF5\uD3EC & \uD0D0\uC695 \uC9C0\uC218",
+    mtf_analysis: "\uBA40\uD2F0 \uD0C0\uC784\uD504\uB808\uC784 \uBD84\uC11D",
+    kimchi_premium: "\uAE40\uCE58 \uD504\uB9AC\uBBF8\uC5C4",
+    econ_calendar: "\uACBD\uC81C \uCE98\uB9B0\uB354",
+    realtime_prices: "\uC2E4\uC2DC\uAC04 \uC2DC\uC138",
+    long_short: "\uB871/\uC19F \uBE44\uC728",
+    whale_alert: "\uACE0\uB798 \uC54C\uB9BC",
+    onchain_radar: "\uC628\uCCB4\uC778 \uB808\uC774\uB354",
+    live_wire: "\uB274\uC2A4 \uD53C\uB4DC",
+    ai_tracker: "AI \uC608\uCE21 \uCD94\uC801\uAE30",
+    market_heatmap: "\uC2DC\uC7A5 \uD788\uD2B8\uB9F5",
+    hm_total_mcap: "\uC2DC\uAC00\uCD1D\uC561",
+    hm_top_gainers: "\uC0C1\uC2B9 TOP",
+    hm_top_losers: "\uD558\uB77D TOP",
+    execute_analysis: "\uBD84\uC11D \uD504\uB85C\uD1A0\uCF5C \uC2E4\uD589",
+    copy_report: "X \uB9AC\uD3EC\uD2B8 \uBCF5\uC0AC",
+    export_snapshot: "\uC2A4\uB0C5\uC0F7 \uC800\uC7A5\uD558\uAE30",
+    refresh_all: "\uC804\uCCB4 \uC0C8\uB85C\uACE0\uCE68",
+    fullscreen: "\uC804\uCCB4\uD654\uBA74",
+    notifications: "\uC54C\uB9BC",
+    re_run: "\uBD84\uC11D \uC7AC\uC2E4\uD589",
+    system_online: "\uC2DC\uC2A4\uD15C \uC628\uB77C\uC778",
+    last_update: "\uB9C8\uC9C0\uB9C9 \uC5C5\uB370\uC774\uD2B8",
+    sources: "\uB370\uC774\uD130 \uC18C\uC2A4",
+    ask_ryzm: "Ryzm\uC5D0\uAC8C \uBB3C\uC5B4\uBCF4\uAE30",
+    chat_placeholder: "\uC2DC\uC7A5\uC5D0 \uB300\uD574 \uBB34\uC5C7\uC774\uB4E0 \uBB3C\uC5B4\uBCF4\uC138\uC694..",
+    tf: "\uC8FC\uAE30", rsi: "RSI", ema: "EMA", signal: "\uC2DC\uADF8\uB110",
+    open_interest: "\uBBF8\uACB0\uC81C\uC57D",
+    funding_rates: "\uD380\uB529\uBE44\uC6A9",
+    mempool_fees: "BTC \uBA64\uD480 \uC218\uC218\uB8CC(sat/vB)",
+    network_hashrate: "\uB124\uD2B8\uC6CC\uD06C \uD574\uC2DC\uB808\uC774\uD2B8",
+    liq_zones: "\uCCAD\uC0B0 \uC874",
+    sessions: "\uC138\uC158", hit_rate: "\uC801\uC911\uB960", hits: "\uC801\uC911",
+    strategic_narrative: "\uC804\uB7B5\uC801 \uB0B4\uB7EC\uD2F0\uBE0C",
+    rc_sentiment: "\uC2EC\uB9AC\uC9C0\uC218",
+    rc_volatility: "\uBCC0\uB3D9\uC131",
+    rc_leverage: "\uB808\uBC84\uB9AC\uC9C0",
+    rc_funding: "\uD380\uB529\uBE44",
+    rc_kimchi: "\uAE40\uCE58",
+    rc_oi: "\uBBF8\uACB0\uC81C\uC57D",
+    rc_stablecoin: "USDT \uC810\uC720",
     // Section nav
-    snav_risk: "리스크", snav_fg: "탐욕/공포", snav_mtf: "MTF",
-    snav_council: "카운슬", snav_chart: "차트", snav_validator: "검증",
-    snav_tracker: "트래커", snav_heatmap: "히트맵",
-    snav_prices: "시세", snav_ls: "롱/숏", snav_scanner: "스캐너",
-    snav_whale: "고래", snav_onchain: "온체인", snav_news: "뉴스",
-    ls_long: "롱", ls_short: "숏",
-    fr_label: "펀딩비:",
-    arb_low: "차익 기회: 낮음",
-    arb_medium: "차익 기회: 보통",
-    arb_high: "차익 기회: 높음",
-    council_run_msg: "분석을 실행하면 추적이 시작됩니다...",
-    briefing: "브리핑",
-    loading: "로딩 중...",
-    heatmap_loading: "히트맵 로딩 중...",
-    no_whale: "고래 활동이 감지되지 않았습니다",
-    no_events: "예정된 이벤트가 없습니다",
-    connection_failed: "연결 실패",
-    summoning: "에이전트 소환 중...",
-    accessing: "뉴럴넷 접속 중...",
+    snav_risk: "\uB9AC\uC2A4\uD06C", snav_fg: "\uD0D0\uC695/\uACF5\uD3EC", snav_mtf: "MTF",
+    snav_council: "\uCE74\uC6B4\uC2AC", snav_chart: "\uCC28\uD2B8", snav_validator: "\uAC80\uC99D",
+    snav_tracker: "\uD2B8\uB798\uCEE4", snav_heatmap: "\uD788\uD2B8\uB9F5",
+    snav_prices: "\uC2DC\uC138", snav_ls: "\uB871/\uC19F", snav_scanner: "\uC2A4\uCE90\uB108",
+    snav_whale: "\uACE0\uB798", snav_onchain: "\uC628\uCCB4\uC778", snav_news: "\uB274\uC2A4",
+    ls_long: "\uB871", ls_short: "\uC19F",
+    fr_label: "\uD380\uB529\uBE44:",
+    arb_low: "\uCC28\uC775 \uAE30\uD68C: \uB0AE\uC74C",
+    arb_medium: "\uCC28\uC775 \uAE30\uD68C: \uBCF4\uD1B5",
+    arb_high: "\uCC28\uC775 \uAE30\uD68C: \uB192\uC74C",
+    council_run_msg: "\uBD84\uC11D\uC744 \uC2E4\uD589\uD558\uBA74 \uCD94\uC801\uC774 \uC2DC\uC791\uB429\uB2C8\uB2E4..",
+    briefing: "\uBE0C\uB9AC\uD551",
+    loading: "\uB85C\uB529 \uC911..",
+    heatmap_loading: "\uD788\uD2B8\uB9F5 \uB85C\uB529 \uC911..",
+    no_whale: "\uACE0\uB798 \uD65C\uB3D9\uC774 \uAC10\uC9C0\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4",
+    no_events: "\uC608\uC815\uB41C \uC774\uBCA4\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4",
+    connection_failed: "\uC5F0\uACB0 \uC2E4\uD328",
+    summoning: "\uD504\uB808\uC784\uC6CC\uD06C \uBD84\uC11D \uC911..",
+    accessing: "\uB2E4\uAC01\uC801 \uBD84\uC11D \uC911..",
     // Scanner
-    alpha_scanner: "알파 스캐너 (15분)",
-    scanner_pump: "급등 포착",
-    scanner_bounce: "과매도 반등",
-    scanner_vol: "거래량 폭발",
-    scanner_calm: "이상 감지되지 않음. 시장이 안정적입니다.",
-    scanner_scanning: "시장 스캐닝 중...",
+    alpha_scanner: "\uC54C\uD30C \uC2A4\uCE90\uB108(15\uBD84)",
+    scanner_pump: "\uAE09\uB4F1 \uD3EC\uCC29",
+    scanner_bounce: "\uACFC\uB9E4\uB3C4 \uBC18\uB4F1",
+    scanner_vol: "\uAC70\uB798\uB7C9 \uAE09\uC99D",
+    scanner_calm: "\uC774\uC0C1 \uAC10\uC9C0\uB418\uC9C0 \uC54A\uC74C. \uC2DC\uC7A5\uC774 \uC548\uC815\uC801\uC785\uB2C8\uB2E4.",
+    scanner_scanning: "\uC2DC\uC7A5 \uC2A4\uCE90\uB2DD \uC911..",
     // Regime Detector
-    regime_detector: "레짐 감지기",
-    regime_btc: "BTC 시즌",
-    regime_alt: "알트 시즌",
-    regime_risk_off: "리스크 오프",
-    regime_bull: "풀 상승장",
-    regime_rotation: "순환매",
+    regime_detector: "\uB808\uC9D0 \uAC10\uC9C0\uAE30",
+    regime_btc: "BTC \uC2DC\uC98C",
+    regime_alt: "\uC54C\uD2B8 \uC2DC\uC98C",
+    regime_risk_off: "\uB9AC\uC2A4\uD06C \uC624\uD504",
+    regime_bull: "\uD480 \uC0C1\uC2B9\uC7A5",
+    regime_rotation: "\uC21C\uD658\uAE30",
     // Correlation
-    correlation_matrix: "상관관계 매트릭스 (30일)",
+    correlation_matrix: "\uC0C1\uAD00\uAD00\uACC4 \uB9E4\uD2B8\uB9AD\uC2A4 (30\uC77C)",
     // Liquidation
-    liq_heatmap: "청산 킬존",
+    liq_heatmap: "\uCCAD\uC0B0 \uC874",
     // Whale Wallets
-    whale_wallets: "고래 지갑 추적기 (BTC)",
-    no_whale_wallets: "대규모 거래가 감지되지 않았습니다",
+    whale_wallets: "\uACE0\uB798 \uC9C0\uAC11 \uCD94\uC801\uAE30(BTC)",
+    no_whale_wallets: "\uB300\uADDC\uBAA8 \uAC70\uB798\uAC00 \uAC10\uC9C0\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4",
     // Trade Validator
-    trade_validator: "트레이드 검증기",
-    validate_trade: "트레이드 검증",
-    val_no_credits: "무제한 검증은 프리미엄으로 업그레이드하세요!",
-    val_invalid_input: "모든 필드를 올바르게 입력하세요!",
-    val_scanning: "스캐닝 중...",
-    val_complete: "검증 완료",
-    val_failed: "검증 실패"
+    trade_validator: "\uD2B8\uB808\uC774\uB4DC \uAC80\uC99D\uAE30",
+    validate_trade: "\uD2B8\uB808\uC774\uB4DC \uAC80\uC99D",
+    val_no_credits: "\uBB34\uC81C\uD55C \uAC80\uC99D\uC740 \uD504\uB9AC\uBBF8\uC5C4\uC73C\uB85C \uC5C5\uADF8\uB808\uC774\uB4DC\uD558\uC138\uC694!",
+    val_invalid_input: "\uBAA8\uB4E0 \uD544\uB4DC\uB97C \uC62C\uBC14\uB974\uAC8C \uC785\uB825\uD558\uC138\uC694",
+    val_scanning: "\uC2A4\uCE90\uB2DD \uC911..",
+    val_complete: "\uAC80\uC99D \uC644\uB8CC",
+    val_failed: "\uAC80\uC99D \uC2E4\uD328",
+    // Help modal
+    help_title: "\uB3C4\uC6C0\uB9D0 & FAQ",
+    help_faq1_q: "\uD83D\uDCB3 \uACB0\uC81C\uD588\uB294\uB370 Pro\uAC00 \uC548 \uB3FC\uC694",
+    help_faq1_a: "\uACB0\uC81C \uD6C4 \uBC18\uC601\uAE4C\uC9C0 \uCD5C\uB300 1\uBD84 \uC18C\uC694\uB429\uB2C8\uB2E4. \uD398\uC774\uC9C0\uB97C \uC0C8\uB85C\uACE0\uCE68\uD574 \uBCF4\uC138\uC694.<br>\uADF8\uB798\uB3C4 \uC548 \uB418\uBA74 \uB85C\uADF8\uC544\uC6C3 \uD6C4 \uB2E4\uC2DC \uB85C\uADF8\uC778\uD558\uC138\uC694.<br>\uACC4\uC18D \uBB38\uC81C\uAC00 \uC788\uC73C\uBA74 \uC544\uB798 \uC774\uBA54\uC77C\uB85C \uC5F0\uB77D\uC8FC\uC138\uC694.",
+    help_faq2_q: "\uD83D\uDD04 \uD574\uC9C0/\uCE74\uB4DC \uBCC0\uACBD\uC740 \uC5B4\uB5BB\uAC8C \uD558\uB098\uC694?",
+    help_faq2_a: "\uD504\uB85C\uD544 \uBA54\uB274 \u2192 <b>Manage Subscription</b> \uD074\uB9AD \u2192 Stripe \uD3EC\uD138\uC5D0\uC11C \uC9C1\uC811 \uCE74\uB4DC \uBCC0\uACBD, \uD574\uC9C0, \uC601\uC218\uC99D \uC870\uD68C\uAC00 \uAC00\uB2A5\uD569\uB2C8\uB2E4.<br>\uD574\uC9C0 \uC2DC \uD604\uC7AC \uACB0\uC81C \uC8FC\uAE30 \uB05D\uAE4C\uC9C0 Pro\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+    help_faq3_q: "\uD83D\uDCE1 \uB370\uC774\uD130\uAC00 \uC9C0\uC5F0\uB418\uAC70\uB098 \uBE48\uCE78\uC774\uC5D0\uC694",
+    help_faq3_a: "\uC678\uBD80 \uB370\uC774\uD130 \uC18C\uC2A4(Binance, CoinGecko \uB4F1)\uC758 \uC77C\uC2DC\uC801 \uC7A5\uC560\uC77C \uC218 \uC788\uC2B5\uB2C8\uB2E4.<br>\uBCF4\uD1B5 \uC218 \uBD84 \uB0B4 \uC790\uB3D9 \uBCF5\uAD6C\uB429\uB2C8\uB2E4. \uD654\uBA74 \uD558\uB2E8\uC758 \uC5F0\uACB0 \uC0C1\uD0DC \uD45C\uC2DC\uAE30\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
+    help_faq4_q: "\uD83E\uDD16 AI \uBD84\uC11D\uC740 \uD22C\uC790 \uC870\uC5B8\uC778\uAC00\uC694?",
+    help_faq4_a: "\uC544\uB2D9\uB2C8\uB2E4. Ryzm\uC758 AI \uBD84\uC11D\uC740 \uC815\uBCF4 \uC81C\uACF5 \uBAA9\uC801\uC774\uBA70, \uD22C\uC790 \uC870\uC5B8\uC774 \uC544\uB2D9\uB2C8\uB2E4.<br>\uBAA8\uB4E0 \uD22C\uC790 \uACB0\uC815\uC5D0 \uB300\uD55C \uCC45\uC784\uC740 \uC774\uC6A9\uC790\uC5D0\uAC8C \uC788\uC2B5\uB2C8\uB2E4.",
+    help_faq5_q: "\uD83E\uDDE0 Analysis Council\uC740 \uC5B4\uB5BB\uAC8C \uC791\uB3D9\uD558\uB098\uC694?",
+    help_faq5_a: "\uD558\uB098\uC758 AI \uC5D4\uC9C4\uC774 <b>5\uAC00\uC9C0 \uC804\uBB38 \uD504\uB808\uC784\uC6CC\uD06C</b>(\uB9E4\uD06C\uB85C, \uC628\uCCB4\uC778, \uAE30\uC220\uC801, \uC2EC\uB9AC, \uB9AC\uC2A4\uD06C)\uB97C \uD1B5\uD574 \uC2DC\uC7A5\uC744 \uBD84\uC11D\uD569\uB2C8\uB2E4.<br>\uAC01 \uD504\uB808\uC784\uC6CC\uD06C\uB294 \uC11C\uB85C \uB2E4\uB978 \uB370\uC774\uD130\uC640 \uAD00\uC810\uC5D0 \uC9D1\uC911\uD558\uC5EC \uB3C5\uB9BD\uC801\uC778 \uBD84\uC11D \uACB0\uACFC\uB97C \uC0B0\uCD9C\uD569\uB2C8\uB2E4.<br>\uD55C \uBA85\uC758 \uBD84\uC11D\uAC00\uAC00 5\uAC00\uC9C0 \uCCB4\uD06C\uB9AC\uC2A4\uD2B8\uB97C \uC2E4\uD589\uD558\uB294 \uAC83\uC73C\uB85C \uC0DD\uAC01\uD558\uC138\uC694 \u2014 \uD55C \uBC88\uC5D0 \uB2E4\uAC01\uC801 \uBD84\uC11D\uC744 \uC81C\uACF5\uD569\uB2C8\uB2E4.",
+    help_contact: "\uBB38\uC758",
+    // Daily Report modal
+    dr_title: "\uB370\uC77C\uB9AC \uB9C8\uCF13 \uBE0C\uB9AC\uD551",
+    dr_desc: "\uB9E4\uC77C \uC544\uCE68 9\uC2DC(KST) \uC2DC\uC7A5 \uBD84\uC11D \uB9AC\uD3EC\uD2B8\uB97C \uBC1B\uC544\uBCF4\uC138\uC694.",
+    dr_or: "\uB610\uB294",
+    dr_placeholder: "\uC774\uBA54\uC77C \uC8FC\uC18C \uC785\uB825",
+    dr_subscribe: "\uAD6C\uB3C5\uD558\uAE30",
+    dr_email_error: "\uC62C\uBC14\uB978 \uC774\uBA54\uC77C \uC8FC\uC18C\uB97C \uC785\uB825\uD558\uC138\uC694.",
+    // Price Alerts
+    price_alerts: "\uAC00\uACA9 \uC54C\uB9BC",
+    pa_current: "\uD604\uC7AC\uAC00",
+    pa_invalid_price: "\uC798\uBABB\uB41C \uAC00\uACA9",
+    pa_enter_valid: "\uC720\uD6A8\uD55C \uBAA9\uD45C \uAC00\uACA9\uC744 \uC785\uB825\uD558\uC138\uC694.",
+    pa_alert_set: "\uC54C\uB9BC \uC124\uC815 \uC644\uB8CC",
+    pa_limit_reached: "\uD55C\uB3C4 \uCD08\uACFC",
+    pa_upgrade_msg: "\uBB34\uB8CC \uC54C\uB9BC \uD55C\uB3C4 \uCD08\uACFC. Pro\uB85C \uC5C5\uADF8\uB808\uC774\uB4DC\uD558\uC138\uC694.",
+    pa_create_fail: "\uC54C\uB9BC\uC744 \uC0DD\uC131\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+    pa_no_alerts: "\uD65C\uC131 \uC54C\uB9BC \uC5C6\uC74C",
+    pa_alerts_used: "\uAC1C \uC54C\uB9BC",
+    pa_above: "\u25B2 \uC774\uC0C1",
+    pa_below: "\u25BC \uC774\uD558",
+    pa_memo: "\uD83D\uDCDD \uBA54\uBAA8 (\uC120\uD0DD\uC0AC\uD56D)"
   }
 };
 
@@ -2133,6 +2279,18 @@ function applyTranslations(lang) {
     el.textContent = dict[key] + ':' + suffix;
   });
 
+  // 3b) HTML content elements (FAQ answers with <b>, <br> etc.)
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.getAttribute('data-i18n-html');
+    if (dict[key]) el.innerHTML = dict[key];
+  });
+
+  // 3c) Placeholder attributes
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (dict[key]) el.placeholder = dict[key];
+  });
+
   // 4) Risk gauge component labels
   const rcLabels = {
     'rc-fg-bar': 'rc_sentiment',
@@ -2191,9 +2349,9 @@ function applyTranslations(lang) {
   try { lucide.createIcons(); } catch (e) {}
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    Keyboard Shortcuts Modal
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 function initKeyboardShortcutsModal() {
   // No-op, the keydown handler above handles ? key
 }
@@ -2206,18 +2364,18 @@ function toggleShortcutsModal() {
   }
 
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-  const mod = isMac ? '⌘' : 'Ctrl';
+  const mod = isMac ? 'Cmd' : 'Ctrl';
 
   const shortcuts = [
     { keys: [mod, 'R'], label: _currentLang === 'ko' ? '전체 새로고침' : 'Refresh all data' },
     { keys: [mod, '/'], label: _currentLang === 'ko' ? '채팅 열기' : 'Open Ryzm Chat' },
     { keys: ['D'], label: _currentLang === 'ko' ? '다크/라이트 모드 전환' : 'Toggle dark/light mode' },
-    { keys: ['F'], label: _currentLang === 'ko' ? '전체화면 토글' : 'Toggle fullscreen' },
+    { keys: ['F'], label: _currentLang === 'ko' ? '전체화면 전환' : 'Toggle fullscreen' },
     { keys: ['1'], label: _currentLang === 'ko' ? '좌측 패널 포커스' : 'Focus left panel' },
     { keys: ['2'], label: _currentLang === 'ko' ? '중앙 패널 포커스' : 'Focus center panel' },
     { keys: ['3'], label: _currentLang === 'ko' ? '우측 패널 포커스' : 'Focus right panel' },
     { keys: ['Esc'], label: _currentLang === 'ko' ? '모달/채팅 닫기' : 'Close modals' },
-    { keys: ['?'], label: _currentLang === 'ko' ? '이 도움말 표시' : 'Show this help' },
+    { keys: ['?'], label: _currentLang === 'ko' ? '단축키 도움말 표시' : 'Show this help' },
   ];
 
   const overlay = document.createElement('div');
@@ -2246,9 +2404,9 @@ function toggleShortcutsModal() {
   playSound('click');
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    Market Open/Close Status
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 function initMarketStatus() {
   updateMarketStatus();
   setInterval(updateMarketStatus, 60000); // Update every minute
@@ -2289,9 +2447,9 @@ function updateMarketStatus() {
   }
 }
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    Live "Time Ago" Status Bar Update
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 let _lastDataUpdate = Date.now();
 
 function updateLastRefreshTime() {
@@ -2315,7 +2473,7 @@ function _updateTimeAgo() {
     text = _currentLang === 'ko' ? `${m}분 전` : `${m}m ago`;
     cls = 'time-ago stale';
   } else {
-    text = _currentLang === 'ko' ? '연결 확인 중...' : 'Checking...';
+    text = _currentLang === 'ko' ? '연결 확인 중..' : 'Checking...';
     cls = 'time-ago offline';
   }
   el.innerHTML = `${t('last_update')}: <span class="${cls}">${text}</span>`;
@@ -2325,9 +2483,9 @@ function _updateTimeAgo() {
 setInterval(_updateTimeAgo, 5000);
 
 
-/* ═══════════════════════════════════════
+/* ═══════════════════
    #17 Layout Server Sync
-   ═══════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 let _layoutSyncTimer = null;
 function _syncLayoutToServer() {
   // Debounce: wait 2s after last drag before syncing
@@ -2364,53 +2522,90 @@ function _loadServerLayout() {
 _loadServerLayout();
 
 
-/* ═══════════════════════════════════════
-   #18 Price Alerts UI
-   ═══════════════════════════════════════ */
+/* ═══════════════════
+   #18 Price Alerts UI — v2 Upgraded
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 function initPriceAlerts() {
   const container = document.getElementById('price-alerts-container');
   if (!container) return;
 
+  const quickCoins = ['BTC','ETH','SOL','XRP','DOGE','ADA'];
+
   const html = `
-    <div class="alert-form" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+    <div class="pa-quick-coins" style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;">
+      ${quickCoins.map(c => `<button class="pa-coin-btn" data-coin="${c}" style="background:rgba(201,169,110,0.08);border:1px solid rgba(201,169,110,0.2);border-radius:12px;color:var(--neon-gold);padding:2px 8px;font-size:0.65rem;cursor:pointer;font-weight:600;transition:all .2s;">${c}</button>`).join('')}
+    </div>
+    <div class="pa-current-price" id="pa-current-price" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;display:none;">
+      <span data-i18n-text="pa_current">Current</span>: <span id="pa-current-val" style="color:var(--neon-gold);font-weight:600;">--</span>
+    </div>
+    <div class="alert-form" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center;">
       <input id="alert-symbol" type="text" placeholder="BTC" maxlength="10"
-        style="width:60px; background:rgba(255,255,255,0.05); border:1px solid rgba(6,182,212,0.3); border-radius:4px; color:var(--text-primary); padding:4px 8px; font-size:0.75rem; text-transform:uppercase;">
-      <select id="alert-direction" style="background:rgba(255,255,255,0.05); border:1px solid rgba(6,182,212,0.3); border-radius:4px; color:var(--text-primary); padding:4px 6px; font-size:0.75rem;">
-        <option value="above">Above</option>
-        <option value="below">Below</option>
+        style="width:56px;background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.3);border-radius:4px;color:var(--text-primary);padding:4px 8px;font-size:0.72rem;text-transform:uppercase;">
+      <select id="alert-direction" style="background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.3);border-radius:4px;color:var(--text-primary);padding:4px 6px;font-size:0.72rem;">
+        <option value="above">\u25B2 Above</option>
+        <option value="below">\u25BC Below</option>
       </select>
       <input id="alert-price" type="number" placeholder="$100,000" step="0.01"
-        style="width:100px; background:rgba(255,255,255,0.05); border:1px solid rgba(6,182,212,0.3); border-radius:4px; color:var(--text-primary); padding:4px 8px; font-size:0.75rem;">
-      <button id="alert-add-btn" style="background:var(--neon-cyan); color:#000; border:none; border-radius:4px; padding:4px 10px; font-size:0.7rem; cursor:pointer; font-weight:700;">
+        style="width:95px;background:rgba(255,255,255,0.05);border:1px solid rgba(201,169,110,0.3);border-radius:4px;color:var(--text-primary);padding:4px 8px;font-size:0.72rem;">
+      <button id="alert-add-btn" style="background:var(--neon-gold);color:#0D0D0F;border:none;border-radius:4px;padding:4px 10px;font-size:0.68rem;cursor:pointer;font-weight:700;">
         + ADD
       </button>
     </div>
+    <div style="margin-bottom:8px;">
+      <input id="alert-note" type="text" placeholder="\uD83D\uDCDD Memo (optional)" maxlength="200"
+        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.03);border:1px solid rgba(201,169,110,0.15);border-radius:4px;color:var(--text-secondary);padding:4px 8px;font-size:0.68rem;">
+    </div>
     <div id="alert-list" style="font-size:0.72rem;"></div>
+    <div id="pa-limit-info" style="font-size:0.6rem;color:var(--text-tertiary);margin-top:6px;text-align:right;"></div>
   `;
   container.innerHTML = html;
+
+  // Quick coin buttons
+  container.querySelectorAll('.pa-coin-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const coin = btn.dataset.coin;
+      document.getElementById('alert-symbol').value = coin;
+      container.querySelectorAll('.pa-coin-btn').forEach(b => b.style.borderColor = 'rgba(201,169,110,0.2)');
+      btn.style.borderColor = 'var(--neon-gold)';
+      _updateCurrentPrice(coin);
+    });
+  });
+
+  // Show current price when symbol changes
+  const symbolInput = document.getElementById('alert-symbol');
+  let _priceTimer = null;
+  symbolInput?.addEventListener('input', () => {
+    clearTimeout(_priceTimer);
+    _priceTimer = setTimeout(() => {
+      _updateCurrentPrice(symbolInput.value.trim().toUpperCase());
+    }, 400);
+  });
 
   document.getElementById('alert-add-btn')?.addEventListener('click', async () => {
     const symbol = document.getElementById('alert-symbol').value.trim().toUpperCase() || 'BTC';
     const direction = document.getElementById('alert-direction').value;
     const target_price = parseFloat(document.getElementById('alert-price').value);
+    const note = document.getElementById('alert-note')?.value?.trim() || '';
     if (!target_price || target_price <= 0) {
-      showToast('error', 'Invalid Price', 'Enter a valid target price.');
+      showToast('error', t('pa_invalid_price'), t('pa_enter_valid'));
       return;
     }
     try {
       await apiFetch('/api/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, target_price, direction })
+        body: JSON.stringify({ symbol, target_price, direction, note })
       });
-      showToast('success', 'Alert Set', `${symbol} ${direction} $${target_price.toLocaleString()}`);
+      const arrow = direction === 'above' ? '\u25B2' : '\u25BC';
+      showToast('success', t('pa_alert_set'), `${symbol} ${arrow} $${target_price.toLocaleString()}`);
       document.getElementById('alert-price').value = '';
+      document.getElementById('alert-note').value = '';
       refreshAlertList();
     } catch (e) {
       if (e.status === 403) {
-        showToast('warning', 'Limit Reached', e.data?.detail || 'Free alert limit reached.');
+        showToast('warning', t('pa_limit_reached'), e.data?.detail || t('pa_upgrade_msg'));
       } else {
-        showToast('error', 'Error', 'Could not create alert.');
+        showToast('error', 'Error', t('pa_create_fail'));
       }
     }
   });
@@ -2418,38 +2613,96 @@ function initPriceAlerts() {
   refreshAlertList();
   // Poll for triggered alerts every 60s
   setInterval(refreshAlertList, 60000);
+  // Initial current price
+  _updateCurrentPrice('BTC');
+}
+
+function _updateCurrentPrice(symbol) {
+  const el = document.getElementById('pa-current-price');
+  const val = document.getElementById('pa-current-val');
+  if (!el || !val || !symbol) { if (el) el.style.display = 'none'; return; }
+
+  try {
+    const market = window._latestMarketData || {};
+    const coin = market[symbol] || market[symbol.toUpperCase()];
+    if (coin && coin.price) {
+      val.textContent = '$' + Number(coin.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  } catch { el.style.display = 'none'; }
 }
 
 async function refreshAlertList() {
   const list = document.getElementById('alert-list');
+  const limitInfo = document.getElementById('pa-limit-info');
   if (!list) return;
   try {
     const data = await apiFetch('/api/alerts', { silent: true });
     let html = '';
+    // Triggered alerts (recent)
     if (data.triggered && data.triggered.length > 0) {
       data.triggered.slice(0, 3).forEach(a => {
-        html += `<div style="color:var(--neon-yellow); margin-bottom:3px;">🔔 ${escapeHtml(a.symbol)} hit $${Number(a.target_price).toLocaleString()} (${escapeHtml(a.direction)})</div>`;
+        const arrow = a.direction === 'above' ? '\u25B2' : '\u25BC';
+        html += `<div class="pa-alert-card pa-triggered" style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border-radius:6px;background:rgba(201,169,110,0.08);border-left:3px solid var(--neon-gold);">
+          <span style="font-size:0.85rem;">\uD83D\uDD14</span>
+          <div style="flex:1;min-width:0;">
+            <div style="color:var(--neon-gold);font-weight:600;font-size:0.72rem;">${escapeHtml(a.symbol)} ${arrow} $${Number(a.target_price).toLocaleString()}</div>
+            ${a.note ? `<div style="color:var(--text-muted);font-size:0.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(a.note)}</div>` : ''}
+          </div>
+          <span style="font-size:0.58rem;color:var(--text-tertiary);">${_timeAgo(a.triggered_at)}</span>
+        </div>`;
       });
     }
+    // Active alerts
     if (data.alerts && data.alerts.length > 0) {
       data.alerts.forEach(a => {
         const aid = parseInt(a.id, 10);
-        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
-          <span style="color:var(--text-secondary);">${escapeHtml(a.symbol)} ${escapeHtml(a.direction)} $${Number(a.target_price).toLocaleString()}</span>
-          <button data-delete-alert="${aid}" style="background:none; border:none; color:var(--neon-red); cursor:pointer; font-size:0.7rem;">✕</button>
+        const arrow = a.direction === 'above' ? '\u25B2' : '\u25BC';
+        const color = a.direction === 'above' ? 'var(--neon-green)' : 'var(--neon-red)';
+        html += `<div class="pa-alert-card" style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:4px;border-radius:6px;background:rgba(255,255,255,0.02);border-left:3px solid ${color};">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:var(--text-primary);font-weight:600;font-size:0.72rem;">${escapeHtml(a.symbol)}</span>
+              <span style="color:${color};font-size:0.68rem;font-weight:600;">${arrow} $${Number(a.target_price).toLocaleString()}</span>
+            </div>
+            ${a.note ? `<div style="color:var(--text-muted);font-size:0.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(a.note)}</div>` : ''}
+          </div>
+          <button data-delete-alert="${aid}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 2px;opacity:0.5;transition:opacity .2s;" onmouseenter="this.style.opacity='1';this.style.color='var(--neon-red)'" onmouseleave="this.style.opacity='0.5';this.style.color='var(--text-muted)'">&times;</button>
         </div>`;
       });
     } else if (!data.triggered || data.triggered.length === 0) {
-      html = '<div style="color:var(--text-tertiary); font-style:italic;">No active alerts</div>';
+      html = `<div style="color:var(--text-tertiary);font-style:italic;text-align:center;padding:8px 0;">${t('pa_no_alerts')}</div>`;
     }
     list.innerHTML = html;
-    // Event delegation for delete buttons (avoids inline onclick)
+
+    // Show limit info
+    if (limitInfo) {
+      const activeCount = (data.alerts || []).length;
+      limitInfo.textContent = `${activeCount}/5 ${t('pa_alerts_used')}`;
+    }
+
+    // Event delegation for delete buttons
     list.querySelectorAll('[data-delete-alert]').forEach(btn => {
       btn.addEventListener('click', () => deleteAlert(parseInt(btn.dataset.deleteAlert, 10)));
     });
   } catch {
-    list.innerHTML = '<div style="color:var(--text-tertiary);">—</div>';
+    list.innerHTML = '<div style="color:var(--text-tertiary);">--</div>';
   }
+}
+
+function _timeAgo(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const diff = Date.now() - new Date(dateStr + 'Z').getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h';
+    return Math.floor(hrs / 24) + 'd';
+  } catch { return ''; }
 }
 
 async function deleteAlert(id) {
@@ -2460,13 +2713,13 @@ async function deleteAlert(id) {
 }
 
 
-/* ═══════════════════════════════════════════════════════
+/* ═══════════════════════════
    PR-5: Accuracy Tracking 2.0
-   ═══════════════════════════════════════════════════════ */
+   ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 
 /**
- * drawEquityCurve — cumulative hypothetical return curve.
- * Simple strategy: follow the AI signal (BULL → +return, BEAR → -return).
+ * drawEquityCurve ??cumulative hypothetical return curve.
+ * Simple strategy: follow the AI signal (BULL ??+return, BEAR ??-return).
  */
 function drawEquityCurve(records) {
   const canvas = document.getElementById('ch-equity-canvas');
@@ -2496,7 +2749,7 @@ function drawEquityCurve(records) {
     const after = parseFloat(r.btc_price_after);
     const pctChange = (after - r.btc_price) / r.btc_price * 100;
     const score = r.consensus_score || 50;
-    // Signal: score >= 60 → long (capture gain), score <= 40 → short (inverse), else flat
+    // Signal: score >= 60 ??long (capture gain), score <= 40 ??short (inverse), else flat
     let signal = 0;
     if (score >= 60) signal = 1;
     else if (score <= 40) signal = -1;
@@ -2565,8 +2818,8 @@ function drawEquityCurve(records) {
 }
 
 /**
- * renderRegimeBadges — show performance badges by market regime.
- * Regimes: BULL (score ≥ 60), BEAR (score ≤ 40), NEUTRAL, HIGH_CONF, LOW_CONF
+ * renderRegimeBadges ??show performance badges by market regime.
+ * Regimes: BULL (score ??60), BEAR (score ??40), NEUTRAL, HIGH_CONF, LOW_CONF
  */
 function renderRegimeBadges(records, scoreVsBtc) {
   const container = document.getElementById('ch-regime-badges');
@@ -2592,7 +2845,7 @@ function renderRegimeBadges(records, scoreVsBtc) {
   // Render badges
   const badgeColors = {
     BULL: '#059669', BEAR: '#dc2626', ALT: '#f59e0b',
-    'RISK OFF': '#8b5cf6', NEUTRAL: '#64748b'
+    'RISK OFF': '#b8944f', NEUTRAL: '#64748b'
   };
 
   container.innerHTML = Object.entries(regimes)
@@ -2617,9 +2870,9 @@ document.getElementById('btn-export-csv')?.addEventListener('click', async () =>
     a.download = 'ryzm_council_history.csv';
     a.click();
     URL.revokeObjectURL(url);
-    showToast('success', '✓ Exported', 'Council history CSV downloaded.');
+    showToast('success', '??Exported', 'Council history CSV downloaded.');
   } catch (e) {
     console.error('[CSV Export]', e);
-    showToast('error', '⚠ Export Failed', 'Could not export data.');
+    showToast('error', '??Export Failed', 'Could not export data.');
   }
 });

@@ -16,6 +16,7 @@ cache = {
     "fear_greed": {"data": {}, "updated": 0},
     "kimchi": {"data": {}, "updated": 0},
     "long_short_ratio": {"data": {}, "updated": 0},
+    "long_short_history": {"data": {}, "updated": 0},
     "funding_rate": {"data": [], "updated": 0},
     "liquidations": {"data": [], "updated": 0},
     "heatmap": {"data": [], "updated": 0},

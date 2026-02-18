@@ -8,24 +8,59 @@ from app.core.cache import cache
 
 
 def fetch_long_short_ratio():
-    """Binance Top Trader Long/Short Ratio (Accounts)."""
-    try:
-        url = "https://fapi.binance.com/futures/data/topLongShortAccountRatio"
-        params = {"symbol": "BTCUSDT", "period": "1d", "limit": 1}
-        resp = resilient_get(url, timeout=5, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        if data and len(data) > 0:
-            latest = data[0]
-            return {
-                "longAccount": float(latest["longAccount"]),
-                "shortAccount": float(latest["shortAccount"]),
-                "ratio": float(latest["longShortRatio"]),
-                "timestamp": latest["timestamp"]
-            }
-    except Exception as e:
-        logger.error(f"[LS Ratio] Error: {e}")
-    return {"longAccount": 50.0, "shortAccount": 50.0, "ratio": 1.0}
+    """Binance Top Trader Long/Short Ratio (Accounts) — BTC, ETH, SOL."""
+    result = {}
+    for symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+        coin = symbol.replace("USDT", "")
+        try:
+            url = "https://fapi.binance.com/futures/data/topLongShortAccountRatio"
+            params = {"symbol": symbol, "period": "1d", "limit": 1}
+            resp = resilient_get(url, timeout=5, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            if data and len(data) > 0:
+                latest = data[0]
+                result[coin] = {
+                    "longAccount": float(latest["longAccount"]),
+                    "shortAccount": float(latest["shortAccount"]),
+                    "ratio": float(latest["longShortRatio"]),
+                    "timestamp": latest["timestamp"]
+                }
+            else:
+                result[coin] = {"longAccount": 50.0, "shortAccount": 50.0, "ratio": 1.0}
+        except Exception as e:
+            logger.error(f"[LS Ratio] {coin} Error: {e}")
+            result[coin] = {"longAccount": 50.0, "shortAccount": 50.0, "ratio": 1.0}
+    # Keep backward-compat top-level fields from BTC
+    btc = result.get("BTC", {})
+    return {
+        "longAccount": btc.get("longAccount", 50.0),
+        "shortAccount": btc.get("shortAccount", 50.0),
+        "ratio": btc.get("ratio", 1.0),
+        "timestamp": btc.get("timestamp"),
+        "coins": result
+    }
+
+
+def fetch_long_short_history():
+    """Binance Top Trader L/S Ratio — 24 data points (last 24 hours, 1h period)."""
+    result = {}
+    for symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+        coin = symbol.replace("USDT", "")
+        try:
+            url = "https://fapi.binance.com/futures/data/topLongShortAccountRatio"
+            params = {"symbol": symbol, "period": "1h", "limit": 24}
+            resp = resilient_get(url, timeout=5, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            result[coin] = [
+                {"long": float(d["longAccount"]) * 100, "ts": d["timestamp"]}
+                for d in data
+            ] if data else []
+        except Exception as e:
+            logger.error(f"[LS History] {coin} Error: {e}")
+            result[coin] = []
+    return result
 
 
 def fetch_funding_rate():

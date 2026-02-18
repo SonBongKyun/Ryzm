@@ -2,6 +2,7 @@
 Ryzm Terminal — FastAPI Application Entry Point
 Creates app, adds middleware, includes routers, mounts static files.
 """
+import os
 import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
@@ -18,13 +19,30 @@ from app.routes.user_routes import router as user_router
 from app.routes.auth_routes import router as auth_router
 from app.routes.payment_routes import router as payment_router
 from app.routes.journal_routes import router as journal_router
+from app.routes.portfolio_routes import router as portfolio_router
+from app.routes.sse_routes import router as sse_router
 from app.background import startup_background_tasks
+from app.services.briefing_service import setup_daily_scheduler
+
+# ── Optional: Sentry error tracking ──
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+        sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=0.1, environment=os.getenv("APP_ENV", "production"))
+        logger.info("[Sentry] Error tracking enabled")
+    except ImportError:
+        logger.warning("[Sentry] sentry-sdk not installed. pip install sentry-sdk to enable.")
+    except Exception as e:
+        logger.warning(f"[Sentry] Init failed: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle hook (replaces deprecated on_event)."""
     startup_background_tasks()
+    setup_daily_scheduler()
     yield
     # Shutdown logic (if needed) goes here
 
@@ -37,6 +55,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to every response."""
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
+        # ── Force no-cache on ALL HTML pages (prevent stale dashboard) ──
+        _html_paths = {"/", "/app", "/features", "/pricing", "/about", "/verify-email", "/reset-password"}
+        _path = request.url.path.rstrip("/") or "/"
+        if _path in _html_paths:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        # Always tag version
+        response.headers["X-Ryzm-Version"] = "7.0"
         # Prevent clickjacking
         response.headers["X-Frame-Options"] = "DENY"
         # Prevent MIME-type sniffing
@@ -102,6 +129,20 @@ app.include_router(user_router)
 app.include_router(auth_router)
 app.include_router(payment_router)
 app.include_router(journal_router)
+app.include_router(portfolio_router)
+app.include_router(sse_router)
+
+
+# ── Client-side JS Error Collector (debug) ──
+@app.post("/api/client-error")
+async def collect_client_error(request: Request):
+    """Receive JS errors from browser and log them server-side."""
+    try:
+        body = await request.body()
+        logger.error(f"[JS-ERROR] {body.decode('utf-8', errors='replace')}")
+    except Exception:
+        pass
+    return Response(status_code=204)
 
 
 # Static file mount (after API routes)

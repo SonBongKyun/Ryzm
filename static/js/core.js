@@ -346,6 +346,7 @@ function updatePlaylistHighlight() {
 }
 
 function playSound(type) {
+  if (localStorage.getItem('ryzm_sound') === 'off') return;
   if (sfx[type]) {
     sfx[type].currentTime = 0;
     sfx[type].play().catch(() => { });

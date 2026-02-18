@@ -22,7 +22,7 @@ async function fetchBriefing() {
     timeEl.innerText = data.time;
     panel.style.display = 'flex';
 
-    // Close handler — always update dismissedKey via data attribute
+    // Close handler ??always update dismissedKey via data attribute
     closeBtn.dataset.dismissKey = dismissedKey;
     if (!closeBtn.dataset.bound) {
       closeBtn.addEventListener('click', () => {
@@ -43,10 +43,20 @@ async function fetchFundingRate() {
     const data = await apiFetch('/api/funding-rate', { silent: true });
     if (!data.rates || data.rates.length === 0) return;
     data.rates.forEach(r => {
-      const el = document.getElementById(`fr-${String(r.symbol).toLowerCase().replace(/[^a-z0-9]/g,'')}`);
-      if (el) {
-        const color = r.rate > 0 ? 'var(--neon-green)' : r.rate < 0 ? 'var(--neon-red)' : 'var(--text-muted)';
-        el.innerHTML = `${escapeHtml(r.symbol)} <span style="color:${safeColor(color)};font-weight:600;">${r.rate > 0 ? '+' : ''}${escapeHtml(String(r.rate))}%</span>`;
+      const sym = String(r.symbol).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const rateEl = document.getElementById(`fr-${sym}`);
+      const blockEl = document.getElementById(`fr-block-${sym}`);
+      if (rateEl) {
+        const sign = r.rate > 0 ? '+' : '';
+        rateEl.textContent = `${sign}${r.rate}%`;
+        rateEl.style.color = r.rate > 0 ? 'var(--neon-green)' : r.rate < 0 ? 'var(--neon-red)' : 'var(--text-muted)';
+      }
+      // ??Heatmap block coloring
+      if (blockEl) {
+        blockEl.classList.remove('fr-positive', 'fr-negative', 'fr-extreme');
+        if (r.rate > 0) blockEl.classList.add('fr-positive');
+        else if (r.rate < 0) blockEl.classList.add('fr-negative');
+        if (Math.abs(r.rate) >= 0.05) blockEl.classList.add('fr-extreme');
       }
     });
   } catch (e) {
@@ -65,7 +75,7 @@ async function fetchWhaleFeed() {
     }
     container.innerHTML = data.trades.map(tr => {
       const isBuy = tr.side === 'BUY';
-      const icon = isBuy ? '▲' : '▼';
+      const icon = isBuy ? '\u25B2' : '\u25BC';
       const color = isBuy ? 'var(--neon-green)' : 'var(--neon-red)';
       const usd = tr.usd >= 1000000 ? `$${(tr.usd/1000000).toFixed(1)}M` : `$${(tr.usd/1000).toFixed(0)}K`;
       const time = new Date(tr.time).toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
@@ -96,7 +106,7 @@ async function fetchCalendar() {
       const isTomorrow = (() => { const d = new Date(); d.setDate(d.getDate()+1); return e.date === d.toISOString().slice(0,10); })();
       const badge = isToday ? '<span class="cal-badge today">TODAY</span>' : isTomorrow ? '<span class="cal-badge tomorrow">D-1</span>' : '';
       const dateStr = e.date.slice(5); // MM-DD
-      const impactDot = e.impact === 'HIGH' ? '🔴' : '🟡';
+      const impactDot = e.impact === 'HIGH' ? '?��' : '?��';
       return `<div class="cal-item ${isToday ? 'cal-today' : ''}">
         <span class="cal-date">${escapeHtml(dateStr)}</span>
         <span class="cal-event">${impactDot} ${escapeHtml(e.event)} <span class="cal-region">${escapeHtml(e.region)}</span></span>
@@ -110,7 +120,7 @@ async function fetchCalendar() {
 
 /* Dark Mode */
 function initTheme() {
-  const saved = localStorage.getItem('ryzm-theme') || 'light';
+  const saved = localStorage.getItem('ryzm-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
   // Sync body class for components that check body.classList (e.g. TradingView modal)
   document.body.classList.toggle('white-theme', saved === 'light');
@@ -145,17 +155,17 @@ function updateThemeIcon(theme) {
   lucide.createIcons();
 }
 
-/* ══════════════════════════════════════════════════════
+/* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═
    Systemic Risk Gauge v2.0
    270° arc, radar, heatmap, sparklines, simulator,
    correlation, zone timeline, BTC overlay, alerts
-   ══════════════════════════════════════════════════════ */
+   ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═ */
 let _prevRiskScore = null;
 let _riskAlertThreshold = parseFloat(localStorage.getItem('rg_threshold') || '-999');
 let _btcPriceOverlay = false;
 let _cachedRiskHistory = null;
 
-// ── Tab switching ──
+// ?�?� Tab switching ?�?�
 document.addEventListener('DOMContentLoaded', () => {
   const tabContainer = document.getElementById('rg-tabs');
   if (tabContainer) {
@@ -251,7 +261,7 @@ async function fetchRiskGauge() {
     // Color mapping
     const levelColors = {
       'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308',
-      'MODERATE': '#06b6d4', 'LOW': '#059669'
+      'MODERATE': '#C9A96E', 'LOW': '#059669'
     };
     const color = levelColors[data.level] || '#64748b';
 
@@ -264,11 +274,11 @@ async function fetchRiskGauge() {
     // Needle color
     if (needleLine) needleLine.setAttribute('stroke', color);
 
-    // 270° needle rotation: -100→-135°, 0→0°, +100→+135°
+    // 270° needle rotation: -100??135°, 0??°, +100??135°
     const needleAngle = (clampedScore / 100) * 135;
     if (needleEl) needleEl.setAttribute('transform', `rotate(${needleAngle}, 100, 100)`);
 
-    // 270° arc fill: total arc length ≈ 377
+    // 270° arc fill: total arc length ??377
     const pct = (clampedScore + 100) / 200;
     const arcLen = 377;
     if (arcEl) arcEl.setAttribute('stroke-dashoffset', arcLen - (pct * arcLen));
@@ -282,13 +292,13 @@ async function fetchRiskGauge() {
     if (deltaEl && _prevRiskScore !== null) {
       const diff = score - _prevRiskScore;
       if (Math.abs(diff) > 0.5) {
-        const arrow = diff > 0 ? '▲' : '▼';
+        const arrow = diff > 0 ? '\u25B2' : '\u25BC';
         const dColor = diff > 0 ? '#059669' : '#dc2626';
         deltaEl.innerHTML = `<span style="color:${dColor}">${arrow} ${Math.abs(diff).toFixed(1)}</span>`;
         deltaEl.classList.add('delta-flash');
         setTimeout(() => deltaEl.classList.remove('delta-flash'), 2000);
       } else {
-        deltaEl.innerHTML = '<span style="color:var(--text-muted)">— 0.0</span>';
+        deltaEl.innerHTML = '<span style="color:var(--text-muted)">+0.0</span>';
       }
     }
     _prevRiskScore = score;
@@ -317,7 +327,7 @@ async function fetchRiskGauge() {
     // Update threshold line on gauge
     _updateThresholdLine(_riskAlertThreshold);
 
-    // ── Component bars + sparklines ──
+    // ?�?� Component bars + sparklines ?�?�
     const c = data.components || {};
     const sparklines = data.sparklines || {};
 
@@ -379,10 +389,10 @@ async function fetchRiskGauge() {
         `<span style="color:${scColor}">${scVal}%</span>`);
     }
 
-    // ── Radar Chart ──
+    // ?�?� Radar Chart ?�?�
     _drawRadarChart(c);
 
-    // ── Change Heatmap ──
+    // ?�?� Change Heatmap ?�?�
     if (data.changes) _drawChangeHeatmap(data.changes);
 
     // Auto-update Market Vibe
@@ -396,7 +406,7 @@ async function fetchRiskGauge() {
   }
 }
 
-// ── Sparkline drawer ──
+// ?�?� Sparkline drawer ?�?�
 function _drawSparkline(canvasId, data) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || data.length < 2) return;
@@ -435,7 +445,7 @@ function _drawSparkline(canvasId, data) {
   ctx.fill();
 }
 
-// ── Radar Chart ──
+// ?�?� Radar Chart ?�?�
 function _drawRadarChart(components) {
   const svg = document.getElementById('rg-radar-svg');
   if (!svg) return;
@@ -491,7 +501,7 @@ function _drawRadarChart(components) {
   svg.innerHTML = html;
 }
 
-// ── Change Rate Heatmap ──
+// ?�?� Change Rate Heatmap ?�?�
 function _drawChangeHeatmap(changes) {
   const body = document.getElementById('rg-heatmap-body');
   if (!body) return;
@@ -511,7 +521,7 @@ function _drawChangeHeatmap(changes) {
   body.innerHTML = html;
 }
 
-// ── Correlation Matrix ──
+// ?�?� Correlation Matrix ?�?�
 async function _fetchCorrelationMatrix() {
   try {
     const data = await apiFetch('/api/correlation', { silent: true });
@@ -535,7 +545,7 @@ function _drawCorrelationMatrix(data) {
   for (const a of assets) {
     html += `<div class="rg-corr-cell rg-corr-header">${a}</div>`;
   }
-  // Rows — handle both dict-of-dicts and array-of-arrays
+  // Rows ??handle both dict-of-dicts and array-of-arrays
   for (let i = 0; i < n; i++) {
     html += `<div class="rg-corr-cell rg-corr-header">${assets[i]}</div>`;
     for (let j = 0; j < n; j++) {
@@ -548,7 +558,7 @@ function _drawCorrelationMatrix(data) {
       const absVal = Math.abs(val);
       let bg, fg;
       if (i === j) {
-        bg = 'rgba(6,182,212,0.15)'; fg = 'var(--neon-cyan)';
+        bg = 'rgba(201,169,110,0.15)'; fg = 'var(--neon-cyan)';
       } else if (val > 0.5) {
         bg = `rgba(5,150,105,${0.1 + absVal * 0.3})`; fg = '#059669';
       } else if (val < -0.3) {
@@ -562,7 +572,7 @@ function _drawCorrelationMatrix(data) {
   container.innerHTML = html;
 }
 
-// ── Scenario Simulator ──
+// ?�?� Scenario Simulator ?�?�
 function _populateSimulator(components) {
   const mapping = {
     'sim-fg': c => c.fear_greed?.value ?? 50,
@@ -608,7 +618,7 @@ function _runSimulation() {
       const labelEl = document.getElementById('rg-sim-label');
       const levelColors = {
         'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308',
-        'MODERATE': '#06b6d4', 'LOW': '#059669'
+        'MODERATE': '#C9A96E', 'LOW': '#059669'
       };
       if (scoreEl) { scoreEl.textContent = data.score; scoreEl.style.color = levelColors[data.level] || '#64748b'; }
       if (labelEl) { labelEl.textContent = data.label; labelEl.style.color = levelColors[data.level] || '#64748b'; }
@@ -633,11 +643,11 @@ function updateMarketVibe(riskData) {
   const level = riskData.level || 'MODERATE';
 
   const vibeMap = {
-    'CRITICAL': { text: 'EXTREME FEAR', color: '#dc2626', msg: '/// SYSTEM: High-risk environment detected — exercise extreme caution' },
-    'HIGH':     { text: 'FEARFUL',      color: '#f97316', msg: '/// SYSTEM: Elevated risk levels — monitor positions closely' },
-    'ELEVATED': { text: 'CAUTIOUS',     color: '#eab308', msg: '/// SYSTEM: Market uncertainty elevated — stay alert' },
-    'MODERATE': { text: 'NEUTRAL',      color: '#06b6d4', msg: '/// SYSTEM: Market conditions within normal range' },
-    'LOW':      { text: 'OPTIMISTIC',   color: '#059669', msg: '/// SYSTEM: Low-risk environment — favorable conditions' }
+    'CRITICAL': { text: 'EXTREME FEAR', color: '#dc2626', msg: '/// SYSTEM: High-risk environment detected ??exercise extreme caution' },
+    'HIGH':     { text: 'FEARFUL',      color: '#f97316', msg: '/// SYSTEM: Elevated risk levels ??monitor positions closely' },
+    'ELEVATED': { text: 'CAUTIOUS',     color: '#eab308', msg: '/// SYSTEM: Market uncertainty elevated ??stay alert' },
+    'MODERATE': { text: 'NEUTRAL',      color: '#C9A96E', msg: '/// SYSTEM: Market conditions within normal range' },
+    'LOW':      { text: 'OPTIMISTIC',   color: '#059669', msg: '/// SYSTEM: Low-risk environment ??favorable conditions' }
   };
   const vibe = vibeMap[level] || vibeMap['MODERATE'];
 
@@ -647,7 +657,7 @@ function updateMarketVibe(riskData) {
   if (vMsg) vMsg.innerText = vibe.msg;
 }
 
-/* ══ Risk Index 30-Day History Chart (Interactive + BTC overlay + Zone Timeline) ══ */
+/* ?�═ Risk Index 30-Day History Chart (Interactive + BTC overlay + Zone Timeline) ?�═ */
 async function fetchRiskHistory() {
   try {
     const data = await apiFetch('/api/risk-gauge/history?days=30', { silent: true });
@@ -696,7 +706,7 @@ function drawRiskHistoryChart(history) {
     { min: -100, max: -60, color: 'rgba(220,38,38,0.06)' },
     { min: -60, max: -30, color: 'rgba(249,115,22,0.04)' },
     { min: -30, max: 0, color: 'rgba(234,179,8,0.03)' },
-    { min: 0, max: 30, color: 'rgba(6,182,212,0.03)' },
+    { min: 0, max: 30, color: 'rgba(201,169,110,0.03)' },
     { min: 30, max: 100, color: 'rgba(5,150,105,0.05)' }
   ];
   zones.forEach(z => {
@@ -758,7 +768,7 @@ function drawRiskHistoryChart(history) {
     const x = pad.left + i * step, y = yOf(s);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-  const lineColor = latest > 30 ? '#059669' : latest > 0 ? '#06b6d4' : latest > -30 ? '#eab308' : latest > -60 ? '#f97316' : '#dc2626';
+  const lineColor = latest > 30 ? '#059669' : latest > 0 ? '#C9A96E' : latest > -30 ? '#eab308' : latest > -60 ? '#f97316' : '#dc2626';
   ctx.strokeStyle = lineColor;
   ctx.lineWidth = 1.5;
   ctx.stroke();
@@ -770,19 +780,19 @@ function drawRiskHistoryChart(history) {
   ctx.beginPath(); ctx.arc(lastX, lastY, 7, 0, Math.PI * 2); ctx.strokeStyle = lineColor; ctx.lineWidth = 1; ctx.globalAlpha = 0.3; ctx.stroke(); ctx.globalAlpha = 1;
 
   // Level dots
-  const levelColors = { 'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308', 'MODERATE': '#06b6d4', 'LOW': '#059669' };
+  const levelColors = { 'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308', 'MODERATE': '#C9A96E', 'LOW': '#059669' };
   history.forEach((r, i) => {
     const x = pad.left + i * step, y = yOf(r.score);
     ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2);
     ctx.fillStyle = levelColors[r.level] || '#94a3b8'; ctx.fill();
   });
 
-  // ── BTC Price Overlay (Feature 13) ──
+  // ?�?� BTC Price Overlay (Feature 13) ?�?�
   if (_btcPriceOverlay) {
     _drawBtcPriceOverlay(ctx, history, pad, cw, ch, w);
   }
 
-  // ── Interactive tooltip on hover (Feature 3) ──
+  // ?�?� Interactive tooltip on hover (Feature 3) ?�?�
   canvas.onmousemove = (e) => {
     if (!tooltipEl) return;
     const cRect = canvas.getBoundingClientRect();
@@ -801,7 +811,7 @@ function drawRiskHistoryChart(history) {
   canvas.onmouseleave = () => { if (tooltipEl) tooltipEl.classList.add('hidden'); };
 }
 
-// ── BTC Price Overlay ──
+// ?�?� BTC Price Overlay ?�?�
 async function _drawBtcPriceOverlay(ctx, history, pad, cw, ch, w) {
   try {
     const marketData = await apiFetch('/api/market', { silent: true });
@@ -834,20 +844,20 @@ async function _drawBtcPriceOverlay(ctx, history, pad, cw, ch, w) {
     ctx.fillStyle = 'rgba(247,147,26,0.5)';
     ctx.font = '7px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText('BTC ₿', pad.left + cw - 2, yPrice(btcPrice) - 3);
+    ctx.fillText('BTC >>', pad.left + cw - 2, yPrice(btcPrice) - 3);
   } catch (e) {
     // silently fail
   }
 }
 
-// ── Zone Timeline (Feature 4) ──
+// ?�?� Zone Timeline (Feature 4) ?�?�
 function _drawZoneTimeline(history) {
   const container = document.getElementById('rg-zone-timeline');
   if (!container || !history.length) return;
 
   const levelColors = {
     'CRITICAL': '#dc2626', 'HIGH': '#f97316', 'ELEVATED': '#eab308',
-    'MODERATE': '#06b6d4', 'LOW': '#059669'
+    'MODERATE': '#C9A96E', 'LOW': '#059669'
   };
 
   // Group consecutive same-level segments
@@ -873,7 +883,7 @@ function _drawZoneTimeline(history) {
 // Correlation matrix and risk history are now managed via RyzmScheduler (H-5/M-2 fix)
 // Removed standalone setTimeout/setInterval to prevent duplicate polling.
 
-/* ── Museum of Scars ── */
+/* ?�?� Museum of Scars ?�?� */
 async function fetchMuseumOfScars() {
   try {
     const data = await apiFetch('/api/scars', { silent: true });
@@ -895,7 +905,7 @@ async function fetchMuseumOfScars() {
   }
 }
 
-/* ── Strategic Narrative (rendered from Council data) ── */
+/* ?�?� Strategic Narrative (rendered from Council data) ?�?� */
 function renderStrategicNarrative(narrativeData) {
   const container = document.getElementById('strategic-narrative');
   const layersEl = document.getElementById('sn-layers');
@@ -919,41 +929,247 @@ function renderStrategicNarrative(narrativeData) {
   container.style.display = 'block';
 }
 
+/* ?�?� L/S Ratio Panel (Upgraded) ?�?� */
+let _lsActiveCoin = 'BTC';
+let _lsCoinData = {};   // { BTC: {longAccount, shortAccount, ratio}, ETH: {...}, SOL: {...} }
+let _lsHistory = {};    // { BTC: [{long, ts}, ...], ... }
+let _lsPrevLong = {};   // track previous long% for wave trigger
+
+function _initLsTabs() {
+  document.querySelectorAll('.ls-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ls-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _lsActiveCoin = btn.dataset.coin;
+      _renderLsPanel();
+    });
+  });
+}
+
 async function fetchLongShortRatio() {
   try {
     const data = await apiFetch('/api/long-short', { silent: true });
     
-    const lsLong = document.getElementById('ls-long');
-    const lsShort = document.getElementById('ls-short');
-    
-    if (lsLong && lsShort && data.longAccount) {
-      let finalLong = data.longAccount;
-      if (finalLong <= 1) finalLong *= 100;
-      const finalShort = 100 - finalLong;
-
-      lsLong.style.width = `${finalLong}%`;
-      const lsLongVal = lsLong.querySelector('.ls-val');
-      if (lsLongVal) lsLongVal.textContent = `${finalLong.toFixed(1)}%`;
-
-      lsShort.style.width = `${finalShort}%`;
-      const lsShortVal = lsShort.querySelector('.ls-val');
-      if (lsShortVal) lsShortVal.textContent = `${finalShort.toFixed(1)}%`;
-
-      // Update indicator row
-      const longPct = document.getElementById('ls-long-pct');
-      const shortPct = document.getElementById('ls-short-pct');
-      const ratioNum = document.getElementById('ls-ratio-num');
-      if (longPct) longPct.textContent = `${finalLong.toFixed(1)}%`;
-      if (shortPct) shortPct.textContent = `${finalShort.toFixed(1)}%`;
-      if (ratioNum) {
-        const ratio = finalShort > 0 ? (finalLong / finalShort).toFixed(2) : '∞';
-        ratioNum.textContent = ratio;
-        ratioNum.style.color = finalLong > finalShort ? 'var(--neon-green)' : finalLong < finalShort ? 'var(--neon-red)' : 'var(--neon-cyan)';
-      }
+    // Parse multi-coin data
+    if (data.coins) {
+      _lsCoinData = data.coins;
+    } else if (data.longAccount) {
+      // Backward compat ??single BTC
+      _lsCoinData['BTC'] = { longAccount: data.longAccount, shortAccount: data.shortAccount, ratio: data.ratio };
     }
+
+    // Parse history
+    if (data.history) {
+      _lsHistory = data.history;
+    }
+
+    _renderLsPanel();
+    _renderLsHistory();
+    _initLsTabs();
   } catch (e) {
     console.error("L/S Error:", e); 
   }
+}
+
+function _renderLsPanel() {
+  const coinData = _lsCoinData[_lsActiveCoin];
+  if (!coinData) return;
+
+  let finalLong = coinData.longAccount;
+  if (finalLong <= 1) finalLong *= 100;
+  const finalShort = 100 - finalLong;
+
+  const lsLong = document.getElementById('ls-long');
+  const lsShort = document.getElementById('ls-short');
+
+  if (lsLong && lsShort) {
+    lsLong.style.width = `${finalLong}%`;
+    const lsLongVal = lsLong.querySelector('.ls-val');
+    if (lsLongVal) lsLongVal.textContent = `${finalLong.toFixed(1)}%`;
+
+    lsShort.style.width = `${finalShort}%`;
+    const lsShortVal = lsShort.querySelector('.ls-val');
+    if (lsShortVal) lsShortVal.textContent = `${finalShort.toFixed(1)}%`;
+  }
+
+  // Update indicator row
+  const longPct = document.getElementById('ls-long-pct');
+  const shortPct = document.getElementById('ls-short-pct');
+  const ratioNum = document.getElementById('ls-ratio-num');
+  if (longPct) longPct.textContent = `${finalLong.toFixed(1)}%`;
+  if (shortPct) shortPct.textContent = `${finalShort.toFixed(1)}%`;
+  if (ratioNum) {
+    const ratio = finalShort > 0 ? (finalLong / finalShort).toFixed(2) : '--';
+    ratioNum.textContent = ratio;
+    ratioNum.style.color = finalLong > finalShort ? 'var(--neon-green)' : finalLong < finalShort ? 'var(--neon-red)' : 'var(--neon-cyan)';
+  }
+
+  // ??Sentiment Arc Gauge
+  _updateLsArcGauge(finalLong);
+
+  // ??Wave animation ??trigger if ratio changed significantly
+  const prevLong = _lsPrevLong[_lsActiveCoin] || 50;
+  if (Math.abs(finalLong - prevLong) > 0.3) {
+    _triggerLsWave(finalLong > prevLong);
+  }
+  _lsPrevLong[_lsActiveCoin] = finalLong;
+
+  // ??Alert threshold (60%+)
+  _updateLsAlert(finalLong, finalShort);
+}
+
+/* ??Sentiment Arc Gauge */
+function _updateLsArcGauge(longPct) {
+  const arcFill = document.getElementById('ls-arc-fill');
+  const arcDot = document.getElementById('ls-arc-dot');
+  const arcLabel = document.getElementById('ls-arc-label');
+  if (!arcFill) return;
+
+  // Arc total length ??157 (half circle)
+  const totalLen = 157;
+  const pct = longPct / 100;  // 0~1
+  const offset = totalLen * (1 - pct);
+  arcFill.style.strokeDashoffset = offset;
+
+  // Move dot along arc (angle from -180° to 0°)
+  if (arcDot) {
+    const angle = Math.PI * (1 - pct);
+    const cx = 60 - 50 * Math.cos(angle);
+    const cy = 62 - 50 * Math.sin(angle);
+    arcDot.setAttribute('cx', cx.toFixed(1));
+    arcDot.setAttribute('cy', cy.toFixed(1));
+  }
+
+  // Label
+  if (arcLabel) {
+    if (longPct >= 65) { arcLabel.textContent = 'EXTREME LONG'; arcLabel.style.fill = 'var(--neon-green)'; }
+    else if (longPct >= 55) { arcLabel.textContent = 'BULLISH'; arcLabel.style.fill = 'var(--neon-green)'; }
+    else if (longPct <= 35) { arcLabel.textContent = 'EXTREME SHORT'; arcLabel.style.fill = 'var(--neon-red)'; }
+    else if (longPct <= 45) { arcLabel.textContent = 'BEARISH'; arcLabel.style.fill = 'var(--neon-red)'; }
+    else { arcLabel.textContent = 'NEUTRAL'; arcLabel.style.fill = 'var(--neon-cyan)'; }
+  }
+}
+
+/* ??Wave ripple animation on ratio change */
+function _triggerLsWave(isLongSide) {
+  const canvas = document.getElementById('ls-wave-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width = canvas.offsetWidth || 300;
+  const h = canvas.height = canvas.offsetHeight || 32;
+  const color = isLongSide ? [5, 150, 105] : [220, 38, 38];
+  const startX = isLongSide ? 0 : w;
+
+  let frame = 0;
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    const progress = frame / 40;
+    if (progress > 1) { ctx.clearRect(0, 0, w, h); return; }
+    const waveX = startX + (isLongSide ? 1 : -1) * progress * w;
+    const alpha = 0.3 * (1 - progress);
+    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
+    ctx.beginPath();
+    for (let y = 0; y <= h; y += 2) {
+      const wave = Math.sin(y * 0.3 + frame * 0.3) * 8 * (1 - progress);
+      ctx.rect(isLongSide ? 0 : waveX, y, Math.abs(waveX - (isLongSide ? 0 : w)) + wave, 2);
+    }
+    ctx.fill();
+    frame++;
+    if (frame < 40) requestAnimationFrame(animate);
+    else ctx.clearRect(0, 0, w, h);
+  }
+  animate();
+}
+
+/* ??Alert threshold */
+function _updateLsAlert(longPct, shortPct) {
+  const zone = document.getElementById('ls-alert-zone');
+  const text = document.getElementById('ls-alert-text');
+  if (!zone) return;
+
+  if (longPct >= 60) {
+    zone.style.display = 'flex';
+    zone.className = 'ls-alert-zone alert-long';
+    text.textContent = `[!] EXTREME LONG ${longPct.toFixed(1)}%`;
+  } else if (shortPct >= 60) {
+    zone.style.display = 'flex';
+    zone.className = 'ls-alert-zone alert-short';
+    text.textContent = `[!] EXTREME SHORT ${shortPct.toFixed(1)}%`;
+  } else {
+    zone.style.display = 'none';
+  }
+}
+
+/* ??History sparkline (24h L/S trend) */
+function _renderLsHistory() {
+  const canvas = document.getElementById('ls-history-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const hist = _lsHistory[_lsActiveCoin];
+  if (!hist || hist.length < 2) return;
+
+  const w = canvas.width = canvas.offsetWidth || 240;
+  const h = canvas.height = 36;
+  ctx.clearRect(0, 0, w, h);
+
+  const values = hist.map(d => d.long);
+  const min = Math.min(...values) - 1;
+  const max = Math.max(...values) + 1;
+  const range = max - min || 1;
+
+  // Draw 50% reference line
+  const y50 = h - ((50 - min) / range) * h;
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(0, y50);
+  ctx.lineTo(w, y50);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw area fill
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  const lastVal = values[values.length - 1];
+  const isUp = lastVal >= 50;
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, isUp ? 'rgba(5,150,105,0.2)' : 'rgba(220,38,38,0.2)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Draw line
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = isUp ? '#059669' : '#dc2626';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // End dot
+  const lastX = w;
+  const lastY = h - ((lastVal - min) / range) * h;
+  ctx.beginPath();
+  ctx.arc(lastX - 1, lastY, 3, 0, Math.PI * 2);
+  ctx.fillStyle = isUp ? '#059669' : '#dc2626';
+  ctx.fill();
+  ctx.strokeStyle = 'var(--bg-card)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }
 
 async function fetchMacroTicker() {
@@ -963,6 +1179,9 @@ async function fetchMacroTicker() {
     const container = document.getElementById('macro-ticker');
 
     if (!market || Object.keys(market).length === 0) return;
+
+    // Expose market data globally for Price Alerts current price display
+    window._latestMarketData = market;
 
     // Update header FX display
     if (market['USD/KRW']) {
@@ -1014,7 +1233,25 @@ async function fetchMacroTicker() {
     });
     if (container) container.innerHTML = html + html;
 
-    // Kimchi is handled by its own scheduler entry — no duplicate call needed (H-4 fix)
+    // ── Seed price cards from backend API (so effects work even without WebSocket) ──
+    _allPriceKeys.forEach(key => {
+      const coin = market[key];
+      if (!coin || !coin.price) return;
+      const prev = _livePrices[key];
+      const prevPrice = prev ? prev.price : coin.price;
+      _livePrices[key] = {
+        price: coin.price,
+        prevPrice: prevPrice,
+        change: coin.change ?? (prev ? prev.change : 0),
+        high: coin.high ?? (prev ? prev.high : coin.price),
+        low: coin.low ?? (prev ? prev.low : coin.price),
+        vol: coin.volume ?? (prev ? prev.vol : 0),
+        mcap: coin.mcap ?? (prev ? prev.mcap : 0),
+      };
+      renderPriceCard(key);
+    });
+
+    // Kimchi is handled by its own scheduler entry ??no duplicate call needed (H-4 fix)
   } catch (e) { console.error("Ticker Error:", e); }
 }
 
@@ -1057,7 +1294,7 @@ async function fetchKimchi() {
   } catch (e) { console.error("KP Error:", e); }
 }
 
-/* ── Connection Status Banner ── */
+/* ?�?� Connection Status Banner ?�?� */
 let _connBanner = null;
 let _connBannerTimeout = null;
 
@@ -1088,7 +1325,7 @@ function _updateConnectionBanner(status) {
   }
 }
 
-/* ── Skeleton → Data Fade Transition Helper ── */
+/* ?�?� Skeleton ??Data Fade Transition Helper ?�?� */
 function replaceSkeleton(container) {
   if (!container) return;
   const skeleton = container.querySelector('.skeleton-loader');
@@ -1101,9 +1338,10 @@ function replaceSkeleton(container) {
   container.addEventListener('animationend', () => container.classList.remove('data-loaded'), { once: true });
 }
 
-/* ── Real-time Price Panel (Binance WebSocket + Backend Macro) ── */
-const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol}, ... }
-const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 30 pts)
+/* ?�?� Real-time Price Panel v5.6 (Binance WebSocket + Backend Macro) ?�?� */
+const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol, mcap}, ... }
+const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 50 pts)
+const _tickDirs = {};      // { BTC: ['up','down','up',...], ... } last 5 tick directions
 let _priceWs = null;
 let _priceWsRetry = 0;
 const _wsHosts = [
@@ -1112,13 +1350,24 @@ const _wsHosts = [
   'wss://fstream.binance.com'
 ];
 let _wsHostIdx = 0;
+let _priceFilter = 'all';   // 'all' | 'crypto' | 'macro'
+let _priceSort = 'default'; // 'default' | 'change-desc' | 'change-asc' | 'vol-desc'
+
+// Crypto coins (3) + Macro items
+const _cryptoKeys = ['BTC','ETH','SOL'];
+const _macroKeys = ['VIX','DXY','USD/KRW','USD/JPY'];
+const _allPriceKeys = [..._cryptoKeys, ..._macroKeys];
+
+const _wsStreamMap = {
+  BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL'
+};
 
 function initBinanceWebSocket() {
-  if (_priceWs && _priceWs.readyState <= 1) return; // already open/connecting
-  const streams = 'btcusdt@miniTicker/ethusdt@miniTicker/solusdt@miniTicker';
+  if (_priceWs && _priceWs.readyState <= 1) return;
+  const streams = _cryptoKeys.map(k => `${k.toLowerCase()}usdt@miniTicker`).join('/');
   const host = _wsHosts[_wsHostIdx % _wsHosts.length];
   const url = `${host}/stream?streams=${streams}`;
-  console.log(`[WS] Connecting to ${host}...`);
+  console.log(`[WS] Connecting to ${host} (3 streams)...`);
   try { _priceWs = new WebSocket(url); } catch (e) { _wsHostIdx++; scheduleWsReconnect(); return; }
 
   const connectTimeout = setTimeout(() => {
@@ -1128,8 +1377,9 @@ function initBinanceWebSocket() {
   _priceWs.onopen = () => {
     clearTimeout(connectTimeout);
     _priceWsRetry = 0;
-    console.log('[WS] Binance connected via ' + host);
+    console.log('[WS] Binance connected via ' + host + ' ??3 crypto streams');
     _updateConnectionBanner('connected');
+    _updateWsBadge('connected');
   };
 
   _priceWs.onmessage = (evt) => {
@@ -1137,12 +1387,11 @@ function initBinanceWebSocket() {
       const msg = JSON.parse(evt.data);
       const d = msg.data;
       if (!d || !d.s) return;
-      const symbolMap = { BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL' };
-      const key = symbolMap[d.s];
+      const key = _wsStreamMap[d.s];
       if (!key) return;
 
-      const newPrice = parseFloat(d.c);  // current close
-      const openPrice = parseFloat(d.o); // 24h open
+      const newPrice = parseFloat(d.c);
+      const openPrice = parseFloat(d.o);
       const high = parseFloat(d.h);
       const low = parseFloat(d.l);
       const vol = parseFloat(d.v);
@@ -1156,9 +1405,12 @@ function initBinanceWebSocket() {
         high: high,
         low: low,
         vol: vol,
-        _wsTime: Date.now()
+        mcap: prev ? prev.mcap : 0,
+        _wsTime: Date.now(),
+        _source: 'ws'
       };
       renderPriceCard(key);
+      _updatePriceSummary();
     } catch (e) { /* ignore parse errors */ }
   };
 
@@ -1167,9 +1419,15 @@ function initBinanceWebSocket() {
     console.log('[WS] Binance disconnected, trying next host...');
     _wsHostIdx++;
     _updateConnectionBanner('reconnecting');
+    _updateWsBadge('reconnecting');
     scheduleWsReconnect();
   };
-  _priceWs.onerror = () => { clearTimeout(connectTimeout); _updateConnectionBanner('disconnected'); _priceWs.close(); };
+  _priceWs.onerror = () => {
+    clearTimeout(connectTimeout);
+    _updateConnectionBanner('disconnected');
+    _updateWsBadge('disconnected');
+    _priceWs.close();
+  };
 }
 
 function scheduleWsReconnect() {
@@ -1179,9 +1437,21 @@ function scheduleWsReconnect() {
   setTimeout(initBinanceWebSocket, delay);
 }
 
+function _updateWsBadge(status) {
+  const badge = document.getElementById('price-ws-status');
+  if (!badge) return;
+  const label = badge.querySelector('.price-ws-label');
+  badge.className = 'price-ws-badge ws-' + status;
+  if (label) {
+    const labels = { connected: 'LIVE', reconnecting: 'RECONNECTING', disconnected: 'OFFLINE' };
+    label.textContent = labels[status] || 'CONNECTING';
+  }
+}
+
 function round2(v) { return Math.round(v * 100) / 100; }
 
 function formatVol(v) {
+  if (v >= 1e12) return (v / 1e12).toFixed(1) + 'T';
   if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
   if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
   if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
@@ -1189,32 +1459,46 @@ function formatVol(v) {
 }
 
 function renderPriceCard(key) {
-  const container = document.getElementById('realtime-prices');
-  if (!container) return;
   const data = _livePrices[key];
   if (!data) return;
 
-  let card = document.getElementById(`price-card-${key}`);
-  if (!card) return; // card not yet built
+  const cardKey = key.replace('/', '');
+  let card = document.getElementById(`price-card-${cardKey}`);
+  if (!card) return;
 
   const valEl = card.querySelector('.price-value');
   const chgEl = card.querySelector('.price-change');
   const volEl = card.querySelector('.price-vol');
   const timeEl = card.querySelector('.price-time');
+  const hlBar = card.querySelector('.price-hl-bar');
 
   if (!valEl) return;
 
   // Determine direction
   const dir = data.price > data.prevPrice ? 'up' : data.price < data.prevPrice ? 'down' : null;
 
-  // Format price — use countup animation for crypto
-  const decimals = data.price >= 100 ? 2 : data.price >= 1 ? 4 : 6;
-  animateCountup(valEl, data.price, { duration: 400, decimals, prefix: '$', useComma: true });
+  // ??Neon glow ??set data-dir attribute for CSS-driven glow
+  if (dir) card.setAttribute('data-dir', dir);
+
+  // ??Track tick direction history (last 5)
+  if (dir) {
+    if (!_tickDirs[key]) _tickDirs[key] = [];
+    _tickDirs[key].push(dir);
+    if (_tickDirs[key].length > 5) _tickDirs[key].shift();
+    _renderTickSeq(cardKey, _tickDirs[key]);
+  }
+
+  // Format price
+  const isCrypto = _cryptoKeys.includes(key);
+  const isFx = key.startsWith('USD/');
+  const decimals = isCrypto ? (data.price >= 100 ? 2 : data.price >= 1 ? 4 : 6) : 2;
+  const prefix = isFx ? '' : '$';
+  animateCountup(valEl, data.price, { duration: 400, decimals, prefix, useComma: true });
 
   // Flash effect
   if (dir) {
     card.classList.remove('price-flash-up', 'price-flash-down');
-    void card.offsetWidth; // force reflow
+    void card.offsetWidth;
     card.classList.add(dir === 'up' ? 'price-flash-up' : 'price-flash-down');
     valEl.style.color = dir === 'up' ? 'var(--neon-green)' : 'var(--neon-red)';
     setTimeout(() => { valEl.style.color = ''; }, 1200);
@@ -1227,9 +1511,34 @@ function renderPriceCard(key) {
     chgEl.className = `price-change ${data.change >= 0 ? 'up' : 'down'}`;
   }
 
+  // ??Particle burst on ±3% change
+  if (Math.abs(data.change) >= 3) {
+    const canvas = card.querySelector('.price-card-particle');
+    if (canvas) _spawnParticles(canvas, data.change >= 0);
+  }
+
   // Volume
-  if (volEl && data.vol) volEl.textContent = 'Vol: ' + formatVol(data.vol);
+  if (volEl && data.vol) volEl.textContent = formatVol(data.vol);
   if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+  // ??24h High/Low bar ??enhanced with gradient + current price label
+  if (hlBar && data.high && data.low && data.high !== data.low) {
+    const range = data.high - data.low;
+    const pos = ((data.price - data.low) / range) * 100;
+    const fill = hlBar.querySelector('.price-hl-fill');
+    const dot = hlBar.querySelector('.price-hl-dot');
+    const valLabel = hlBar.querySelector('.price-hl-val');
+    if (fill) fill.style.width = pos + '%';
+    if (dot) dot.style.left = pos + '%';
+    if (valLabel) {
+      // Show abbreviated price at dot position
+      const shortPrice = data.price >= 1000 ? (data.price / 1000).toFixed(1) + 'k'
+                       : data.price >= 1 ? data.price.toFixed(1)
+                       : data.price.toFixed(4);
+      valLabel.textContent = shortPrice;
+      valLabel.style.left = pos + '%';
+    }
+  }
 
   // Update mini sparkline
   updateMiniChart(key, data.price, data.change);
@@ -1239,7 +1548,7 @@ function updateMiniChart(key, price, change) {
   const cardKey = key.replace('/', '');
   if (!_priceHistory[key]) _priceHistory[key] = [];
   _priceHistory[key].push(price);
-  if (_priceHistory[key].length > 30) _priceHistory[key].shift();
+  if (_priceHistory[key].length > 50) _priceHistory[key].shift();
   const hist = _priceHistory[key];
   if (hist.length < 2) return;
 
@@ -1251,7 +1560,7 @@ function updateMiniChart(key, price, change) {
   const min = Math.min(...hist);
   const max = Math.max(...hist);
   const range = max - min || 1;
-  const w = 60, h = 24, pad = 2;
+  const w = 60, h = 18, pad = 2;
   const points = hist.map((v, i) => {
     const x = (i / (hist.length - 1)) * w;
     const y = pad + (1 - (v - min) / range) * (h - pad * 2);
@@ -1271,121 +1580,426 @@ function updateMiniChart(key, price, change) {
   `;
 }
 
-// Build all price cards once, then let WebSocket + polling update them
-// Inline SVG icons for each ticker
+// Inline SVG icons for each ticker (3 crypto + 4 macro)
 const _tickerIcons = {
   BTC: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#f7931a"/><path d="M22.5 14.2c.3-2-1.2-3.1-3.3-3.8l.7-2.7-1.6-.4-.6 2.6c-.4-.1-.9-.2-1.3-.3l.7-2.6-1.7-.4-.7 2.7c-.4-.1-.7-.2-1-.2l-2.3-.6-.4 1.7s1.2.3 1.2.3c.7.2.8.6.8 1l-.8 3.3c0 .1.1.1.1.1l-.1 0-1.2 4.7c-.1.2-.3.6-.8.4 0 0-1.2-.3-1.2-.3l-.8 1.9 2.2.5c.4.1.8.2 1.2.3l-.7 2.8 1.6.4.7-2.7c.5.1.9.2 1.3.3l-.7 2.7 1.7.4.7-2.8c2.8.5 4.9.3 5.8-2.2.7-2 0-3.2-1.5-3.9 1.1-.3 1.9-1 2.1-2.5zm-3.7 5.2c-.5 2-3.9.9-5 .7l.9-3.6c1.1.3 4.7.8 4.1 2.9zm.5-5.3c-.5 1.8-3.3.9-4.2.7l.8-3.2c.9.2 3.9.7 3.4 2.5z" fill="#fff"/></svg>`,
   ETH: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#627eea"/><path d="M16.5 4v8.9l7.5 3.3z" fill="#fff" opacity=".6"/><path d="M16.5 4L9 16.2l7.5-3.3z" fill="#fff"/><path d="M16.5 21.9v6.1l7.5-10.4z" fill="#fff" opacity=".6"/><path d="M16.5 28V21.9L9 17.6z" fill="#fff"/><path d="M16.5 20.6l7.5-4.4-7.5-3.3z" fill="#fff" opacity=".2"/><path d="M9 16.2l7.5 4.4v-7.7z" fill="#fff" opacity=".5"/></svg>`,
   SOL: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#000"/><linearGradient id="sol-g" x1="5" y1="27" x2="27" y2="5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9945ff"/><stop offset=".5" stop-color="#14f195"/><stop offset="1" stop-color="#00d1ff"/></linearGradient><path d="M9.5 20.1h13.6l-3 3H6.5z M9.5 14.5h13.6l-3-3H6.5z M9.5 8.9h13.6l-3 3H6.5z" fill="url(#sol-g)" transform="translate(0,0.5)"/></svg>`,
   VIX: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><path d="M8 22l4-8 3 5 3-10 3 7 3-6" stroke="#f97316" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  DXY: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#06b6d4" font-size="14" font-weight="bold" font-family="sans-serif">$</text></svg>`,
-  'USD/KRW': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#eab308" font-size="12" font-weight="bold" font-family="sans-serif">₩</text></svg>`,
+  DXY: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#C9A96E" font-size="14" font-weight="bold" font-family="sans-serif">$</text></svg>`,
+  'USD/KRW': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#eab308" font-size="12" font-weight="bold" font-family="sans-serif">??/text></svg>`,
   'USD/JPY': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold" font-family="sans-serif">¥</text></svg>`
 };
+
+const _tickerCategory = {};
+_cryptoKeys.forEach(k => { _tickerCategory[k] = 'crypto'; });
+_macroKeys.forEach(k => { _tickerCategory[k] = k.startsWith('USD/') ? 'fx' : 'macro'; });
 
 function buildPriceCards() {
   const container = document.getElementById('realtime-prices');
   if (!container) return;
 
-  const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
+  // Force vertical column layout
+  container.style.cssText = 'display:flex !important;flex-direction:column !important;flex-wrap:nowrap !important;overflow-y:auto;overflow-x:hidden;max-height:600px;width:100%;';
+
   let html = '';
-  order.forEach((key, idx) => {
+  _allPriceKeys.forEach((key, idx) => {
     const icon = _tickerIcons[key] || '';
+    const cardKey = key.replace('/', '');
+    const cat = _tickerCategory[key] || 'macro';
+    const tagClass = cat === 'crypto' ? 'tag-crypto' : (cat === 'fx' ? 'tag-fx' : 'tag-macro');
+    const tagLabel = cat === 'crypto' ? 'CRYPTO' : (cat === 'fx' ? 'FX' : 'INDEX');
+
     html += `
-      <div class="price-card" id="price-card-${key.replace('/', '')}" style="animation-delay:${idx * 0.05}s">
-        <div class="price-card-header">
-          <span class="price-symbol">${icon} ${key}</span>
-          <span class="price-live-dot" title="Live">&bull;</span>
+      <div class="price-card" id="price-card-${cardKey}" data-key="${key}" data-cat="${cat}" style="display:grid;width:100%;box-sizing:border-box;margin-bottom:3px;animation-delay:${idx * 0.04}s">
+        <canvas class="price-card-particle" width="200" height="80"></canvas>
+        <div class="price-card-icon">${icon}</div>
+        <div class="price-card-info">
+          <span class="price-symbol">${key}</span>
+          <span class="price-card-tag ${tagClass}">${tagLabel}</span>
         </div>
-        <div style="display:flex;align-items:baseline;gap:8px;">
-          <div class="price-value">—</div>
-          <div class="price-change">—</div>
+        <div class="price-card-right">
+          <div class="price-value">--</div>
+          <div class="price-change">--</div>
+          <div class="price-time">--:--:--</div>
         </div>
-        <div class="price-details">
-          <span class="price-vol">Vol: —</span>
-          <span class="price-time">--:--:--</span>
-        </div>
-        <div class="price-mini-chart" id="mini-chart-${key.replace('/', '')}">
-          <svg width="100%" height="24" preserveAspectRatio="none" viewBox="0 0 60 24">
-            <polyline class="mini-chart-line" fill="none" stroke="var(--neon-cyan)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,12 60,12" opacity="0.3"/>
-          </svg>
+        <div class="price-card-bottom">
+          <span class="price-vol">--</span>
+          <div class="price-mini-chart" id="mini-chart-${cardKey}">
+            <svg width="100%" height="18" preserveAspectRatio="none" viewBox="0 0 60 18">
+              <polyline class="mini-chart-line" fill="none" stroke="var(--neon-cyan)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,9 60,9" opacity="0.2"/>
+            </svg>
+          </div>
+          <span class="price-tick-seq" id="tick-seq-${cardKey}"></span>
+          <div class="price-hl-bar" title="24h Range">
+            <span class="hl-label">L</span>
+            <div class="price-hl-track">
+              <div class="price-hl-fill" style="width:50%"></div>
+              <div class="price-hl-dot" style="left:50%"></div>
+              <span class="price-hl-val" style="left:50%">--</span>
+            </div>
+            <span class="hl-label">H</span>
+          </div>
         </div>
       </div>
     `;
   });
   container.innerHTML = html;
+
+  // Re-apply layout after innerHTML (belt & suspenders)
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.flexWrap = 'nowrap';
+  container.style.overflowY = 'auto';
+  container.style.overflowX = 'hidden';
+  container.style.maxHeight = '600px';
+  container.style.width = '100%';
+
+  // Diagnostic log
+  requestAnimationFrame(() => {
+    const cs = getComputedStyle(container);
+    console.log('[PRICE-DIAG] container display:', cs.display, 'flex-direction:', cs.flexDirection, 'flex-wrap:', cs.flexWrap);
+    const firstCard = container.querySelector('.price-card');
+    if (firstCard) {
+      const ccs = getComputedStyle(firstCard);
+      console.log('[PRICE-DIAG] card display:', ccs.display, 'float:', ccs.cssFloat, 'position:', ccs.position, 'width:', ccs.width);
+    }
+  });
+
+  _initPriceToolbar();
+  _initPriceHover();
+  _initThemeToggle();
+  _cloneMarqueeForSeamless();
 }
 
-// Fetch macro/FX from backend (VIX, DXY, USD/KRW, USD/JPY) for price panel
-// Also updates BTC/ETH/SOL as fallback when Binance WS is unavailable
+/* Sort & Filter */
+function _initPriceToolbar() {
+  // Filter buttons
+  document.querySelectorAll('.price-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.price-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _priceFilter = btn.dataset.filter;
+      _applyPriceFilterSort();
+    });
+  });
+  // Sort buttons
+  document.querySelectorAll('.price-sort-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.price-sort-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _priceSort = btn.dataset.sort;
+      _applyPriceFilterSort();
+    });
+  });
+}
+
+function _applyPriceFilterSort() {
+  const container = document.getElementById('realtime-prices');
+  if (!container) return;
+
+  // Filter
+  const cards = Array.from(container.querySelectorAll('.price-card'));
+  cards.forEach(card => {
+    const cat = card.dataset.cat;
+    const show = _priceFilter === 'all' ||
+      (_priceFilter === 'crypto' && cat === 'crypto') ||
+      (_priceFilter === 'macro' && (cat === 'macro' || cat === 'fx'));
+    card.classList.toggle('hidden-card', !show);
+  });
+
+  // Sort visible cards
+  const visible = cards.filter(c => !c.classList.contains('hidden-card'));
+  if (_priceSort !== 'default') {
+    visible.sort((a, b) => {
+      const ka = a.dataset.key, kb = b.dataset.key;
+      const da = _livePrices[ka], db = _livePrices[kb];
+      if (!da || !db) return 0;
+      if (_priceSort === 'change-desc') return db.change - da.change;
+      if (_priceSort === 'change-asc') return da.change - db.change;
+      if (_priceSort === 'vol-desc') return (db.vol || 0) - (da.vol || 0);
+      return 0;
+    });
+    visible.forEach(card => container.appendChild(card));
+  } else {
+    // Restore default order
+    _allPriceKeys.forEach(key => {
+      const cardKey = key.replace('/', '');
+      const card = document.getElementById(`price-card-${cardKey}`);
+      if (card) container.appendChild(card);
+    });
+  }
+}
+
+/* Summary Stats Marquee Ticker */
+function _updatePriceSummary() {
+  const btcdEl = document.getElementById('psb-btcd');
+  const volEl = document.getElementById('psb-vol');
+  const gainEl = document.getElementById('psb-gainers');
+  const loseEl = document.getElementById('psb-losers');
+  if (!btcdEl) return;
+
+  // BTC dominance ??estimate from BTC mcap if available
+  const btc = _livePrices['BTC'];
+  if (btc && btc.mcap) {
+    let totalMcap = 0;
+    _cryptoKeys.forEach(k => { if (_livePrices[k] && _livePrices[k].mcap) totalMcap += _livePrices[k].mcap; });
+    if (totalMcap > 0) btcdEl.textContent = ((btc.mcap / totalMcap) * 100).toFixed(1) + '%';
+  }
+
+  // Total 24h vol (crypto only)
+  let totalVol = 0;
+  _cryptoKeys.forEach(k => {
+    const d = _livePrices[k];
+    if (d && d.vol && d.price) totalVol += d.vol * d.price;
+  });
+  if (totalVol > 0) volEl.textContent = '$' + formatVol(totalVol);
+
+  // Gainers / losers count
+  let gainers = 0, losers = 0;
+  _cryptoKeys.forEach(k => {
+    const d = _livePrices[k];
+    if (d) { if (d.change > 0) gainers++; else if (d.change < 0) losers++; }
+  });
+  gainEl.textContent = gainers;
+  loseEl.textContent = losers;
+
+  // ??Update BTC/ETH/SOL prices in marquee
+  _cryptoKeys.forEach(k => {
+    const d = _livePrices[k];
+    const el = document.getElementById('psb-' + k.toLowerCase());
+    if (el && d) {
+      const dec = d.price >= 100 ? 0 : d.price >= 1 ? 2 : 4;
+      const priceStr = '$' + Number(d.price).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+      const sign = d.change >= 0 ? '+' : '';
+      el.textContent = `${priceStr} (${sign}${d.change}%)`;
+      el.className = 'pmq-val ' + (d.change >= 0 ? 'up' : 'down');
+    }
+  });
+}
+
+/* Hover Preview Card */
+function _initPriceHover() {
+  const hoverCard = document.getElementById('price-hover-card');
+  if (!hoverCard) return;
+  const container = document.getElementById('realtime-prices');
+  if (!container) return;
+
+  let hoverTimeout = null;
+
+  container.addEventListener('mouseenter', (e) => {
+    const card = e.target.closest('.price-card');
+    if (!card) return;
+    clearTimeout(hoverTimeout);
+    hoverTimeout = setTimeout(() => _showHoverCard(card, hoverCard), 350);
+  }, true);
+
+  container.addEventListener('mouseleave', (e) => {
+    const card = e.target.closest('.price-card');
+    if (!card) return;
+    clearTimeout(hoverTimeout);
+    hoverCard.classList.add('hidden');
+  }, true);
+
+  container.addEventListener('mousemove', (e) => {
+    if (hoverCard.classList.contains('hidden')) return;
+    const card = e.target.closest('.price-card');
+    if (!card) { hoverCard.classList.add('hidden'); return; }
+  }, true);
+}
+
+function _showHoverCard(card, hoverCard) {
+  const key = card.dataset.key;
+  if (!key) return;
+  const data = _livePrices[key];
+  if (!data) return;
+
+  const icon = _tickerIcons[key] || '';
+  hoverCard.querySelector('.phc-icon').innerHTML = icon;
+  hoverCard.querySelector('.phc-symbol').textContent = key;
+  hoverCard.querySelector('.phc-source').textContent = data._source === 'ws' ? 'BINANCE WS' : 'REST API';
+
+  const isFx = key.startsWith('USD/');
+  const isCrypto = _cryptoKeys.includes(key);
+  const decimals = isCrypto ? (data.price >= 100 ? 2 : data.price >= 1 ? 4 : 6) : 2;
+  const prefix = isFx ? '' : '$';
+  hoverCard.querySelector('.phc-price').textContent = prefix + Number(data.price).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+  const chgEl = hoverCard.querySelector('.phc-change');
+  const sign = data.change >= 0 ? '+' : '';
+  chgEl.textContent = `${sign}${data.change}%`;
+  chgEl.className = `phc-change ${data.change >= 0 ? 'up' : 'down'}`;
+  chgEl.style.background = data.change >= 0 ? 'rgba(5,150,105,0.12)' : 'rgba(220,38,38,0.12)';
+  chgEl.style.color = data.change >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+
+  const highEl = document.getElementById('phc-high');
+  const lowEl = document.getElementById('phc-low');
+  const pVolEl = document.getElementById('phc-vol');
+  const mcapEl = document.getElementById('phc-mcap');
+
+  if (highEl) highEl.textContent = data.high ? prefix + Number(data.high).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--';
+  if (lowEl) lowEl.textContent = data.low ? prefix + Number(data.low).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--';
+  if (pVolEl) pVolEl.textContent = data.vol ? formatVol(data.vol) : '--';
+  if (mcapEl) mcapEl.textContent = data.mcap ? '$' + formatVol(data.mcap) : '--';
+
+  // Draw mini sparkline in canvas
+  const canvas = document.getElementById('phc-canvas');
+  if (canvas && _priceHistory[key] && _priceHistory[key].length > 2) {
+    _drawHoverSparkline(canvas, _priceHistory[key], data.change >= 0);
+  }
+
+  // Position below the card
+  const rect = card.getBoundingClientRect();
+  const parent = hoverCard.offsetParent ? hoverCard.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+  hoverCard.style.left = (rect.left - parent.left) + 'px';
+  hoverCard.style.top = (rect.bottom - parent.top + 6) + 'px';
+  hoverCard.classList.remove('hidden');
+}
+
+function _drawHoverSparkline(canvas, history, isUp) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min || 1;
+  const color = isUp ? '#059669' : '#dc2626';
+
+  ctx.beginPath();
+  history.forEach((v, i) => {
+    const x = (i / (history.length - 1)) * w;
+    const y = 4 + (1 - (v - min) / range) * (h - 8);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Area fill
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, isUp ? 'rgba(5,150,105,0.15)' : 'rgba(220,38,38,0.15)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+/* ??Render tick direction arrows (last 5) */
+function _renderTickSeq(cardKey, dirs) {
+  const el = document.getElementById('tick-seq-' + cardKey);
+  if (!el) return;
+  el.innerHTML = dirs.map(d => {
+    if (d === 'up') return '<span class="tick-arrow tick-up">\u25B2</span>';
+    if (d === 'down') return '<span class="tick-arrow tick-down">\u25BC</span>';
+    return '<span class="tick-arrow tick-flat">\u2022</span>';
+  }).join('');
+}
+
+/* ??Particle spark burst on ±3% change */
+function _spawnParticles(canvas, isUp) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width = canvas.offsetWidth || 200;
+  const h = canvas.height = canvas.offsetHeight || 80;
+  const color = isUp ? [5, 150, 105] : [220, 38, 38];
+  const particles = [];
+  for (let i = 0; i < 18; i++) {
+    particles.push({
+      x: w * 0.5 + (Math.random() - 0.5) * w * 0.6,
+      y: h * 0.5 + (Math.random() - 0.5) * h * 0.4,
+      vx: (Math.random() - 0.5) * 3,
+      vy: (Math.random() - 0.5) * 3,
+      r: Math.random() * 2.5 + 0.5,
+      life: 1
+    });
+  }
+  let frame = 0;
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    let alive = false;
+    particles.forEach(p => {
+      if (p.life <= 0) return;
+      alive = true;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.025;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${p.life * 0.7})`;
+      ctx.fill();
+    });
+    if (alive && frame++ < 60) requestAnimationFrame(animate);
+    else ctx.clearRect(0, 0, w, h);
+  }
+  animate();
+}
+
+/* ??Glass / Dark theme toggle */
+function _initThemeToggle() {
+  const btn = document.getElementById('price-theme-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const section = document.getElementById('prices-section');
+    if (!section) return;
+    const isGlass = section.classList.toggle('price-glass-mode');
+    btn.classList.toggle('glass-active', isGlass);
+  });
+}
+
+/* ??Clone marquee inner content for seamless infinite scroll */
+function _cloneMarqueeForSeamless() {
+  const marquee = document.querySelector('.price-marquee-inner');
+  if (!marquee || marquee.dataset.cloned) return;
+  const clone = marquee.cloneNode(true);
+  clone.setAttribute('aria-hidden', 'true');
+  marquee.parentElement.appendChild(clone);
+  marquee.dataset.cloned = '1';
+}
+
+// Fetch macro/FX from backend + update crypto prices as fallback
 async function fetchRealtimePrices() {
   try {
     const data = await apiFetch('/api/market', { silent: true });
     const market = data.market;
     if (!market) return;
 
-    const allKeys = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
-    allKeys.forEach(key => {
+    _allPriceKeys.forEach(key => {
       if (!market[key]) return;
       const item = market[key];
-      const cardKey = key.replace('/', '');
       const prev = _livePrices[key];
 
       // For crypto: skip if WS already provided a recent update (within 15s)
-      const isCrypto = ['BTC', 'ETH', 'SOL'].includes(key);
+      const isCrypto = _cryptoKeys.includes(key);
       if (isCrypto && prev && prev._wsTime && (Date.now() - prev._wsTime < 15000)) return;
 
       _livePrices[key] = {
         price: item.price,
         change: item.change,
         prevPrice: prev ? prev.price : item.price,
-        high: prev ? prev.high : 0,
-        low: prev ? prev.low : 0,
-        vol: prev ? prev.vol : 0,
-        _wsTime: prev ? prev._wsTime : 0
+        high: item.high || (prev ? prev.high : 0),
+        low: item.low || (prev ? prev.low : 0),
+        vol: item.vol || (prev ? prev.vol : 0),
+        mcap: item.mcap || (prev ? prev.mcap : 0),
+        _wsTime: prev ? prev._wsTime : 0,
+        _source: 'rest'
       };
 
-      const card = document.getElementById(`price-card-${cardKey}`);
-      if (!card) return;
-      const valEl = card.querySelector('.price-value');
-      const chgEl = card.querySelector('.price-change');
-      const timeEl = card.querySelector('.price-time');
-      if (!valEl) return;
-
-      // Direction flash
-      const dir = prev && item.price > prev.price ? 'up' : prev && item.price < prev.price ? 'down' : null;
-
-      const isFx = key.startsWith('USD/');
-      const decimals = isCrypto ? (item.price >= 100 ? 2 : item.price >= 1 ? 4 : 6) : 2;
-      const prefix = isFx ? '' : '$';
-      valEl.textContent = prefix + Number(item.price).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-
-      if (dir) {
-        card.classList.remove('price-flash-up', 'price-flash-down');
-        void card.offsetWidth;
-        card.classList.add(dir === 'up' ? 'price-flash-up' : 'price-flash-down');
-        valEl.style.color = dir === 'up' ? 'var(--neon-green)' : 'var(--neon-red)';
-        setTimeout(() => { valEl.style.color = ''; }, 1200);
-      }
-
-      if (chgEl) {
-        const sign = item.change >= 0 ? '+' : '';
-        chgEl.textContent = `${sign}${item.change}%`;
-        chgEl.className = `price-change ${item.change >= 0 ? 'up' : 'down'}`;
-      }
-      if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
-
-      // Update mini sparkline for this key too
-      updateMiniChart(key, item.price, item.change);
+      renderPriceCard(key);
     });
+
+    _updatePriceSummary();
   } catch (e) {
     console.error('Realtime Price Error:', e);
   }
 }
 
-/* ═══════════════════════════════════════
-   Live Wire — News Feed (Upgraded v3)
-   ═══════════════════════════════════════ */
+/* ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??
+   Live Wire ??News Feed (Upgraded v3)
+   ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═??*/
 let _newsCache = [];           // full article list from last fetch
 let _newsFilter = 'all';      // active source filter
 let _prevNewsLinks = new Set();// track known titles for flash effect
@@ -1444,11 +2058,11 @@ function _updateBreakingBanner(articles) {
     if (breaking.sentiment === 'BULLISH') {
       banner.style.background = 'linear-gradient(90deg, rgba(5,150,105,0.12), rgba(5,150,105,0.04))';
       banner.style.borderColor = 'rgba(5,150,105,0.3)';
-      if (badge) { badge.style.background = '#059669'; badge.textContent = '🟢 BULLISH'; }
+      if (badge) { badge.style.background = '#059669'; badge.textContent = '?�� BULLISH'; }
     } else {
       banner.style.background = 'linear-gradient(90deg, rgba(220,38,38,0.12), rgba(220,38,38,0.04))';
       banner.style.borderColor = 'rgba(220,38,38,0.3)';
-      if (badge) { badge.style.background = '#dc2626'; badge.textContent = '🔴 BEARISH'; }
+      if (badge) { badge.style.background = '#dc2626'; badge.textContent = '?�� BEARISH'; }
     }
     link.href = safeUrl(breaking.link);
     link.textContent = breaking.title;
@@ -1560,13 +2174,13 @@ function _updateNewsCount(count) {
   if (el) el.textContent = count;
 }
 
-/* ── Auto Skeleton→Data Fade-in via MutationObserver ── */
+/* ?�?� Auto Skeleton?�Data Fade-in via MutationObserver ?�?� */
 (function initSkeletonFadeObserver() {
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
       for (const removed of m.removedNodes) {
         if (removed.nodeType === 1 && removed.classList && removed.classList.contains('skeleton-loader')) {
-          // Skeleton was removed — apply fade-in to parent
+          // Skeleton was removed ??apply fade-in to parent
           const parent = m.target;
           if (parent && parent.nodeType === 1) {
             parent.classList.add('data-loaded');

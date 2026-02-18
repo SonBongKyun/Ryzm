@@ -1,10 +1,10 @@
-﻿/* ?????????????????????????????????????????????
+/* ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
    Ryzm Terminal ??Service Worker v4.7
-   ????????????????????????????????????????????? */
-const CACHE_NAME = 'ryzm-v5.5';
-const API_CACHE_NAME = 'ryzm-api-v5.5';
+   ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?� */
+const CACHE_NAME = 'ryzm-v7.0';
+const API_CACHE_NAME = 'ryzm-api-v7.0';
 
-// ?? Precache: actual files loaded by index.html ??
+// ?�?� Precache: actual files loaded by index.html ?�?�
 // No ?v= suffix ??SW uses ignoreSearch for cache matching
 // NOTE: '/' is NOT in precache ??HTML is always network-first
 const STATIC_ASSETS = [
@@ -15,10 +15,11 @@ const STATIC_ASSETS = [
   '/static/js/data.js',
   '/static/js/council.js',
   '/static/js/ui.js',
+  '/static/js/portfolio.js',
   '/manifest.json'
 ];
 
-// ?? API caching whitelist + TTL (ms) ??
+// ?�?� API caching whitelist + TTL (ms) ?�?�
 // User-specific / auth endpoints are NEVER cached.
 const API_CACHE_RULES = {
   '/api/market':          5 * 60_000,
@@ -47,10 +48,12 @@ const API_CACHE_RULES = {
 const API_NEVER_CACHE = [
   '/api/me', '/api/layout', '/api/alerts', '/api/council',
   '/api/validate', '/api/chat', '/api/auth/', '/api/payments/',
-  '/api/export/', '/api/journal', '/api/risk-gauge/simulate'
+  '/api/export/', '/api/journal', '/api/risk-gauge/simulate',
+  '/api/portfolio', '/api/council/accuracy', '/api/onboarding',
+  '/api/events'
 ];
 
-// ?? Install: precache static assets ??
+// ?�?� Install: precache static assets ?�?�
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
@@ -58,7 +61,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// ?? Activate: purge old caches ??
+// ?�?� Activate: purge old caches ?�?�
 self.addEventListener('activate', event => {
   const keep = new Set([CACHE_NAME, API_CACHE_NAME]);
   event.waitUntil(
@@ -69,13 +72,13 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// ?? Fetch handler ??
+// ?�?� Fetch handler ?�?�
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;         // skip external
   if (event.request.method !== 'GET') return;              // skip mutations
 
-  // ? API routes ?
+  // ?� API routes ?�
   if (url.pathname.startsWith('/api/')) {
     // Block caching for user-specific endpoints
     if (API_NEVER_CACHE.some(p => url.pathname.startsWith(p))) {
@@ -130,7 +133,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ? HTML navigation: always network-first (so template changes apply immediately) ?
+  // ?� HTML navigation: always network-first (so template changes apply immediately) ?�
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() =>
@@ -140,7 +143,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ? Static assets: network-first, cache fallback for offline ?
+  // ?� Static assets: network-first, cache fallback for offline ?�
   // (ignoreSearch only used as offline fallback so ?v= busting always works)
   event.respondWith(
     fetch(event.request).then(resp => {

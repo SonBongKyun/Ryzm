@@ -108,12 +108,15 @@ def fetch_market_data():
     """
     result = {}
 
-    # ── Crypto: Binance REST API (fast, no rate limit) ──
-    binance_map = {"BTCUSDT": "BTC", "ETHUSDT": "ETH", "SOLUSDT": "SOL"}
+    # ── Crypto: Binance REST API (fast, no rate limit) ── 3 coins
+    binance_map = {
+        "BTCUSDT": "BTC", "ETHUSDT": "ETH", "SOLUSDT": "SOL"
+    }
+    binance_symbols = list(binance_map.keys())
+    symbols_param = "%5B" + "%2C".join(f"%22{s}%22" for s in binance_symbols) + "%5D"
     try:
         resp = resilient_get(
-            "https://api.binance.com/api/v3/ticker/24hr?symbols=" +
-            "%5B%22BTCUSDT%22%2C%22ETHUSDT%22%2C%22SOLUSDT%22%5D",
+            "https://api.binance.com/api/v3/ticker/24hr?symbols=" + symbols_param,
             timeout=8
         )
         if resp.status_code == 200:
@@ -124,27 +127,42 @@ def fetch_market_data():
                     continue
                 price = float(t.get("lastPrice", 0))
                 change = float(t.get("priceChangePercent", 0))
-                result[name] = {"price": round(price, 2), "change": round(change, 2), "symbol": name}
+                high = float(t.get("highPrice", 0))
+                low = float(t.get("lowPrice", 0))
+                vol = float(t.get("volume", 0))
+                result[name] = {
+                    "price": round(price, 6 if price < 1 else 2),
+                    "change": round(change, 2),
+                    "high": round(high, 6 if high < 1 else 2),
+                    "low": round(low, 6 if low < 1 else 2),
+                    "vol": round(vol, 0),
+                    "symbol": name
+                }
             logger.debug(f"[Market] Binance REST: {list(result.keys())}")
         else:
             raise Exception(f"Binance status {resp.status_code}")
     except Exception as e:
         logger.warning(f"[Market] Binance REST failed ({e}), trying CoinGecko...")
         # Fallback: CoinGecko
-        coingecko_map = {"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}
+        coingecko_map = {
+            "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"
+        }
         for name, coin_id in coingecko_map.items():
             if name not in result:
                 price, change = fetch_coingecko_price(coin_id)
                 if price:
-                    result[name] = {"price": round(price, 2), "change": round(change, 2), "symbol": name}
+                    result[name] = {"price": round(price, 6 if price < 1 else 2), "change": round(change, 2), "symbol": name}
                 else:
                     result[name] = {"price": 0, "change": 0, "symbol": name}
 
     # Ensure all crypto keys exist
-    for name in ["BTC", "ETH", "SOL"]:
+    crypto_cg_map = {
+        "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"
+    }
+    for name, coin_id in crypto_cg_map.items():
         if name not in result:
-            price, change = fetch_coingecko_price({"BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana"}[name])
-            result[name] = {"price": round(price or 0, 2), "change": round(change or 0, 2), "symbol": name}
+            price, change = fetch_coingecko_price(coin_id)
+            result[name] = {"price": round(price or 0, 6 if (price or 0) < 1 else 2), "change": round(change or 0, 2), "symbol": name}
 
     forex = fetch_forex_rates()
     if forex['JPY'] > 0:
