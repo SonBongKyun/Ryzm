@@ -141,13 +141,15 @@ def get_briefing():
 @router.get("/api/briefing/history")
 def get_briefing_history(days: int = 7):
     try:
+        from datetime import datetime, timezone, timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute(
                 """SELECT id, title, content, created_at_utc
                    FROM briefings
-                   WHERE datetime(created_at_utc) >= datetime('now', ?)
+                   WHERE created_at_utc >= ?
                    ORDER BY id DESC""",
-                (f"-{days} days",)
+                (cutoff,)
             )
             rows = [dict(r) for r in c.fetchall()]
         return {"status": "ok", "briefings": rows, "days": days}

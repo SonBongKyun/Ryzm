@@ -153,7 +153,8 @@ def compute_risk_gauge():
     # 3) Long/Short Ratio (weight: deviation * -0.6)
     ls = cache["long_short_ratio"].get("data", {})
     if ls and ls.get("longAccount"):
-        long_pct = ls["longAccount"] * 100
+        raw_long = ls["longAccount"]
+        long_pct = raw_long * 100 if raw_long <= 1 else raw_long
         ls_deviation = abs(long_pct - 50)
         ls_contrib = -ls_deviation * 0.6
         components["long_short"] = {"value": round(long_pct, 1), "contrib": round(ls_contrib, 1)}

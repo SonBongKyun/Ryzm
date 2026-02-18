@@ -223,6 +223,15 @@ function setupEventListeners() {
 
   // Start auto bar on init
   startAutoBar();
+
+  // Load auto-council cache to show initial state
+  apiFetch('/api/council/auto', { silent: true })
+    .then(data => {
+      if (data && data.vibe && data.vibe.status !== 'OFFLINE' && data.vibe.status !== 'STANDBY') {
+        renderCouncil(data);
+      }
+    })
+    .catch(() => {});
 }
 
 /* ?�═??renderCouncil ?�═??*/

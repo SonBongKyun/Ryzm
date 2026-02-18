@@ -37,6 +37,7 @@ from app.services.analysis_service import (
     fetch_regime_data, fetch_correlation_matrix, compute_risk_gauge,
 )
 from app.services.ai_service import generate_council_debate
+from app.services.briefing_service import _build_briefing_text
 
 
 # ── Module-level state ──
@@ -335,6 +336,17 @@ def refresh_cache():
                     logger.warning(f"[Alert] CRITICAL risk alert sent (score={risk['score']})")
         except Exception:
             pass
+
+        # Briefing cache (populate on first loop and every hour)
+        try:
+            last_briefing = cache["latest_briefing"]
+            if not last_briefing.get("title"):
+                text = _build_briefing_text()
+                title = f"Daily Briefing — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                cache["latest_briefing"] = {"title": title, "content": text, "time": datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}
+                logger.info("[Briefing] Initial briefing cached")
+        except Exception as e:
+            logger.error(f"[Briefing] Cache error: {e}")
 
         # BTC price snapshot (every 1 min)
         try:

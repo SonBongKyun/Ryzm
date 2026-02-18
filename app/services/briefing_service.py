@@ -66,13 +66,29 @@ def _build_briefing_text() -> str:
 
 
 def send_daily_briefing():
-    """Generate and send daily market briefing to Discord."""
+    """Generate and send daily market briefing to Discord + cache + DB."""
+    text = _build_briefing_text()
+    title = f"Daily Briefing — {datetime.now(KST).strftime('%Y-%m-%d')}"
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    # Always populate cache for /api/briefing
+    cache["latest_briefing"] = {"title": title, "content": text, "time": now_str}
+
+    # Also store in DB for history
+    try:
+        from app.core.database import db_session
+        import sqlite3
+        with db_session() as (conn, c):
+            c.execute("INSERT INTO briefings (title, content, created_at_utc) VALUES (?, ?, ?)",
+                      (title, text, now_str))
+    except Exception as db_err:
+        logger.warning(f"[Briefing] DB save failed: {db_err}")
+
     if not DISCORD_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_WEBHOOK_URL.upper():
-        logger.warning("[Briefing] Discord webhook not configured — skipping briefing.")
+        logger.info("[Briefing] Briefing cached (Discord webhook not configured).")
         return
 
     try:
-        text = _build_briefing_text()
         payload = {
             "username": "Ryzm Daily Briefing",
             "avatar_url": "https://i.imgur.com/8QZ7r7s.png",

@@ -27,15 +27,15 @@ def fetch_long_short_ratio():
                     "timestamp": latest["timestamp"]
                 }
             else:
-                result[coin] = {"longAccount": 50.0, "shortAccount": 50.0, "ratio": 1.0}
+                result[coin] = {"longAccount": 0.50, "shortAccount": 0.50, "ratio": 1.0}
         except Exception as e:
             logger.error(f"[LS Ratio] {coin} Error: {e}")
-            result[coin] = {"longAccount": 50.0, "shortAccount": 50.0, "ratio": 1.0}
+            result[coin] = {"longAccount": 0.50, "shortAccount": 0.50, "ratio": 1.0}
     # Keep backward-compat top-level fields from BTC
     btc = result.get("BTC", {})
     return {
-        "longAccount": btc.get("longAccount", 50.0),
-        "shortAccount": btc.get("shortAccount", 50.0),
+        "longAccount": btc.get("longAccount", 0.50),
+        "shortAccount": btc.get("shortAccount", 0.50),
         "ratio": btc.get("ratio", 1.0),
         "timestamp": btc.get("timestamp"),
         "coins": result

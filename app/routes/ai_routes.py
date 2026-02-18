@@ -135,6 +135,21 @@ async def get_council(request: Request, response: Response):
         raise HTTPException(status_code=500, detail="Failed to generate council analysis")
 
 
+@router.get("/api/council/auto")
+async def get_auto_council():
+    """Return the latest auto-council result from cache (no Gemini call)."""
+    data = cache.get("auto_council", {}).get("data", {})
+    if data and data.get("vibe", {}).get("status") != "OFFLINE":
+        return data
+    return {
+        "vibe": {"status": "STANDBY", "color": "#555", "message": "Auto-analysis warming up... Click RUN for instant analysis."},
+        "narratives": [], "strategies": [], "agents": [],
+        "consensus_score": 50, "strategic_narrative": [],
+        "edge": {"value": 0.0, "bias": "Neutral", "agreement": 0, "bulls": 0, "bears": 0},
+        "prediction": "NEUTRAL", "confidence": "LOW",
+    }
+
+
 @router.get("/api/council/history")
 async def get_council_history_api(limit: int = 50):
     """Retrieve AI Council prediction history & accuracy stats."""
