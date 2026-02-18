@@ -56,3 +56,6 @@ services:
       # ── 선택: Sentry 에러 트래킹 ──
       - key: SENTRY_DSN
         sync: false
+      # ── 필수: 외부 PostgreSQL (Neon 등) ──
+      - key: DATABASE_URL
+        sync: false

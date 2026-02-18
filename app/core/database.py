@@ -1,6 +1,7 @@
 """
-Ryzm Terminal — Database Layer (SQLite)
+Ryzm Terminal — Database Layer (SQLite / PostgreSQL)
 Connection management, schema init, all CRUD operations.
+Supports SQLite (local dev) and PostgreSQL (production) via DATABASE_URL.
 """
 import os
 import json
@@ -14,14 +15,73 @@ from app.core.config import PROJECT_ROOT, RISK_SAVE_INTERVAL
 from app.core.logger import logger
 from app.core.http_client import resilient_get
 
-# ── Database Path (project root) ──
+# ── PostgreSQL support via DATABASE_URL ──
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+USE_PG = bool(DATABASE_URL)
+
+if USE_PG:
+    import psycopg2
+    import psycopg2.extras
+    logger.info("[DB] PostgreSQL mode (DATABASE_URL detected)")
+else:
+    logger.info("[DB] SQLite mode (local development)")
+
+# ── Database Path (SQLite only) ──
 DB_PATH = str(PROJECT_ROOT / "council_history.db")
 
 _db_lock = threading.Lock()
 
 
+class _AutoCursor:
+    """Wraps DB cursor to auto-convert SQLite ? placeholders to PostgreSQL %s."""
+    __slots__ = ('_c',)
+
+    def __init__(self, cursor):
+        self._c = cursor
+
+    def execute(self, sql, params=None):
+        if USE_PG:
+            sql = sql.replace("?", "%s")
+            sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        return self._c.execute(sql, params) if params is not None else self._c.execute(sql)
+
+    def fetchone(self):
+        return self._c.fetchone()
+
+    def fetchall(self):
+        return self._c.fetchall()
+
+    @property
+    def lastrowid(self):
+        return self._c.lastrowid
+
+    @property
+    def rowcount(self):
+        return self._c.rowcount
+
+    def close(self):
+        return self._c.close()
+
+    def __iter__(self):
+        return iter(self._c)
+
+
+def _migrate_col(cursor, table, col_name, col_def):
+    """Add column to table if not exists (handles both SQLite and PG)."""
+    if USE_PG:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_def}")
+    else:
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def db_connect():
-    """Create a SQLite connection with WAL mode for better concurrency."""
+    """Create a database connection (PostgreSQL or SQLite)."""
+    if USE_PG:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
@@ -43,15 +103,24 @@ class db_session:
     def __enter__(self):
         _db_lock.acquire()
         self._conn = db_connect()
-        if self._row_factory:
-            self._conn.row_factory = self._row_factory
-        self._cursor = self._conn.cursor()
+        if USE_PG:
+            if self._row_factory:
+                raw_cursor = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            else:
+                raw_cursor = self._conn.cursor()
+        else:
+            if self._row_factory:
+                self._conn.row_factory = self._row_factory
+            raw_cursor = self._conn.cursor()
+        self._cursor = _AutoCursor(raw_cursor)
         return self._conn, self._cursor
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type is None:
                 self._conn.commit()
+            elif USE_PG:
+                self._conn.rollback()
             self._conn.close()
         finally:
             _db_lock.release()
@@ -236,29 +305,23 @@ def init_council_db():
                 )
             """)
             # Migration: add trial columns to users
-            for col_def in [
+            for col_name, col_def in [
                 ("trial_used", "INTEGER DEFAULT 0"),
                 ("trial_started_at", "TEXT DEFAULT NULL"),
                 ("onboarding_step", "INTEGER DEFAULT 0"),
             ]:
-                try:
-                    c.execute(f"ALTER TABLE users ADD COLUMN {col_def[0]} {col_def[1]}")
-                except sqlite3.OperationalError:
-                    pass
+                _migrate_col(c, "users", col_name, col_def)
             # Migration: add new columns to existing users table if missing
-            for col_def in [
+            for col_name, col_def in [
                 ("email_verified", "INTEGER DEFAULT 0"),
                 ("email_verify_token", "TEXT DEFAULT NULL"),
                 ("password_reset_token", "TEXT DEFAULT NULL"),
                 ("reset_token_expires", "TEXT DEFAULT NULL"),
                 ("tos_accepted_at", "TEXT DEFAULT NULL"),
             ]:
-                try:
-                    c.execute(f"ALTER TABLE users ADD COLUMN {col_def[0]} {col_def[1]}")
-                except sqlite3.OperationalError:
-                    pass
+                _migrate_col(c, "users", col_name, col_def)
             # Migration: add new columns to existing council_history if missing
-            for col_def in [
+            for col_name, col_def in [
                 ("timestamp_ms", "INTEGER DEFAULT 0"),
                 ("horizon_min", "INTEGER DEFAULT 60"),
                 ("return_pct", "REAL DEFAULT NULL"),
@@ -267,19 +330,13 @@ def init_council_db():
                 ("prediction", "TEXT DEFAULT 'NEUTRAL'"),
                 ("confidence", "TEXT DEFAULT 'LOW'"),
             ]:
-                try:
-                    c.execute(f"ALTER TABLE council_history ADD COLUMN {col_def[0]} {col_def[1]}")
-                except sqlite3.OperationalError:
-                    pass
+                _migrate_col(c, "council_history", col_name, col_def)
             # Migration: add OI + Stablecoin columns to risk_history
-            for col_def in [
+            for col_name, col_def in [
                 ("oi", "REAL DEFAULT 0"),
                 ("sc", "REAL DEFAULT 0"),
             ]:
-                try:
-                    c.execute(f"ALTER TABLE risk_history ADD COLUMN {col_def[0]} {col_def[1]}")
-                except sqlite3.OperationalError:
-                    pass
+                _migrate_col(c, "risk_history", col_name, col_def)
         logger.info("[DB] Council + Risk + PriceSnapshot + Eval + Briefings + Usage + Auth database initialized")
     except Exception as e:
         logger.error(f"[DB] Failed to initialize database: {e}")
@@ -293,11 +350,14 @@ def create_user(email: str, password_hash: str, display_name: str = "", uid: str
     """Create a new user. Returns user_id or None on failure."""
     try:
         with db_session() as (conn, c):
-            c.execute(
-                "INSERT INTO users (email, password_hash, display_name, uid, tier, created_at_utc) VALUES (?, ?, ?, ?, 'free', ?)",
-                (email, password_hash, display_name, uid, utc_now_str())
-            )
-            user_id = c.lastrowid
+            sql = "INSERT INTO users (email, password_hash, display_name, uid, tier, created_at_utc) VALUES (?, ?, ?, ?, 'free', ?)"
+            params = (email, password_hash, display_name, uid, utc_now_str())
+            if USE_PG:
+                c.execute(sql + " RETURNING id", params)
+                user_id = c.fetchone()[0]
+            else:
+                c.execute(sql, params)
+                user_id = c.lastrowid
         return user_id
     except Exception as e:
         logger.error(f"[DB] Create user error: {e}")
@@ -406,10 +466,16 @@ def create_subscription(user_id: int, stripe_sub_id: str, plan: str, period_end:
     """Record a new subscription."""
     try:
         with db_session() as (conn, c):
-            c.execute(
-                "INSERT OR REPLACE INTO subscriptions (user_id, stripe_subscription_id, plan, status, current_period_end, created_at_utc) VALUES (?, ?, ?, 'active', ?, ?)",
-                (user_id, stripe_sub_id, plan, period_end, utc_now_str())
-            )
+            if USE_PG:
+                c.execute(
+                    "INSERT INTO subscriptions (user_id, stripe_subscription_id, plan, status, current_period_end, created_at_utc) VALUES (?, ?, ?, 'active', ?, ?) ON CONFLICT (stripe_subscription_id) DO UPDATE SET user_id=EXCLUDED.user_id, plan=EXCLUDED.plan, status='active', current_period_end=EXCLUDED.current_period_end",
+                    (user_id, stripe_sub_id, plan, period_end, utc_now_str())
+                )
+            else:
+                c.execute(
+                    "INSERT OR REPLACE INTO subscriptions (user_id, stripe_subscription_id, plan, status, current_period_end, created_at_utc) VALUES (?, ?, ?, 'active', ?, ?)",
+                    (user_id, stripe_sub_id, plan, period_end, utc_now_str())
+                )
     except Exception as e:
         logger.error(f"[DB] Create subscription error: {e}")
 
@@ -469,15 +535,18 @@ def create_journal_entry(user_id: int, council_id: int, snapshot_json: str,
     """Create a signal journal entry. Returns entry ID or None."""
     try:
         with db_session() as (conn, c):
-            c.execute(
-                """INSERT INTO signal_journal
+            sql = """INSERT INTO signal_journal
                    (user_id, council_id, snapshot_json, position_type, entry_price,
                     stop_loss, take_profit, user_note, tags, created_at_utc)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (user_id, council_id, snapshot_json, position_type, entry_price,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            params = (user_id, council_id, snapshot_json, position_type, entry_price,
                  stop_loss, take_profit, user_note, tags, utc_now_str())
-            )
-            entry_id = c.lastrowid
+            if USE_PG:
+                c.execute(sql + " RETURNING id", params)
+                entry_id = c.fetchone()[0]
+            else:
+                c.execute(sql, params)
+                entry_id = c.lastrowid
         logger.info(f"[Journal] Entry #{entry_id} created for user {user_id}")
         return entry_id
     except Exception as e:
@@ -719,13 +788,14 @@ def save_risk_record(score, level, components):
 def get_risk_history(days: int = 30) -> List[dict]:
     """Retrieve risk history for the last N days."""
     try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute("""
                 SELECT timestamp, score, level, fg, vix, ls, fr, kp, oi, sc
                 FROM risk_history
-                WHERE datetime(timestamp) > datetime('now', ?)
+                WHERE timestamp > ?
                 ORDER BY timestamp ASC
-            """, (f'-{days} days',))
+            """, (cutoff,))
             rows = [dict(r) for r in c.fetchall()]
         return rows
     except Exception as e:
@@ -745,11 +815,12 @@ def get_risk_component_changes() -> dict:
                 return changes
             latest = dict(latest)
             for period_key, hours in [("1h", 1), ("4h", 4), ("24h", 24)]:
+                cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
                 c.execute("""
                     SELECT fg, vix, ls, fr, kp, oi, sc FROM risk_history
-                    WHERE datetime(timestamp) <= datetime('now', ?)
+                    WHERE timestamp <= ?
                     ORDER BY timestamp DESC LIMIT 1
-                """, (f'-{hours} hours',))
+                """, (cutoff,))
                 row = c.fetchone()
                 if row:
                     row = dict(row)
@@ -767,12 +838,13 @@ def get_component_sparklines(days: int = 7) -> dict:
     """Get component-level history for sparklines."""
     result = {"fg": [], "vix": [], "ls": [], "fr": [], "kp": [], "oi": [], "sc": []}
     try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute("""
                 SELECT timestamp, fg, vix, ls, fr, kp, oi, sc FROM risk_history
-                WHERE datetime(timestamp) > datetime('now', ?)
+                WHERE timestamp > ?
                 ORDER BY timestamp ASC
-            """, (f'-{days} days',))
+            """, (cutoff,))
             for row in c.fetchall():
                 r = dict(row)
                 for k in result:
@@ -928,10 +1000,16 @@ def store_price_snapshot(symbol: str = "BTC", source: str = "binance") -> None:
     ts = utc_now_str()
     try:
         with db_session() as (conn, c):
-            c.execute(
-                "INSERT OR IGNORE INTO price_snapshots (ts_utc, symbol, price, source) VALUES (?, ?, ?, ?)",
-                (ts, symbol, price, source),
-            )
+            if USE_PG:
+                c.execute(
+                    "INSERT INTO price_snapshots (ts_utc, symbol, price, source) VALUES (?, ?, ?, ?) ON CONFLICT (ts_utc, symbol) DO NOTHING",
+                    (ts, symbol, price, source),
+                )
+            else:
+                c.execute(
+                    "INSERT OR IGNORE INTO price_snapshots (ts_utc, symbol, price, source) VALUES (?, ?, ?, ?)",
+                    (ts, symbol, price, source),
+                )
     except Exception as e:
         logger.error(f"[DB] Failed to store price snapshot: {e}")
 
@@ -941,22 +1019,25 @@ def find_price_near(symbol: str, target_dt_utc: datetime, window_min: int = 10) 
     try:
         start = (target_dt_utc - timedelta(minutes=window_min)).strftime("%Y-%m-%d %H:%M:%S")
         end = (target_dt_utc + timedelta(minutes=window_min)).strftime("%Y-%m-%d %H:%M:%S")
-        target = target_dt_utc.strftime("%Y-%m-%d %H:%M:%S")
         with db_session(row_factory=sqlite3.Row) as (conn, c):
+            # Fetch all candidates in window, sort by proximity in Python
             c.execute(
                 """
                 SELECT price, ts_utc
                 FROM price_snapshots
                 WHERE symbol = ? AND ts_utc BETWEEN ? AND ?
-                ORDER BY ABS(strftime('%s', ts_utc) - strftime('%s', ?)) ASC
-                LIMIT 1
                 """,
-                (symbol, start, end, target)
+                (symbol, start, end)
             )
-            row = c.fetchone()
-        if not row:
+            rows = c.fetchall()
+        if not rows:
             return None
-        return float(row["price"])
+        # Find closest to target
+        target_epoch = target_dt_utc.timestamp()
+        best = min(rows, key=lambda r: abs(
+            datetime.strptime(r["ts_utc"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp() - target_epoch
+        ))
+        return float(best["price"])
     except Exception as e:
         logger.error(f"[DB] find_price_near error: {e}")
         return None
@@ -966,6 +1047,7 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
     """Evaluate past council predictions using price_snapshots."""
     try:
         for h in horizons_min:
+            cutoff = (datetime.now(timezone.utc) - timedelta(minutes=h)).strftime("%Y-%m-%d %H:%M:%S")
             with db_session(row_factory=sqlite3.Row) as (conn, c):
                 c.execute("""
                     SELECT h.id, h.timestamp, h.consensus_score, h.btc_price,
@@ -976,10 +1058,10 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                       ON e.council_id = h.id AND e.horizon_min = ?
                     WHERE e.council_id IS NULL
                       AND h.btc_price > 0
-                      AND datetime(h.timestamp) < datetime('now', ? || ' minutes')
+                      AND h.timestamp < ?
                     ORDER BY h.id ASC
                     LIMIT 50
-                """, (h, f'-{h}'))
+                """, (h, cutoff))
                 rows = [dict(r) for r in c.fetchall()]
 
             if not rows:
@@ -1006,14 +1088,26 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                     hit = 1 if (predicted_bull == actual_bull) else 0
 
                 with db_session() as (conn, c):
-                    c.execute(
-                        """
-                        INSERT OR REPLACE INTO council_eval
-                          (council_id, horizon_min, price_after, hit, evaluated_at_utc)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
-                    )
+                    if USE_PG:
+                        c.execute(
+                            """
+                            INSERT INTO council_eval
+                              (council_id, horizon_min, price_after, hit, evaluated_at_utc)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT (council_id, horizon_min) DO UPDATE SET
+                              price_after=EXCLUDED.price_after, hit=EXCLUDED.hit, evaluated_at_utc=EXCLUDED.evaluated_at_utc
+                            """,
+                            (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
+                        )
+                    else:
+                        c.execute(
+                            """
+                            INSERT OR REPLACE INTO council_eval
+                              (council_id, horizon_min, price_after, hit, evaluated_at_utc)
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
+                        )
                     if h == min(horizons_min):
                         c.execute(
                             """
@@ -1037,10 +1131,11 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
 def count_usage_today(uid: str, endpoint: str) -> int:
     """Count how many times this UID used this endpoint today."""
     try:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         with db_session() as (conn, c):
             c.execute(
-                "SELECT COUNT(*) FROM ai_usage WHERE uid = ? AND endpoint = ? AND date(used_at_utc) = date('now')",
-                (uid, endpoint)
+                "SELECT COUNT(*) FROM ai_usage WHERE uid = ? AND endpoint = ? AND substr(used_at_utc, 1, 10) = ?",
+                (uid, endpoint, today)
             )
             count = c.fetchone()[0]
         return count
@@ -1099,6 +1194,9 @@ def admin_get_users(search: str = "", page: int = 1, per_page: int = 20) -> dict
 def admin_get_stats() -> dict:
     """Aggregate dashboard statistics for admin."""
     stats = {}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    cutoff_7d = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+    cutoff_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
     try:
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             # Total users
@@ -1113,24 +1211,24 @@ def admin_get_stats() -> dict:
             c.execute("SELECT COUNT(*) FROM users WHERE email_verified = 1")
             stats["verified_users"] = c.fetchone()[0]
             # Registered today
-            c.execute("SELECT COUNT(*) FROM users WHERE date(created_at_utc) = date('now')")
+            c.execute("SELECT COUNT(*) FROM users WHERE substr(created_at_utc, 1, 10) = ?", (today,))
             stats["signups_today"] = c.fetchone()[0]
             # Active today (last_login_utc today)
-            c.execute("SELECT COUNT(*) FROM users WHERE date(last_login_utc) = date('now')")
+            c.execute("SELECT COUNT(*) FROM users WHERE substr(last_login_utc, 1, 10) = ?", (today,))
             stats["active_today"] = c.fetchone()[0]
             # Active last 7 days
-            c.execute("SELECT COUNT(*) FROM users WHERE datetime(last_login_utc) > datetime('now', '-7 days')")
+            c.execute("SELECT COUNT(*) FROM users WHERE last_login_utc > ?", (cutoff_7d,))
             stats["active_7d"] = c.fetchone()[0]
             # AI usage today
-            c.execute("SELECT endpoint, COUNT(*) AS cnt FROM ai_usage WHERE date(used_at_utc) = date('now') GROUP BY endpoint")
+            c.execute("SELECT endpoint, COUNT(*) AS cnt FROM ai_usage WHERE substr(used_at_utc, 1, 10) = ? GROUP BY endpoint", (today,))
             stats["usage_today"] = {r["endpoint"]: r["cnt"] for r in c.fetchall()}
             # AI usage last 7 days by day
             c.execute("""
-                SELECT date(used_at_utc) AS day, endpoint, COUNT(*) AS cnt
+                SELECT substr(used_at_utc, 1, 10) AS day, endpoint, COUNT(*) AS cnt
                 FROM ai_usage
-                WHERE datetime(used_at_utc) > datetime('now', '-7 days')
+                WHERE used_at_utc > ?
                 GROUP BY day, endpoint ORDER BY day
-            """)
+            """, (cutoff_7d,))
             daily = {}
             for r in c.fetchall():
                 d = r["day"]
@@ -1149,11 +1247,11 @@ def admin_get_stats() -> dict:
             stats["active_subscriptions"] = c.fetchone()[0]
             # Signup trend (last 14 days)
             c.execute("""
-                SELECT date(created_at_utc) AS day, COUNT(*) AS cnt
+                SELECT substr(created_at_utc, 1, 10) AS day, COUNT(*) AS cnt
                 FROM users
-                WHERE datetime(created_at_utc) > datetime('now', '-14 days')
+                WHERE created_at_utc > ?
                 GROUP BY day ORDER BY day
-            """)
+            """, (cutoff_14d,))
             stats["signup_trend"] = [{"day": r["day"], "count": r["cnt"]} for r in c.fetchall()]
     except Exception as e:
         logger.error(f"[Admin] Stats error: {e}")
@@ -1210,11 +1308,14 @@ def admin_create_announcement(title: str, content: str, level: str = "info") -> 
     """Create an admin announcement."""
     try:
         with db_session() as (conn, c):
-            c.execute(
-                "INSERT INTO announcements (title, content, level, active, created_at_utc) VALUES (?, ?, ?, 1, ?)",
-                (title, content, level, utc_now_str())
-            )
-            return c.lastrowid
+            sql = "INSERT INTO announcements (title, content, level, active, created_at_utc) VALUES (?, ?, ?, 1, ?)"
+            params = (title, content, level, utc_now_str())
+            if USE_PG:
+                c.execute(sql + " RETURNING id", params)
+                return c.fetchone()[0]
+            else:
+                c.execute(sql, params)
+                return c.lastrowid
     except Exception as e:
         logger.error(f"[Admin] Create announcement error: {e}")
         return None
