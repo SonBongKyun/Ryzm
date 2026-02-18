@@ -1642,7 +1642,11 @@
     try {
       _authUser = await apiFetch('/api/auth/profile', { silent: true });
       updateAuthUI(_authUser);
-    } catch { updateAuthUI(null); }
+    } catch {
+      // Clear stale token (DB may have been reset on deploy)
+      localStorage.removeItem('ryzm_token');
+      updateAuthUI(null);
+    }
   })();
   // Handle Stripe checkout return (payment=success / payment=canceled)
   (function handlePaymentReturn() {

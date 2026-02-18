@@ -133,7 +133,10 @@ def get_profile(request: Request):
         raise HTTPException(401, "Not authenticated")
     user = get_user_by_id(int(user_data["sub"]))
     if not user:
-        raise HTTPException(404, "User not found")
+        # Token valid but user gone (DB reset / deleted) → treat as unauthenticated
+        resp = JSONResponse(status_code=401, content={"detail": "Session expired"})
+        resp.delete_cookie("ryzm_token")
+        return resp
     is_admin = user["email"].lower() in ADMIN_EMAILS
     effective_tier = "pro" if is_admin else user["tier"]
     return {
