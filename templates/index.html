@@ -2013,6 +2013,7 @@
     // Ignore if typing in input/textarea
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
     if (e.ctrlKey || e.metaKey) return;
+    if (!e.key) return;
 
     const shortcuts = {
       '1': 'council-section',    // AI Council
