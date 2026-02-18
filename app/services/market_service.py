@@ -5,7 +5,7 @@ Crypto prices, forex, heatmap, fear/greed, kimchi premium, multi-timeframe.
 from typing import List
 
 from app.core.logger import logger
-from app.core.config import ENABLE_YAHOO
+from app.core.config import ENABLE_YAHOO, CG_HEADERS
 from app.core.http_client import resilient_get
 from app.core.cache import cache
 
@@ -39,7 +39,7 @@ def fetch_heatmap_data():
         url = ("https://api.coingecko.com/api/v3/coins/markets"
                "?vs_currency=usd&order=market_cap_desc&per_page=20&page=1"
                "&sparkline=false&price_change_percentage=1h_in_currency,24h,7d")
-        resp = resilient_get(url, timeout=10, headers={"Accept": "application/json"})
+        resp = resilient_get(url, timeout=10, headers=CG_HEADERS)
         resp.raise_for_status()
         coins = resp.json()
         for i, c in enumerate(coins, 1):
@@ -60,7 +60,7 @@ def fetch_heatmap_data():
     # BTC Dominance from /global
     try:
         g_resp = resilient_get("https://api.coingecko.com/api/v3/global", timeout=8,
-                               headers={"Accept": "application/json"})
+                               headers=CG_HEADERS)
         g_resp.raise_for_status()
         g_data = g_resp.json().get("data", {})
         result["btc_dominance"] = round(g_data.get("market_cap_percentage", {}).get("btc", 0), 1)

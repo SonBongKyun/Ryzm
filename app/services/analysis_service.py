@@ -4,8 +4,10 @@ Regime detector, correlation matrix, economic calendar, risk gauge.
 """
 from datetime import datetime, timedelta
 
+import time as _time
+
 from app.core.logger import logger
-from app.core.config import CORR_ASSETS, MUSEUM_OF_SCARS
+from app.core.config import CORR_ASSETS, MUSEUM_OF_SCARS, CG_HEADERS
 from app.core.http_client import resilient_get
 from app.core.cache import cache
 from app.core.database import save_risk_record, get_risk_component_changes, get_component_sparklines
@@ -16,7 +18,7 @@ def fetch_regime_data():
     """Regime Detector — BTC Dominance + USDT Dominance + Altcoin Season."""
     try:
         url = "https://api.coingecko.com/api/v3/global"
-        resp = resilient_get(url, timeout=10, headers={"Accept": "application/json"})
+        resp = resilient_get(url, timeout=10, headers=CG_HEADERS)
         resp.raise_for_status()
         data = resp.json().get("data", {})
         btc_dom = round(data.get("market_cap_percentage", {}).get("btc", 0), 1)
@@ -52,9 +54,11 @@ def fetch_correlation_matrix():
     """30-day correlation matrix: BTC, ETH, SOL, GOLD, NASDAQ."""
     prices = {}
     try:
-        for name, cg_id in [("BTC", "bitcoin"), ("ETH", "ethereum"), ("SOL", "solana")]:
+        for idx, (name, cg_id) in enumerate([("BTC", "bitcoin"), ("ETH", "ethereum"), ("SOL", "solana")]):
+            if idx > 0:
+                _time.sleep(1.5)  # CoinGecko free tier: ~10 req/min — space out calls
             url = f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart?vs_currency=usd&days=30&interval=daily"
-            resp = resilient_get(url, timeout=10, headers={"Accept": "application/json"})
+            resp = resilient_get(url, timeout=10, headers=CG_HEADERS)
             data = resp.json()
             prices[name] = [p[1] for p in data.get("prices", [])]
 

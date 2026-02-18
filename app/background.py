@@ -139,8 +139,15 @@ def refresh_cache():
     global _last_auto_council, _last_critical_alert
     logger.info("[Cache] Background refresh thread started")
 
+    _first_run = True  # Stagger first-run initialization to avoid 429 burst
+
     while True:
         now = time.time()
+
+        # On cold start, add initial delay to stagger API calls
+        if _first_run:
+            logger.info("[Cache] Cold start detected — staggering initial API calls")
+            _first_run = False
 
         try:
             if now - cache["news"]["updated"] > CACHE_TTL:
@@ -192,6 +199,7 @@ def refresh_cache():
 
         try:
             if now - cache["funding_rate"]["updated"] > RISK_CACHE_TTL:
+                time.sleep(1)  # Stagger fapi.binance.com calls to avoid 429
                 cache["funding_rate"]["data"] = fetch_funding_rate()
                 cache["funding_rate"]["updated"] = now
                 logger.info("[Cache] Funding Rate refreshed")
@@ -200,6 +208,7 @@ def refresh_cache():
 
         try:
             if now - cache["liquidations"]["updated"] > 120:
+                time.sleep(1)  # Stagger fapi.binance.com calls
                 cache["liquidations"]["data"] = fetch_whale_trades()
                 cache["liquidations"]["updated"] = now
                 logger.info(f"[Cache] Whale trades refreshed: {len(cache['liquidations']['data'])} trades")
@@ -224,6 +233,7 @@ def refresh_cache():
 
         try:
             if now - cache["onchain"]["updated"] > CACHE_TTL:
+                time.sleep(2)  # Stagger fapi.binance.com calls (onchain makes 9+ calls)
                 cache["onchain"]["data"] = fetch_onchain_data()
                 cache["onchain"]["updated"] = now
                 logger.info("[Cache] On-chain data refreshed")
@@ -269,6 +279,7 @@ def refresh_cache():
         # Regime Detector (every 5 mins)
         try:
             if now - cache["regime"]["updated"] > CACHE_TTL:
+                time.sleep(2)  # Stagger CoinGecko calls after heatmap
                 cache["regime"]["data"] = fetch_regime_data()
                 cache["regime"]["updated"] = now
                 logger.info(f"[Regime] {cache['regime']['data'].get('regime')}")
@@ -278,6 +289,7 @@ def refresh_cache():
         # Correlation Matrix (every 10 mins)
         try:
             if now - cache["correlation"]["updated"] > 600:
+                time.sleep(3)  # Stagger CoinGecko calls after regime
                 cache["correlation"]["data"] = fetch_correlation_matrix()
                 cache["correlation"]["updated"] = now
                 logger.info("[Correlation] Matrix refreshed")
@@ -296,6 +308,7 @@ def refresh_cache():
         # Liquidation Zones (every 2 mins)
         try:
             if now - cache["liq_zones"]["updated"] > 120:
+                time.sleep(1)  # Stagger fapi.binance.com calls
                 cache["liq_zones"]["data"] = fetch_liquidation_zones()
                 cache["liq_zones"]["updated"] = now
                 logger.info("[LiqZones] Zones refreshed")

@@ -83,6 +83,12 @@ PRO_FEATURES = {
 # ── Yahoo Finance ──
 ENABLE_YAHOO = os.getenv("ENABLE_YAHOO", "true").lower() in ("true", "1", "yes")
 
+# ── CoinGecko API Key (free demo key → ~30 req/min instead of ~10) ──
+CG_DEMO_API_KEY = os.getenv("CG_DEMO_API_KEY", "")
+CG_HEADERS = {"Accept": "application/json"}
+if CG_DEMO_API_KEY:
+    CG_HEADERS["x-cg-demo-api-key"] = CG_DEMO_API_KEY
+
 # ── Alpha Scanner Configuration ──
 TARGET_COINS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT",

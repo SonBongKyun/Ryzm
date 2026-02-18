@@ -2,6 +2,8 @@
 Ryzm Terminal — On-Chain Data Service
 Long/Short ratio, funding rate, whale trades, whale wallets, liquidation zones, OI + mempool.
 """
+import time as _time
+
 from app.core.logger import logger
 from app.core.http_client import resilient_get
 from app.core.cache import cache
@@ -89,12 +91,14 @@ def fetch_funding_rate():
 
 def fetch_whale_trades():
     """Detect large-scale futures trades (liquidation proxy)."""
-    try:
-        results = []
-        for symbol in ["BTCUSDT", "ETHUSDT"]:
+    results = []
+    for idx, symbol in enumerate(["BTCUSDT", "ETHUSDT"]):
+        if idx > 0:
+            _time.sleep(0.5)  # Stagger fapi.binance.com calls
+        try:
             resp = resilient_get(
                 "https://fapi.binance.com/fapi/v1/aggTrades",
-                timeout=5, params={"symbol": symbol, "limit": 80}
+                timeout=8, params={"symbol": symbol, "limit": 80}
             )
             resp.raise_for_status()
             for t in resp.json():
@@ -110,11 +114,10 @@ def fetch_whale_trades():
                         "usd": round(usd, 0),
                         "time": t["T"]
                     })
-        results.sort(key=lambda x: x["time"], reverse=True)
-        return results[:12]
-    except Exception as e:
-        logger.error(f"[Whale] Error: {e}")
-        return []
+        except Exception as e:
+            logger.error(f"[Whale] {symbol} Error: {e}")
+    results.sort(key=lambda x: x["time"], reverse=True)
+    return results[:12]
 
 
 def fetch_whale_wallets():
@@ -155,9 +158,14 @@ def fetch_whale_wallets():
 def fetch_liquidation_zones():
     """Estimate liquidation density zones from OI + funding + leverage data."""
     try:
-        price_resp = resilient_get("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT", timeout=5)
-        oi_resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", timeout=5)
-        fr_resp = resilient_get("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1", timeout=5)
+        price_resp = resilient_get("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT", timeout=8)
+        price_resp.raise_for_status()
+        _time.sleep(0.3)
+        oi_resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", timeout=8)
+        oi_resp.raise_for_status()
+        _time.sleep(0.3)
+        fr_resp = resilient_get("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1", timeout=8)
+        fr_resp.raise_for_status()
 
         current_price = float(price_resp.json()["price"])
         oi_btc = float(oi_resp.json()["openInterest"])
@@ -199,11 +207,12 @@ def fetch_onchain_data():
 
     for sym in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
         try:
-            resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest", timeout=5, params={"symbol": sym})
+            resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest", timeout=8, params={"symbol": sym})
             resp.raise_for_status()
             d = resp.json()
             oi_val = float(d.get("openInterest", 0))
-            pr = resilient_get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=5, params={"symbol": sym})
+            _time.sleep(0.3)
+            pr = resilient_get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=8, params={"symbol": sym})
             pr.raise_for_status()
             mark = float(pr.json().get("markPrice", 0))
             oi_usd = oi_val * mark

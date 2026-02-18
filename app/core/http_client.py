@@ -37,7 +37,7 @@ def resilient_get(url: str, timeout: int = 15, **kwargs) -> requests.Response:
                     retry_after = int(ra_header)
                 except (ValueError, TypeError):
                     pass
-            backoff = max(retry_after, min(300, 30 * (2 ** (fails - 1))))
+            backoff = max(retry_after, min(120, 15 * (2 ** (fails - 1))))
             _api_429_backoff[domain] = now + backoff
             logger.warning(f"[HTTP] 429 from {domain} — backing off {backoff}s (fail #{fails})")
             raise requests.exceptions.HTTPError(
