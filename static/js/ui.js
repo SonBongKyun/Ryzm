@@ -248,7 +248,7 @@ function toggleBrowserNotif(on) {
 /*  Alpha Scanner  */
 async function fetchScanner() {
   try {
-    const data = await apiFetch('/api/scanner', { silent: true });
+    const data = await apiFetch('/api/scanner', { silent: true, timeoutMs: 20000 });
     const feed = document.getElementById('scanner-feed');
     if (!feed) return;
 
