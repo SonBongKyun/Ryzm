@@ -76,13 +76,15 @@ def register(body: RegisterRequest, request: Request):
     set_email_verify_token(user_id, verify_token)
     send_verification_email(body.email, verify_token)
 
-    token = create_token(user_id, body.email, "free")
+    is_admin = body.email.lower() in ADMIN_EMAILS
+    effective_tier = "pro" if is_admin else "free"
+    token = create_token(user_id, body.email, effective_tier)
     resp = JSONResponse(content={
         "status": "registered",
         "user_id": user_id,
         "email": body.email,
-        "tier": "free",
-        "is_admin": body.email.lower() in ADMIN_EMAILS,
+        "tier": effective_tier,
+        "is_admin": is_admin,
         "token": token,
         "email_verified": False,
         "message": "Verification email sent. Please check your inbox.",
@@ -104,15 +106,17 @@ def login(body: LoginRequest, request: Request):
         raise HTTPException(401, "Invalid credentials")
 
     update_user_login(user["id"])
-    token = create_token(user["id"], user["email"], user["tier"])
     from app.core.config import ADMIN_EMAILS
+    is_admin = user["email"].lower() in ADMIN_EMAILS
+    effective_tier = "pro" if is_admin else user["tier"]
+    token = create_token(user["id"], user["email"], effective_tier)
     resp = JSONResponse(content={
         "status": "ok",
         "user_id": user["id"],
         "email": user["email"],
         "display_name": user["display_name"],
-        "tier": user["tier"],
-        "is_admin": user["email"].lower() in ADMIN_EMAILS,
+        "tier": effective_tier,
+        "is_admin": is_admin,
         "token": token,
     })
     resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=True)
@@ -131,11 +135,12 @@ def get_profile(request: Request):
     if not user:
         raise HTTPException(404, "User not found")
     is_admin = user["email"].lower() in ADMIN_EMAILS
+    effective_tier = "pro" if is_admin else user["tier"]
     return {
         "user_id": user["id"],
         "email": user["email"],
         "display_name": user["display_name"],
-        "tier": user["tier"],
+        "tier": effective_tier,
         "is_admin": is_admin,
         "email_verified": bool(user.get("email_verified", 0)),
         "tos_accepted": bool(user.get("tos_accepted_at")),
