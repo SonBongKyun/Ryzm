@@ -277,13 +277,16 @@ def fetch_kimchi_premium():
 
 def fetch_multi_timeframe(symbol="BTCUSDT"):
     """Multi-timeframe RSI + MA cross analysis using Binance Klines."""
+    import time as _time
     from app.services.scanner_service import calculate_rsi, calculate_ema
 
     intervals = {"1h": "1h", "4h": "4h", "1d": "1d", "1w": "1w"}
     results = {}
-    for label, interval in intervals.items():
+    for idx, (label, interval) in enumerate(intervals.items()):
+        if idx > 0:
+            _time.sleep(0.5)  # Rate-limit protection
         try:
-            url = "https://fapi.binance.com/fapi/v1/klines"
+            url = "https://api.binance.com/api/v3/klines"
             resp = resilient_get(url, timeout=8, params={"symbol": symbol, "interval": interval, "limit": 100})
             resp.raise_for_status()
             klines = resp.json()

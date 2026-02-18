@@ -49,12 +49,15 @@ def calculate_vol_spike(volumes, period=20):
 
 def fetch_alpha_scanner():
     """Alpha Scanner — RSI/Volume based opportunity detection."""
+    import time as _time
     alerts = []
-    for symbol in TARGET_COINS:
+    for idx, symbol in enumerate(TARGET_COINS):
+        if idx > 0 and idx % 4 == 0:
+            _time.sleep(0.5)  # Rate-limit protection: pause every 4 coins
         try:
-            url = "https://fapi.binance.com/fapi/v1/klines"
+            url = "https://api.binance.com/api/v3/klines"
             params = {"symbol": symbol, "interval": "15m", "limit": 30}
-            resp = resilient_get(url, timeout=3, params=params)
+            resp = resilient_get(url, timeout=5, params=params)
             data = resp.json()
             if not data or not isinstance(data, list):
                 continue

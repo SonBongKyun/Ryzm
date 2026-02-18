@@ -416,6 +416,7 @@ function initChartTabs() {
 
   // Create chart and load initial BTC
   setTimeout(() => {
+    if (typeof RyzmChart === 'undefined') { console.warn('[Core] RyzmChart not loaded yet, retrying...'); setTimeout(arguments.callee, 500); return; }
     RyzmChart.create('ryzm-chart-container');
     RyzmChart.switchSymbol('BTCUSDT', '1h');
     startChartInfoBar();
