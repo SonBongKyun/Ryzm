@@ -1,6 +1,6 @@
-/* ?â•??3. AI Council ??Multi-Framework Analysis Engine v6.0 ?â•??*/
+/* ?ï¿½â•??3. AI Council ??Multi-Framework Analysis Engine v6.0 ?ï¿½â•??*/
 
-/* ?€?€ Framework Avatar SVGs ?€?€ */
+/* ?ï¿½?ï¿½ Framework Avatar SVGs ?ï¿½?ï¿½ */
 const _AGENT_AVATARS = {
   macro: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
   onchain: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
@@ -8,7 +8,8 @@ const _AGENT_AVATARS = {
   synthesis: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M3 12l4-4v8l-4-4z"/><path d="M21 12l-4-4v8l4-4z"/><circle cx="12" cy="3" r="1" fill="currentColor"/></svg>'
 };
 function _agentClass(name) {
-  const n = name.toLowerCase();
+  if (!name) return 'sys';
+  const n = String(name).toLowerCase();
   if (n.includes('macro')) return 'macro';
   if (n.includes('onchain') || n.includes('on-chain')) return 'onchain';
   if (n.includes('technical')) return 'technical';
@@ -16,7 +17,7 @@ function _agentClass(name) {
   return 'sys';
 }
 
-/* ?€?€ Loading Steps Controller ?€?€ */
+/* ?ï¿½?ï¿½ Loading Steps Controller ?ï¿½?ï¿½ */
 let _councilLoadTimers = [];
 function showLoadingSteps() {
   const div = document.getElementById('council-steps');
@@ -46,7 +47,7 @@ function hideLoadingSteps() {
   if (div) div.style.display = 'none';
 }
 
-/* ?€?€ Consensus Gauge ?€?€ */
+/* ?ï¿½?ï¿½ Consensus Gauge ?ï¿½?ï¿½ */
 function updateConsensusGauge(score) {
   const arc = document.getElementById('cg-value');
   const txt = document.getElementById('cg-score');
@@ -63,7 +64,7 @@ function updateConsensusGauge(score) {
   }
 }
 
-/* ?€?€ Auto Analysis Status Bar ?€?€ */
+/* ?ï¿½?ï¿½ Auto Analysis Status Bar ?ï¿½?ï¿½ */
 let _autoBarInterval = null;
 function startAutoBar() {
   updateAutoBar();
@@ -108,7 +109,7 @@ function drawAutoSparkline(scores) {
   ctx.stroke();
 }
 
-/* ?â•??setupEventListeners ?â•??*/
+/* ?ï¿½â•??setupEventListeners ?ï¿½â•??*/
 function setupEventListeners() {
   const btnCouncil = document.getElementById('btn-council-start');
   const btnCopy = document.getElementById('btn-copy-report');
@@ -224,7 +225,7 @@ function setupEventListeners() {
   startAutoBar();
 }
 
-/* ?â•??renderCouncil ?â•??*/
+/* ?ï¿½â•??renderCouncil ?ï¿½â•??*/
 function renderCouncil(data) {
   // Vibe
   if (data.vibe) {
@@ -351,7 +352,7 @@ function renderCouncil(data) {
   }
 }
 
-/* ?â•??Narrative Radar Chart ?â•??*/
+/* ?ï¿½â•??Narrative Radar Chart ?ï¿½â•??*/
 function renderRadarChart(narratives) {
   const canvas = document.getElementById('radar-canvas');
   const wrap = document.getElementById('narrative-radar');
@@ -454,11 +455,11 @@ function renderRadarChart(narratives) {
   });
 }
 
-/* ?€?€?€ Matrix Rain Effect (disabled ??canvas hidden, saves CPU/battery) ?€?€?€ */
+/* ?ï¿½?ï¿½?ï¿½ Matrix Rain Effect (disabled ??canvas hidden, saves CPU/battery) ?ï¿½?ï¿½?ï¿½ */
 // Matrix rain is visually hidden via CSS (#matrix-bg { display: none; })
 // No canvas rendering runs to save CPU and battery life.
 
-/* ?€?€?€ Snapshot Export ?€?€?€ */
+/* ?ï¿½?ï¿½?ï¿½ Snapshot Export ?ï¿½?ï¿½?ï¿½ */
 const btnSnapshot = document.getElementById('btn-snapshot');
 if (btnSnapshot) {
   btnSnapshot.addEventListener('click', () => {
@@ -481,7 +482,7 @@ if (btnSnapshot) {
   });
 }
 
-/* ?€?€?€ Trade Validator ?€?€?€ */
+/* ?ï¿½?ï¿½?ï¿½ Trade Validator ?ï¿½?ï¿½?ï¿½ */
 function initValidator() {
   const btnValidate = document.getElementById('btn-validate');
   if (!btnValidate) return;
@@ -602,14 +603,14 @@ function displayValidationResult(data) {
       Win Rate: <strong>${escapeHtml(data.win_rate)}</strong>
     </div>
     <div class="val-personas">${personasHTML}</div>
-    <div class="val-summary">?“Š ${escapeHtml(data.summary)}</div>
+    <div class="val-summary">?ï¿½ï¿½ ${escapeHtml(data.summary)}</div>
   `;
 
   resultDiv.style.display = 'block';
   lucide.createIcons();
 }
 
-/* ?€?€?€ Ask Ryzm Chat ?€?€?€ */
+/* ?ï¿½?ï¿½?ï¿½ Ask Ryzm Chat ?ï¿½?ï¿½?ï¿½ */
 function initChat() {
   const chatFloatBtn = document.getElementById('chat-float-btn');
   const chatOverlay = document.getElementById('chat-overlay');
@@ -707,7 +708,7 @@ function addChatMessage(type, text, id = null, confidence = null) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-/* ?€?€ Quota Refresh (called after any 403) ?€?€ */
+/* ?ï¿½?ï¿½ Quota Refresh (called after any 403) ?ï¿½?ï¿½ */
 function refreshAllQuotas() {
   apiFetch('/api/me', { silent: true })
     .then(data => {

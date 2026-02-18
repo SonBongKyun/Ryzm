@@ -12,9 +12,47 @@ services:
         value: production
       - key: HOST
         value: 0.0.0.0
+      # ── 필수: AI API 키 ──
       - key: GENAI_API_KEY
         sync: false
+      # ── 필수: JWT 시크릿 (64자 이상 랜덤 문자열) ──
       - key: JWT_SECRET
         generateValue: true
+      # ── 필수: 관리자 API 토큰 ──
       - key: ADMIN_TOKEN
+        sync: false
+      # ── 필수: 배포 도메인 (CORS, 이메일 링크 등에 사용) ──
+      - key: BASE_URL
+        value: https://ryzm-os.onrender.com
+      - key: APP_BASE_URL
+        value: https://ryzm-os.onrender.com
+      - key: SITE_URL
+        value: https://ryzm-os.onrender.com
+      # ── 필수: CORS 허용 도메인 ──
+      - key: ALLOWED_ORIGINS
+        value: https://ryzm-os.onrender.com
+      # ── 선택: 관리자 이메일 ──
+      - key: ADMIN_EMAILS
+        sync: false
+      # ── 선택: Stripe 결제 ──
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID_PRO
+        sync: false
+      # ── 선택: SMTP 이메일 ──
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      # ── 선택: Discord 웹훅 ──
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      # ── 선택: Sentry 에러 트래킹 ──
+      - key: SENTRY_DSN
         sync: false

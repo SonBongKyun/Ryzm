@@ -48,6 +48,18 @@ const RyzmSSE = (() => {
           showToast('info', 'System', d.message || 'Broadcast received');
       } catch {}
     });
+
+    // ── Real-time Risk Gauge & L/S Ratio via SSE ──
+    _es.addEventListener('risk_gauge', (e) => {
+      try {
+        if (typeof fetchRiskGauge === 'function') fetchRiskGauge();
+      } catch {}
+    });
+    _es.addEventListener('long_short', (e) => {
+      try {
+        if (typeof fetchLongShortRatio === 'function') fetchLongShortRatio();
+      } catch {}
+    });
   }
 
   function _mergeLivePrices(prices) {

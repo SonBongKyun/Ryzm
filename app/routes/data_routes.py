@@ -193,7 +193,14 @@ async def get_calendar():
 @router.get("/api/risk-gauge")
 def get_risk_gauge():
     try:
-        return compute_risk_gauge()
+        # Use cached result if fresh (< 90s), otherwise recompute
+        cached = cache.get("risk_gauge", {})
+        import time as _time
+        if cached.get("data") and (_time.time() - cached.get("updated", 0)) < 90:
+            return cached["data"]
+        result = compute_risk_gauge()
+        cache["risk_gauge"] = {"data": result, "updated": _time.time()}
+        return result
     except Exception as e:
         logger.error(f"[API] Risk gauge error: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute risk gauge")

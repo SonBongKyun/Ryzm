@@ -1,8 +1,8 @@
 /* ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
    Ryzm Terminal ??Service Worker v4.7
    ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?� */
-const CACHE_NAME = 'ryzm-v7.0';
-const API_CACHE_NAME = 'ryzm-api-v7.0';
+const CACHE_NAME = 'ryzm-v7.1';
+const API_CACHE_NAME = 'ryzm-api-v7.1';
 
 // ?�?� Precache: actual files loaded by index.html ?�?�
 // No ?v= suffix ??SW uses ignoreSearch for cache matching
@@ -53,10 +53,21 @@ const API_NEVER_CACHE = [
   '/api/events'
 ];
 
-// ?�?� Install: precache static assets ?�?�
+// 📦 Install: precache static assets (skip 206/non-ok responses) 📦
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then(async cache => {
+      for (const url of STATIC_ASSETS) {
+        try {
+          const resp = await fetch(url);
+          if (resp.ok && resp.status === 200) {
+            await cache.put(url, resp);
+          }
+        } catch (e) {
+          console.warn('[SW] precache skip:', url, e);
+        }
+      }
+    })
   );
   self.skipWaiting();
 });
@@ -147,8 +158,11 @@ self.addEventListener('fetch', event => {
   // (ignoreSearch only used as offline fallback so ?v= busting always works)
   event.respondWith(
     fetch(event.request).then(resp => {
-      const clone = resp.clone();
-      caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+      // Only cache complete (200) responses, skip 206 partial
+      if (resp.ok && resp.status === 200) {
+        const clone = resp.clone();
+        caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+      }
       return resp;
     }).catch(() =>
       caches.match(event.request, { ignoreSearch: true })

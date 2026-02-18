@@ -50,6 +50,8 @@ async def _event_generator(request: Request) -> AsyncGenerator[str, None]:
 
         last_market_ts = 0
         last_council_ts = 0
+        last_risk_ts = 0
+        last_ls_ts = 0
 
         while True:
             # Check for broadcast events
@@ -66,6 +68,22 @@ async def _event_generator(request: Request) -> AsyncGenerator[str, None]:
                 eth = market.get("ETH", {})
                 if btc:
                     yield f"event: market\ndata: {json.dumps({'BTC': btc.get('price', 0), 'ETH': eth.get('price', 0), 'ts': market_ts})}\n\n"
+
+            # Risk gauge push (when cache updated)
+            risk_ts = cache.get("risk_gauge", {}).get("updated", 0)
+            if risk_ts > last_risk_ts and risk_ts > 0:
+                last_risk_ts = risk_ts
+                risk_data = cache.get("risk_gauge", {}).get("data", {})
+                if risk_data:
+                    yield f"event: risk_gauge\ndata: {json.dumps(risk_data, default=str)}\n\n"
+
+            # L/S ratio push (when cache updated)
+            ls_ts = cache.get("long_short_ratio", {}).get("updated", 0)
+            if ls_ts > last_ls_ts and ls_ts > 0:
+                last_ls_ts = ls_ts
+                ls_data = cache.get("long_short_ratio", {}).get("data", {})
+                if ls_data:
+                    yield f"event: long_short\ndata: {json.dumps(ls_data, default=str)}\n\n"
 
             # Check for new auto-council
             council_ts = cache.get("auto_council", {}).get("updated", 0)

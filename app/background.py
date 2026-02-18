@@ -10,7 +10,8 @@ import requests
 
 from app.core.logger import logger
 from app.core.config import (
-    CACHE_TTL, MARKET_CACHE_TTL, AUTO_COUNCIL_INTERVAL, CRITICAL_ALERT_COOLDOWN,
+    CACHE_TTL, MARKET_CACHE_TTL, RISK_CACHE_TTL,
+    AUTO_COUNCIL_INTERVAL, CRITICAL_ALERT_COOLDOWN,
     DISCORD_WEBHOOK_URL,
 )
 from app.core.cache import cache
@@ -157,7 +158,7 @@ def refresh_cache():
             logger.error(f"[Cache] Market refresh error: {e}")
 
         try:
-            if now - cache["fear_greed"]["updated"] > CACHE_TTL:
+            if now - cache["fear_greed"]["updated"] > RISK_CACHE_TTL:
                 cache["fear_greed"]["data"] = fetch_fear_greed()
                 cache["fear_greed"]["updated"] = now
                 logger.info(f"[Cache] Fear/Greed refreshed: score={cache['fear_greed']['data'].get('score')}")
@@ -165,7 +166,7 @@ def refresh_cache():
             logger.error(f"[Cache] F&G refresh error: {e}")
 
         try:
-            if now - cache["kimchi"]["updated"] > CACHE_TTL:
+            if now - cache["kimchi"]["updated"] > RISK_CACHE_TTL:
                 cache["kimchi"]["data"] = fetch_kimchi_premium()
                 cache["kimchi"]["updated"] = now
                 logger.info(f"[Cache] Kimchi Premium refreshed: {cache['kimchi']['data'].get('premium', 0)}%")
@@ -173,7 +174,7 @@ def refresh_cache():
             logger.error(f"[Cache] KP refresh error: {e}")
 
         try:
-            if now - cache["long_short_ratio"]["updated"] > CACHE_TTL:
+            if now - cache["long_short_ratio"]["updated"] > RISK_CACHE_TTL:
                 cache["long_short_ratio"]["data"] = fetch_long_short_ratio()
                 cache["long_short_ratio"]["updated"] = now
                 logger.info("[Cache] L/S Ratio refreshed")
@@ -189,7 +190,7 @@ def refresh_cache():
             logger.error(f"[Cache] L/S History refresh error: {e}")
 
         try:
-            if now - cache["funding_rate"]["updated"] > CACHE_TTL:
+            if now - cache["funding_rate"]["updated"] > RISK_CACHE_TTL:
                 cache["funding_rate"]["data"] = fetch_funding_rate()
                 cache["funding_rate"]["updated"] = now
                 logger.info("[Cache] Funding Rate refreshed")
@@ -300,9 +301,29 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[LiqZones] Error: {e}")
 
-        # Risk gauge critical alert
+        # Risk gauge — compute + SSE broadcast + critical alert
         try:
             risk = compute_risk_gauge()
+            cache["risk_gauge"] = {"data": risk, "updated": now}
+
+            # SSE broadcast risk gauge + L/S to all connected clients
+            try:
+                from app.routes.sse_routes import broadcast_event
+                broadcast_event('risk_gauge', {
+                    'score': risk.get('score', 0),
+                    'level': risk.get('level', 'MODERATE'),
+                    'label': risk.get('label', ''),
+                    'components': risk.get('components', {}),
+                    'commentary': risk.get('commentary', ''),
+                    'timestamp': risk.get('timestamp', ''),
+                })
+                # Also broadcast L/S ratio
+                ls_data = cache["long_short_ratio"].get("data", {})
+                if ls_data:
+                    broadcast_event('long_short', ls_data)
+            except Exception as sse_err:
+                logger.error(f"[SSE] Risk/LS broadcast error: {sse_err}")
+
             if risk.get("level") == "CRITICAL":
                 if now - _last_critical_alert > CRITICAL_ALERT_COOLDOWN:
                     send_discord_alert(

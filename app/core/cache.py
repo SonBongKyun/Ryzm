@@ -28,6 +28,7 @@ cache = {
     "correlation": {"data": {}, "updated": 0},
     "whale_wallets": {"data": [], "updated": 0},
     "liq_zones": {"data": {}, "updated": 0},
+    "risk_gauge": {"data": {}, "updated": 0},
     "latest_briefing": {"title": "", "content": "", "time": ""},
 }
 

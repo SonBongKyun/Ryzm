@@ -37,6 +37,7 @@ RATE_LIMIT_MAX_AI = 5
 # ── Cache TTL ──
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
 MARKET_CACHE_TTL = int(os.getenv("MARKET_CACHE_TTL", "60"))  # 60s for market prices
+RISK_CACHE_TTL = int(os.getenv("RISK_CACHE_TTL", "60"))  # 60s for risk-critical data (L/S, FR, FG, KP)
 
 # ── Auto-Council / Alerts ──
 AUTO_COUNCIL_INTERVAL = int(os.getenv("AUTO_COUNCIL_INTERVAL", "3600"))

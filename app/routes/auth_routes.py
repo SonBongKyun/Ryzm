@@ -89,7 +89,7 @@ def register(body: RegisterRequest, request: Request):
         "email_verified": False,
         "message": "Verification email sent. Please check your inbox.",
     })
-    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=True)
+    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=request.url.scheme == "https")
     logger.info(f"[Auth] User registered: {body.email}")
     return resp
 
@@ -119,7 +119,7 @@ def login(body: LoginRequest, request: Request):
         "is_admin": is_admin,
         "token": token,
     })
-    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=True)
+    resp.set_cookie("ryzm_token", token, max_age=86400 * 7, httponly=True, samesite="lax", secure=request.url.scheme == "https")
     logger.info(f"[Auth] Login: {body.email}")
     return resp
 
