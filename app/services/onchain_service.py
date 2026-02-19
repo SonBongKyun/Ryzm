@@ -162,20 +162,33 @@ def fetch_whale_wallets():
 
 
 def fetch_liquidation_zones():
-    """Estimate liquidation density zones from OI + funding + leverage data."""
+    """Estimate liquidation density zones from OI + funding + leverage data.
+    Reuses cached onchain data when available to avoid extra fapi calls."""
     try:
-        price_resp = resilient_get("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT", timeout=8)
-        price_resp.raise_for_status()
-        _time.sleep(0.5)
-        oi_resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", timeout=8)
-        oi_resp.raise_for_status()
-        _time.sleep(0.5)
-        fr_resp = resilient_get("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1", timeout=8)
-        fr_resp.raise_for_status()
+        # Try to reuse cached onchain data first (saves 3 fapi calls)
+        _onchain = cache.get("onchain", {}).get("data", {})
+        _oi_list = _onchain.get("open_interest", []) if _onchain else []
+        _fr_list = _onchain.get("funding_rates", []) if _onchain else []
+        btc_oi = next((o for o in _oi_list if o.get("symbol") == "BTC"), None)
+        btc_fr = next((f for f in _fr_list if f.get("symbol") == "BTC"), None)
 
-        current_price = float(price_resp.json()["price"])
-        oi_btc = float(oi_resp.json()["openInterest"])
-        funding = float(fr_resp.json()[0]["fundingRate"])
+        if btc_oi and btc_fr:
+            current_price = btc_oi["mark_price"]
+            oi_btc = btc_oi["oi_coins"]
+            funding = btc_fr["rate"] / 100  # Convert back from percentage
+        else:
+            # Fallback: make API calls only if cache empty
+            price_resp = resilient_get("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT", timeout=8)
+            price_resp.raise_for_status()
+            _time.sleep(0.5)
+            oi_resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", timeout=8)
+            oi_resp.raise_for_status()
+            _time.sleep(0.5)
+            fr_resp = resilient_get("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1", timeout=8)
+            fr_resp.raise_for_status()
+            current_price = float(price_resp.json()["price"])
+            oi_btc = float(oi_resp.json()["openInterest"])
+            funding = float(fr_resp.json()[0]["fundingRate"])
 
         zones = []
         leverages = [5, 10, 25, 50, 100]
@@ -208,25 +221,42 @@ def fetch_liquidation_zones():
 
 
 def fetch_onchain_data():
-    """On-chain metrics: Open Interest (with 24h change) + Mempool fees + Hashrate sparkline."""
-    result = {"open_interest": [], "mempool": {}, "hashrate": None, "hashrate_spark": []}
+    """On-chain metrics: OI + Funding Rate (combined) + Mempool fees + Hashrate sparkline.
+    Uses single premiumIndex call per symbol to get both mark price AND funding rate,
+    drastically reducing fapi.binance.com call count."""
+    result = {"open_interest": [], "funding_rates": [], "mempool": {}, "hashrate": None, "hashrate_spark": []}
 
-    for sym in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+    for idx, sym in enumerate(["BTCUSDT", "ETHUSDT", "SOLUSDT"]):
+        if idx > 0:
+            _time.sleep(1.5)  # Stagger between symbols
         try:
+            # 1) premiumIndex → mark price + funding rate in ONE call
+            pr = resilient_get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=8, params={"symbol": sym})
+            pr.raise_for_status()
+            pi = pr.json()
+            mark = float(pi.get("markPrice", 0))
+            funding_rate = float(pi.get("lastFundingRate", 0)) * 100
+
+            # Extract funding rate (eliminates separate fetch_funding_rate call)
+            result["funding_rates"].append({
+                "symbol": sym.replace("USDT", ""),
+                "rate": round(funding_rate, 4),
+                "nextTime": pi.get("nextFundingTime"),
+                "mark": round(mark, 2)
+            })
+
+            # 2) openInterest
+            _time.sleep(1)
             resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest", timeout=8, params={"symbol": sym})
             resp.raise_for_status()
             d = resp.json()
             oi_val = float(d.get("openInterest", 0))
-            _time.sleep(1)  # Increased delay to avoid 429 on shared IPs (Render)
-            pr = resilient_get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=8, params={"symbol": sym})
-            pr.raise_for_status()
-            mark = float(pr.json().get("markPrice", 0))
             oi_usd = oi_val * mark
 
-            # OI 24h change from kline data
+            # OI 24h change estimate from kline (skip if in backoff to save calls)
             oi_change_pct = 0.0
             try:
-                _time.sleep(0.5)
+                _time.sleep(1)
                 kl = resilient_get(
                     "https://fapi.binance.com/fapi/v1/klines",
                     timeout=5,

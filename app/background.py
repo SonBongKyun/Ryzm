@@ -207,17 +207,20 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[Cache] L/S History refresh error: {e}")
 
+        # NOTE: Funding rate is now extracted inside fetch_onchain_data() to reduce fapi calls.
+        # The onchain refresh below updates cache["funding_rate"] automatically.
+        # Standalone fetch_funding_rate() only as fallback if onchain missed it.
         try:
-            if now - cache["funding_rate"]["updated"] > RISK_CACHE_TTL:
-                time.sleep(max(2, _cold_start_delay))  # Stagger fapi.binance.com calls to avoid 429
+            if now - cache["funding_rate"]["updated"] > CACHE_TTL * 2:  # Only if stale >10min
+                time.sleep(max(2, _cold_start_delay))
                 cache["funding_rate"]["data"] = fetch_funding_rate()
                 cache["funding_rate"]["updated"] = now
-                logger.info("[Cache] Funding Rate refreshed")
+                logger.info("[Cache] Funding Rate refreshed (standalone fallback)")
         except Exception as e:
             logger.error(f"[Cache] Funding Rate refresh error: {e}")
 
         try:
-            if now - cache["liquidations"]["updated"] > 120:
+            if now - cache["liquidations"]["updated"] > 180:  # 3min (was 2min) to reduce fapi calls
                 time.sleep(max(2, _cold_start_delay))  # Stagger fapi.binance.com calls
                 cache["liquidations"]["data"] = fetch_whale_trades()
                 cache["liquidations"]["updated"] = now
@@ -243,10 +246,15 @@ def refresh_cache():
 
         try:
             if now - cache["onchain"]["updated"] > CACHE_TTL:
-                time.sleep(max(3, _cold_start_delay))  # Stagger fapi.binance.com calls (onchain makes 9+ calls)
-                cache["onchain"]["data"] = fetch_onchain_data()
+                time.sleep(max(3, _cold_start_delay))  # Stagger fapi.binance.com calls
+                onchain_result = fetch_onchain_data()
+                cache["onchain"]["data"] = onchain_result
                 cache["onchain"]["updated"] = now
-                logger.info("[Cache] On-chain data refreshed")
+                # Also update funding_rate cache from combined onchain result
+                if onchain_result.get("funding_rates"):
+                    cache["funding_rate"]["data"] = onchain_result["funding_rates"]
+                    cache["funding_rate"]["updated"] = now
+                logger.info("[Cache] On-chain + funding data refreshed")
         except Exception as e:
             logger.error(f"[Cache] On-chain refresh error: {e}")
 
@@ -315,10 +323,10 @@ def refresh_cache():
         except Exception as e:
             logger.error(f"[WhaleWallet] Error: {e}")
 
-        # Liquidation Zones (every 2 mins)
+        # Liquidation Zones (every 5 mins — uses cached onchain data, no extra fapi calls)
         try:
-            if now - cache["liq_zones"]["updated"] > 120:
-                time.sleep(max(2, _cold_start_delay))  # Stagger fapi.binance.com calls
+            if now - cache["liq_zones"]["updated"] > CACHE_TTL:
+                time.sleep(max(1, _cold_start_delay))
                 cache["liq_zones"]["data"] = fetch_liquidation_zones()
                 cache["liq_zones"]["updated"] = now
                 logger.info("[LiqZones] Zones refreshed")

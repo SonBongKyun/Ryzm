@@ -37,7 +37,8 @@ def resilient_get(url: str, timeout: int = 15, **kwargs) -> requests.Response:
                     retry_after = int(ra_header)
                 except (ValueError, TypeError):
                     pass
-            backoff = max(retry_after, min(120, 15 * (2 ** (fails - 1))))
+            # Shorter backoff for shared cloud IPs (Render, Railway)
+            backoff = max(retry_after, min(45, 10 * (2 ** (fails - 1))))
             _api_429_backoff[domain] = now + backoff
             logger.warning(f"[HTTP] 429 from {domain} — backing off {backoff}s (fail #{fails})")
             raise requests.exceptions.HTTPError(
@@ -45,8 +46,9 @@ def resilient_get(url: str, timeout: int = 15, **kwargs) -> requests.Response:
             )
         elif resp.status_code == 418:
             _api_fail_count[domain] = _api_fail_count.get(domain, 0) + 1
-            _api_429_backoff[domain] = now + 600
-            logger.error(f"[HTTP] 418 IP BAN from {domain} — 10min cooldown!")
+            # 90s cooldown (not 600s) — on shared IPs the ban rotates quickly
+            _api_429_backoff[domain] = now + 90
+            logger.error(f"[HTTP] 418 IP BAN from {domain} — 90s cooldown")
             raise requests.exceptions.HTTPError(
                 f"418 IP Ban from {domain}", response=resp
             )
