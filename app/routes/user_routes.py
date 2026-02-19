@@ -14,7 +14,7 @@ from app.core.logger import logger
 from app.core.config import DAILY_FREE_LIMITS, DAILY_PRO_LIMITS, MAX_FREE_ALERTS, MAX_PRO_ALERTS, PriceAlertRequest, LayoutSaveRequest
 from app.core.database import (
     db_session, utc_now_str, count_usage_today,
-    get_user_by_id, get_council_history,
+    get_user_by_id, get_council_history, USE_PG,
 )
 from app.core.security import get_or_create_uid, get_user_tier, check_pro
 from app.core.auth import get_current_user
@@ -170,10 +170,16 @@ def save_layout(request: LayoutSaveRequest, http_request: Request, response: Res
     layout_json = json.dumps(request.panels)
     try:
         with db_session() as (conn, c):
-            c.execute(
-                "INSERT OR REPLACE INTO user_layouts (uid, layout_json, updated_at_utc) VALUES (?, ?, ?)",
-                (uid, layout_json, utc_now_str())
-            )
+            if USE_PG:
+                c.execute(
+                    "INSERT INTO user_layouts (uid, layout_json, updated_at_utc) VALUES (?, ?, ?) ON CONFLICT (uid) DO UPDATE SET layout_json = EXCLUDED.layout_json, updated_at_utc = EXCLUDED.updated_at_utc",
+                    (uid, layout_json, utc_now_str())
+                )
+            else:
+                c.execute(
+                    "INSERT OR REPLACE INTO user_layouts (uid, layout_json, updated_at_utc) VALUES (?, ?, ?)",
+                    (uid, layout_json, utc_now_str())
+                )
         logger.info(f"[Layout] Saved for uid={uid[:8]}...")
         return {"status": "saved"}
     except Exception as e:

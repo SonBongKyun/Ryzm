@@ -19,7 +19,7 @@ def _build_briefing_text() -> str:
     # ── Fear & Greed ──
     fg = cache.get("fear_greed", {}).get("data")
     if fg and isinstance(fg, dict):
-        lines.append(f"**Fear & Greed Index:** {fg.get('value', '?')} — {fg.get('classification', '?')}")
+        lines.append(f"**Fear & Greed Index:** {fg.get('score', '?')} — {fg.get('label', '?')}")
 
     # ── Market overview (BTC, ETH, SOL) ──
     market = cache.get("market", {}).get("data")
@@ -27,19 +27,20 @@ def _build_briefing_text() -> str:
         for sym in ("BTC", "ETH", "SOL"):
             info = market.get(sym, {})
             price = info.get("price")
-            chg = info.get("change_24h")
+            chg = info.get("change")
             if price is not None:
                 arrow = "▲" if (chg or 0) >= 0 else "▼"
                 lines.append(f"**{sym}:** ${price:,.2f}  {arrow} {chg:+.2f}%")
 
     # ── Funding Rates ──
     fr_data = cache.get("funding_rate", {}).get("data")
-    if fr_data and isinstance(fr_data, dict):
+    if fr_data and isinstance(fr_data, list):
         rates = []
-        for sym in ("BTCUSDT", "ETHUSDT", "SOLUSDT"):
-            r = fr_data.get(sym)
-            if r is not None:
-                rates.append(f"{sym.replace('USDT','')}: {float(r) * 100:.4f}%")
+        for item in fr_data:
+            sym = item.get("symbol", "")
+            rate = item.get("rate")
+            if sym and rate is not None:
+                rates.append(f"{sym}: {rate:.4f}%")
         if rates:
             lines.append(f"**Funding:** {' | '.join(rates)}")
 
@@ -54,7 +55,7 @@ def _build_briefing_text() -> str:
     # ── Kimchi Premium ──
     kimchi = cache.get("kimchi", {}).get("data")
     if kimchi and isinstance(kimchi, dict):
-        prem = kimchi.get("premium_pct")
+        prem = kimchi.get("premium")
         if prem is not None:
             lines.append(f"**Kimchi Premium:** {prem:+.2f}%")
 

@@ -45,8 +45,6 @@ def _is_duplicate_event(event_id: str) -> bool:
         _processed_events.popitem(last=False)
     return False
 
-_stripe = None
-
 
 def _get_stripe():
     """Lazy-import stripe SDK. Raises 503 if not configured."""

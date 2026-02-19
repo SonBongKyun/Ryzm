@@ -12,8 +12,10 @@ from app.core.cache import cache
 def fetch_long_short_ratio():
     """Binance Top Trader Long/Short Ratio (Accounts) — BTC, ETH, SOL."""
     result = {}
-    for symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+    for idx, symbol in enumerate(["BTCUSDT", "ETHUSDT", "SOLUSDT"]):
         coin = symbol.replace("USDT", "")
+        if idx > 0:
+            _time.sleep(0.5)  # Stagger fapi calls
         try:
             url = "https://fapi.binance.com/futures/data/topLongShortAccountRatio"
             params = {"symbol": symbol, "period": "1d", "limit": 1}
@@ -47,8 +49,10 @@ def fetch_long_short_ratio():
 def fetch_long_short_history():
     """Binance Top Trader L/S Ratio — 24 data points (last 24 hours, 1h period)."""
     result = {}
-    for symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+    for idx, symbol in enumerate(["BTCUSDT", "ETHUSDT", "SOLUSDT"]):
         coin = symbol.replace("USDT", "")
+        if idx > 0:
+            _time.sleep(0.5)  # Stagger fapi calls
         try:
             url = "https://fapi.binance.com/futures/data/topLongShortAccountRatio"
             params = {"symbol": symbol, "period": "1h", "limit": 24}
@@ -69,7 +73,9 @@ def fetch_funding_rate():
     """Binance Futures Funding Rate."""
     try:
         results = []
-        for symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
+        for idx, symbol in enumerate(["BTCUSDT", "ETHUSDT", "SOLUSDT"]):
+            if idx > 0:
+                _time.sleep(0.5)  # Stagger fapi calls
             resp = resilient_get(
                 "https://fapi.binance.com/fapi/v1/premiumIndex",
                 timeout=5, params={"symbol": symbol}
@@ -160,10 +166,10 @@ def fetch_liquidation_zones():
     try:
         price_resp = resilient_get("https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT", timeout=8)
         price_resp.raise_for_status()
-        _time.sleep(0.3)
+        _time.sleep(0.5)
         oi_resp = resilient_get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT", timeout=8)
         oi_resp.raise_for_status()
-        _time.sleep(0.3)
+        _time.sleep(0.5)
         fr_resp = resilient_get("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1", timeout=8)
         fr_resp.raise_for_status()
 
@@ -211,7 +217,7 @@ def fetch_onchain_data():
             resp.raise_for_status()
             d = resp.json()
             oi_val = float(d.get("openInterest", 0))
-            _time.sleep(0.3)
+            _time.sleep(1)  # Increased delay to avoid 429 on shared IPs (Render)
             pr = resilient_get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=8, params={"symbol": sym})
             pr.raise_for_status()
             mark = float(pr.json().get("markPrice", 0))
@@ -220,6 +226,7 @@ def fetch_onchain_data():
             # OI 24h change from kline data
             oi_change_pct = 0.0
             try:
+                _time.sleep(0.5)
                 kl = resilient_get(
                     "https://fapi.binance.com/fapi/v1/klines",
                     timeout=5,

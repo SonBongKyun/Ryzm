@@ -24,7 +24,14 @@ if USE_PG:
     import psycopg2.extras
     logger.info("[DB] PostgreSQL mode (DATABASE_URL detected)")
 else:
-    logger.info("[DB] SQLite mode (local development)")
+    _app_env = os.getenv("APP_ENV", "").lower()
+    if _app_env == "production":
+        logger.warning(
+            "[DB] ⚠️  SQLite mode in PRODUCTION — data will be lost on redeploy! "
+            "Set DATABASE_URL env var to use PostgreSQL (e.g. Neon, Supabase)."
+        )
+    else:
+        logger.info("[DB] SQLite mode (local development)")
 
 # ── Database Path (SQLite only) ──
 DB_PATH = str(PROJECT_ROOT / "council_history.db")

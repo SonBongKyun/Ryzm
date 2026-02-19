@@ -108,7 +108,13 @@ async def health_check():
 @router.get("/api/long-short")
 async def get_long_short():
     try:
+        from app.services.onchain_service import fetch_long_short_ratio as _fetch_ls
         data = cache["long_short_ratio"]["data"]
+        if not data:
+            data = _fetch_ls()
+            if data:
+                cache["long_short_ratio"]["data"] = data
+                cache["long_short_ratio"]["updated"] = time.time()
         resp = dict(data) if isinstance(data, dict) else {"ratio": data}
         # Include L/S history if available
         hist = cache.get("long_short_history", {}).get("data", {})
@@ -161,8 +167,15 @@ def get_briefing_history(days: int = 7):
 @router.get("/api/funding-rate")
 async def get_funding_rate():
     try:
+        from app.services.onchain_service import fetch_funding_rate as _fetch_fr
+        data = cache["funding_rate"]["data"]
+        if not data:
+            data = _fetch_fr()
+            if data:
+                cache["funding_rate"]["data"] = data
+                cache["funding_rate"]["updated"] = time.time()
         return {
-            "rates": cache["funding_rate"]["data"],
+            "rates": data,
             "_meta": build_api_meta("funding_rate", sources=["fapi.binance.com"])
         }
     except Exception as e:
@@ -173,8 +186,15 @@ async def get_funding_rate():
 @router.get("/api/liquidations")
 async def get_liquidations():
     try:
+        from app.services.onchain_service import fetch_whale_trades as _fetch_wt
+        data = cache["liquidations"]["data"]
+        if not data:
+            data = _fetch_wt()
+            if data:
+                cache["liquidations"]["data"] = data
+                cache["liquidations"]["updated"] = time.time()
         return {
-            "trades": cache["liquidations"]["data"],
+            "trades": data,
             "_meta": build_api_meta("liquidations", sources=["fapi.binance.com"])
         }
     except Exception as e:
@@ -428,7 +448,13 @@ def get_correlation():
 @router.get("/api/whale-wallets")
 def get_whale_wallets():
     try:
+        from app.services.onchain_service import fetch_whale_wallets as _fetch_ww
         data = cache["whale_wallets"]["data"]
+        if not data:
+            data = _fetch_ww()
+            if data:
+                cache["whale_wallets"]["data"] = data
+                cache["whale_wallets"]["updated"] = time.time()
         return {
             "transactions": data,
             "count": len(data),

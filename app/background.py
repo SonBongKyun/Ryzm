@@ -140,14 +140,20 @@ def refresh_cache():
     logger.info("[Cache] Background refresh thread started")
 
     _first_run = True  # Stagger first-run initialization to avoid 429 burst
+    _fapi_call_count = 0  # Track fapi.binance.com calls per loop
 
     while True:
         now = time.time()
+        _fapi_call_count = 0  # Reset per-loop counter
 
         # On cold start, add initial delay to stagger API calls
         if _first_run:
-            logger.info("[Cache] Cold start detected — staggering initial API calls")
+            logger.info("[Cache] Cold start detected — staggering initial API calls (non-Binance first)")
             _first_run = False
+            # On cold start: fetch non-Binance APIs first, then Binance with bigger gaps
+            _cold_start_delay = 3  # seconds between Binance API groups on cold start
+        else:
+            _cold_start_delay = 0
 
         try:
             if now - cache["news"]["updated"] > CACHE_TTL:
@@ -183,6 +189,8 @@ def refresh_cache():
 
         try:
             if now - cache["long_short_ratio"]["updated"] > RISK_CACHE_TTL:
+                if _cold_start_delay:
+                    time.sleep(_cold_start_delay)
                 cache["long_short_ratio"]["data"] = fetch_long_short_ratio()
                 cache["long_short_ratio"]["updated"] = now
                 logger.info("[Cache] L/S Ratio refreshed")
@@ -191,6 +199,8 @@ def refresh_cache():
 
         try:
             if now - cache["long_short_history"]["updated"] > 3600:  # refresh every hour
+                if _cold_start_delay:
+                    time.sleep(_cold_start_delay)
                 cache["long_short_history"]["data"] = fetch_long_short_history()
                 cache["long_short_history"]["updated"] = now
                 logger.info("[Cache] L/S History refreshed")
@@ -199,7 +209,7 @@ def refresh_cache():
 
         try:
             if now - cache["funding_rate"]["updated"] > RISK_CACHE_TTL:
-                time.sleep(1)  # Stagger fapi.binance.com calls to avoid 429
+                time.sleep(max(2, _cold_start_delay))  # Stagger fapi.binance.com calls to avoid 429
                 cache["funding_rate"]["data"] = fetch_funding_rate()
                 cache["funding_rate"]["updated"] = now
                 logger.info("[Cache] Funding Rate refreshed")
@@ -208,7 +218,7 @@ def refresh_cache():
 
         try:
             if now - cache["liquidations"]["updated"] > 120:
-                time.sleep(1)  # Stagger fapi.binance.com calls
+                time.sleep(max(2, _cold_start_delay))  # Stagger fapi.binance.com calls
                 cache["liquidations"]["data"] = fetch_whale_trades()
                 cache["liquidations"]["updated"] = now
                 logger.info(f"[Cache] Whale trades refreshed: {len(cache['liquidations']['data'])} trades")
@@ -233,7 +243,7 @@ def refresh_cache():
 
         try:
             if now - cache["onchain"]["updated"] > CACHE_TTL:
-                time.sleep(2)  # Stagger fapi.binance.com calls (onchain makes 9+ calls)
+                time.sleep(max(3, _cold_start_delay))  # Stagger fapi.binance.com calls (onchain makes 9+ calls)
                 cache["onchain"]["data"] = fetch_onchain_data()
                 cache["onchain"]["updated"] = now
                 logger.info("[Cache] On-chain data refreshed")
@@ -308,7 +318,7 @@ def refresh_cache():
         # Liquidation Zones (every 2 mins)
         try:
             if now - cache["liq_zones"]["updated"] > 120:
-                time.sleep(1)  # Stagger fapi.binance.com calls
+                time.sleep(max(2, _cold_start_delay))  # Stagger fapi.binance.com calls
                 cache["liq_zones"]["data"] = fetch_liquidation_zones()
                 cache["liq_zones"]["updated"] = now
                 logger.info("[LiqZones] Zones refreshed")
