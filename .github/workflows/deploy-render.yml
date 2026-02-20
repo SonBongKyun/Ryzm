@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────
+#  Ryzm Terminal — Auto Deploy to Render
+#  Triggers on every push to master branch
+# ──────────────────────────────────────────────
+name: Deploy to Render
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    name: Trigger Render Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Hook
+        run: |
+          echo "🚀 Triggering Render deploy..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          if [ "$response" -eq 200 ] || [ "$response" -eq 201 ]; then
+            echo "✅ Deploy triggered successfully (HTTP $response)"
+          else
+            echo "❌ Deploy trigger failed (HTTP $response)"
+            exit 1
+          fi
