@@ -128,9 +128,11 @@ class db_session:
                 self._conn.commit()
             elif USE_PG:
                 self._conn.rollback()
-            self._conn.close()
         finally:
-            _db_lock.release()
+            try:
+                self._conn.close()
+            finally:
+                _db_lock.release()
         return False  # propagate exceptions
 
 
@@ -1074,7 +1076,8 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
             if not rows:
                 continue
 
-            evaluated = 0
+            # Pre-compute evaluation results before opening DB session
+            eval_batch = []
             for row in rows:
                 base_price = float(row["btc_price"])
                 prediction = row["prediction"]
@@ -1094,40 +1097,42 @@ def evaluate_council_accuracy(horizons_min: List[int] = [60]):
                     predicted_bull = prediction == "BULL"
                     hit = 1 if (predicted_bull == actual_bull) else 0
 
-                with db_session() as (conn, c):
-                    if USE_PG:
-                        c.execute(
-                            """
-                            INSERT INTO council_eval
-                              (council_id, horizon_min, price_after, hit, evaluated_at_utc)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT (council_id, horizon_min) DO UPDATE SET
-                              price_after=EXCLUDED.price_after, hit=EXCLUDED.hit, evaluated_at_utc=EXCLUDED.evaluated_at_utc
-                            """,
-                            (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
-                        )
-                    else:
-                        c.execute(
-                            """
-                            INSERT OR REPLACE INTO council_eval
-                              (council_id, horizon_min, price_after, hit, evaluated_at_utc)
-                            VALUES (?, ?, ?, ?, ?)
-                            """,
-                            (int(row["id"]), int(h), float(price_after), int(hit), eval_ts)
-                        )
-                    if h == min(horizons_min):
-                        c.execute(
-                            """
-                            UPDATE council_history
-                            SET return_pct = ?, evaluated_at_utc = ?, price_source = ?
-                            WHERE id = ?
-                            """,
-                            (return_pct, eval_ts, "binance_snapshot", int(row["id"]))
-                        )
-                evaluated += 1
+                eval_batch.append((int(row["id"]), int(h), float(price_after), int(hit), eval_ts, return_pct))
 
-            if evaluated > 0:
-                logger.info(f"[DB] Evaluated {evaluated} council predictions at {h}min horizon")
+            # Batch write all evaluations in a single db_session
+            if eval_batch:
+                with db_session() as (conn, c):
+                    for council_id, horizon, pa, hit_val, ts, ret_pct in eval_batch:
+                        if USE_PG:
+                            c.execute(
+                                """
+                                INSERT INTO council_eval
+                                  (council_id, horizon_min, price_after, hit, evaluated_at_utc)
+                                VALUES (?, ?, ?, ?, ?)
+                                ON CONFLICT (council_id, horizon_min) DO UPDATE SET
+                                  price_after=EXCLUDED.price_after, hit=EXCLUDED.hit, evaluated_at_utc=EXCLUDED.evaluated_at_utc
+                                """,
+                                (council_id, horizon, pa, hit_val, ts)
+                            )
+                        else:
+                            c.execute(
+                                """
+                                INSERT OR REPLACE INTO council_eval
+                                  (council_id, horizon_min, price_after, hit, evaluated_at_utc)
+                                VALUES (?, ?, ?, ?, ?)
+                                """,
+                                (council_id, horizon, pa, hit_val, ts)
+                            )
+                        if h == min(horizons_min):
+                            c.execute(
+                                """
+                                UPDATE council_history
+                                SET return_pct = ?, evaluated_at_utc = ?, price_source = ?
+                                WHERE id = ?
+                                """,
+                                (ret_pct, ts, "binance_snapshot", council_id)
+                            )
+                logger.info(f"[DB] Evaluated {len(eval_batch)} council predictions at {h}min horizon")
     except Exception as e:
         logger.error(f"[DB] Accuracy evaluation error: {e}")
 
@@ -1482,15 +1487,15 @@ def get_council_accuracy_summary() -> dict:
             # By prediction direction
             c.execute("""
                 SELECT
-                    COALESCE(h.prediction, 'NEUTRAL') as pred,
+                    COALESCE(ch.prediction, 'NEUTRAL') as pred,
                     COUNT(*) as cnt,
-                    SUM(CASE WHEN e.hit = 1 THEN 1 ELSE 0 END) as h
+                    SUM(CASE WHEN e.hit = 1 THEN 1 ELSE 0 END) as hits
                 FROM council_eval e
-                JOIN council_history h ON h.id = e.council_id
+                JOIN council_history ch ON ch.id = e.council_id
                 WHERE e.hit >= 0
                 GROUP BY pred
             """)
-            by_prediction = {r["pred"]: {"total": r["cnt"], "hits": r["h"], "pct": round((r["h"]/r["cnt"])*100, 1) if r["cnt"] > 0 else 0} for r in c.fetchall()}
+            by_prediction = {r["pred"]: {"total": r["cnt"], "hits": r["hits"], "pct": round((r["hits"]/r["cnt"])*100, 1) if r["cnt"] > 0 else 0} for r in c.fetchall()}
 
             return {
                 "total_evaluated": total,
