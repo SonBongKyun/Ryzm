@@ -14,12 +14,20 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 # ── Environment ──
 load_dotenv()
 
-# ── AI Configuration ──
-GENAI_API_KEY = os.getenv("GENAI_API_KEY")
-if not GENAI_API_KEY:
-    from app.core.logger import logger
-    logger.error("GENAI_API_KEY not found in environment variables!")
-    raise ValueError("GENAI_API_KEY is required. Please check your .env file.")
+# ── AI Configuration (lazy — validated on first use, not at import time) ──
+_GENAI_API_KEY: str | None = None
+
+def get_genai_api_key() -> str:
+    """Return the Gemini API key, raising only when actually needed."""
+    global _GENAI_API_KEY
+    if _GENAI_API_KEY is None:
+        _GENAI_API_KEY = os.getenv("GENAI_API_KEY", "")
+    if not _GENAI_API_KEY:
+        raise ValueError("GENAI_API_KEY is required. Please check your .env file.")
+    return _GENAI_API_KEY
+
+# Backward-compat alias (read-only; modules that just need the value)
+GENAI_API_KEY = os.getenv("GENAI_API_KEY", "")
 
 # ── Admin / Discord ──
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
@@ -93,7 +101,32 @@ if CG_DEMO_API_KEY:
 TARGET_COINS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT",
     "ADAUSDT", "AVAXUSDT", "TRXUSDT", "LINKUSDT", "POLUSDT",
-    "DOTUSDT", "LTCUSDT", "SHIBUSDT", "UNIUSDT", "ATOMUSDT"
+    "DOTUSDT", "LTCUSDT", "SHIBUSDT", "UNIUSDT", "ATOMUSDT",
+    "SUIUSDT", "ARBUSDT", "NEARUSDT", "OPUSDT", "PEPEUSDT"
+]
+
+# ── Altcoin Catalog (available for user selection in Price panel) ──
+ALTCOIN_CATALOG = [
+    {"key": "XRP",  "symbol": "XRPUSDT",  "name": "Ripple",    "color": "#00aae4"},
+    {"key": "DOGE", "symbol": "DOGEUSDT", "name": "Dogecoin",  "color": "#c2a633"},
+    {"key": "ADA",  "symbol": "ADAUSDT",  "name": "Cardano",   "color": "#0033ad"},
+    {"key": "AVAX", "symbol": "AVAXUSDT", "name": "Avalanche", "color": "#e84142"},
+    {"key": "DOT",  "symbol": "DOTUSDT",  "name": "Polkadot",  "color": "#e6007a"},
+    {"key": "LINK", "symbol": "LINKUSDT", "name": "Chainlink", "color": "#375bd2"},
+    {"key": "SUI",  "symbol": "SUIUSDT",  "name": "Sui",       "color": "#6fbcf0"},
+    {"key": "ARB",  "symbol": "ARBUSDT",  "name": "Arbitrum",  "color": "#28a0f0"},
+    {"key": "OP",   "symbol": "OPUSDT",   "name": "Optimism",  "color": "#ff0420"},
+    {"key": "NEAR", "symbol": "NEARUSDT", "name": "NEAR",      "color": "#00ec97"},
+    {"key": "TRX",  "symbol": "TRXUSDT",  "name": "Tron",      "color": "#eb0029"},
+    {"key": "LTC",  "symbol": "LTCUSDT",  "name": "Litecoin",  "color": "#bfbbbb"},
+    {"key": "UNI",  "symbol": "UNIUSDT",  "name": "Uniswap",   "color": "#ff007a"},
+    {"key": "ATOM", "symbol": "ATOMUSDT", "name": "Cosmos",    "color": "#6f7390"},
+    {"key": "POL",  "symbol": "POLUSDT",  "name": "Polygon",   "color": "#8247e5"},
+    {"key": "PEPE", "symbol": "PEPEUSDT", "name": "Pepe",      "color": "#4ca22c"},
+    {"key": "SHIB", "symbol": "SHIBUSDT", "name": "Shiba Inu", "color": "#ffa409"},
+    {"key": "APT",  "symbol": "APTUSDT",  "name": "Aptos",     "color": "#2ed8a3"},
+    {"key": "AAVE", "symbol": "AAVEUSDT", "name": "Aave",      "color": "#b6509e"},
+    {"key": "BNB",  "symbol": "BNBUSDT",  "name": "BNB",       "color": "#f0b90b"},
 ]
 
 # ── Correlation Matrix Assets ──
@@ -128,6 +161,7 @@ MUSEUM_OF_SCARS = [
     {"date": "2023.03.10", "event": "SVB Bank Run", "drop": "-10%", "desc": "Silicon Valley Bank collapse. USDC depeg to $0.87. Contagion fear."},
     {"date": "2024.08.05", "event": "Yen Carry Unwind", "drop": "-18%", "desc": "BOJ rate hike triggered global carry trade unwind. BTC $65k→$49k."},
     {"date": "2025.01.27", "event": "DeepSeek AI Shock", "drop": "-7%", "desc": "Chinese AI model disrupted NVIDIA narrative. Tech sell-off spilled into crypto."},
+    {"date": "2025.02.03", "event": "Trump Tariff War", "drop": "-12%", "desc": "US slapped 25% tariffs on Canada/Mexico, 10% on China. Risk-off cascade across crypto."},
 ]
 
 

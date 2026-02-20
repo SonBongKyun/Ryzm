@@ -980,6 +980,28 @@
               </button>
             </div>
           </div>
+          <!-- Altcoin Selector Toggle -->
+          <div class="alt-selector-wrap">
+            <button id="alt-selector-toggle" class="alt-selector-btn" title="Add/remove altcoins">
+              <i data-lucide="coins" style="width:12px;height:12px;"></i>
+              <span data-i18n-text="alt_select">Altcoins</span>
+              <i data-lucide="chevron-down" style="width:10px;height:10px;" class="alt-chevron"></i>
+            </button>
+            <span id="alt-count-badge" class="alt-count-badge">0</span>
+          </div>
+          <!-- Altcoin Selector Panel (hidden by default) -->
+          <div id="alt-selector-panel" class="alt-selector-panel hidden">
+            <div class="alt-selector-header">
+              <span class="alt-selector-title" data-i18n-text="alt_select_title">Select Altcoins to Track</span>
+              <div class="alt-selector-actions">
+                <button id="alt-select-all" class="alt-action-btn" title="Select All">ALL</button>
+                <button id="alt-clear-all" class="alt-action-btn" title="Clear All">CLEAR</button>
+              </div>
+            </div>
+            <div id="alt-coin-grid" class="alt-coin-grid">
+              <!-- Populated by JS from ALTCOIN_CATALOG -->
+            </div>
+          </div>
           <!-- Price Cards Container -->
           <div id="realtime-prices" class="price-panel" style="display:flex !important;flex-direction:column !important;flex-wrap:nowrap !important;overflow-y:auto;overflow-x:hidden;max-height:600px;width:100%;">
             <div class="skeleton-loader"><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div><div class="skeleton skeleton-block"></div></div>
@@ -1361,15 +1383,15 @@
     </div>
   </div>
 
-  <!-- JS Modules (v8.2 — MATIC→POL rename, config upgrades) -->
-  <script src="/static/js/api.js?v=8.2"></script>
-  <script src="/static/js/binance-direct.js?v=8.2"></script>
-  <script src="/static/js/chart.js?v=8.2"></script>
-  <script src="/static/js/core.js?v=8.2"></script>
-  <script src="/static/js/data.js?v=8.2"></script>
-  <script src="/static/js/council.js?v=8.2"></script>
-  <script src="/static/js/ui.js?v=8.2"></script>
-  <script src="/static/js/portfolio.js?v=8.2"></script>
+  <!-- JS Modules (v8.3 — altcoin selector, lazy GENAI init) -->
+  <script src="/static/js/api.js?v=8.3"></script>
+  <script src="/static/js/binance-direct.js?v=8.3"></script>
+  <script src="/static/js/chart.js?v=8.3"></script>
+  <script src="/static/js/core.js?v=8.3"></script>
+  <script src="/static/js/data.js?v=8.3"></script>
+  <script src="/static/js/council.js?v=8.3"></script>
+  <script src="/static/js/ui.js?v=8.3"></script>
+  <script src="/static/js/portfolio.js?v=8.3"></script>
 
   <!-- ?먥븧??Auth Modal ?먥븧??-->
   <div id="auth-modal" class="auth-modal" style="display:none;">

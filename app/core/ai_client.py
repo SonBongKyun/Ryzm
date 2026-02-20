@@ -8,12 +8,18 @@ import time
 from google import genai
 from google.genai import types
 
-from app.core.config import GENAI_API_KEY
+from app.core.config import get_genai_api_key
 from app.core.logger import logger
 from app.core.security import parse_gemini_json
 
-# ── Singleton client ──
-_client = genai.Client(api_key=GENAI_API_KEY)
+# ── Singleton client (lazy init) ──
+_client = None
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=get_genai_api_key())
+    return _client
 
 DEFAULT_MODEL = "gemini-2.0-flash"
 
@@ -40,7 +46,7 @@ def call_gemini(
     last_err = None
     for attempt in range(max_retries + 1):
         try:
-            response = _client.models.generate_content(
+            response = _get_client().models.generate_content(
                 model=model,
                 contents=prompt,
                 config=config,

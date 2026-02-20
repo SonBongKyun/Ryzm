@@ -996,6 +996,172 @@ html[data-theme="dark"] .snav-item.active {
   padding: 3px 6px;
 }
 
+/* ── Altcoin Selector ── */
+.alt-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.alt-selector-btn {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.3px;
+}
+.alt-selector-btn:hover {
+  background: rgba(163, 126, 58, 0.1);
+  border-color: rgba(163, 126, 58, 0.3);
+  color: var(--neon-cyan);
+}
+.alt-chevron {
+  transition: transform 0.25s;
+}
+.alt-chevron.rotated {
+  transform: rotate(180deg);
+}
+.alt-count-badge {
+  background: var(--neon-cyan);
+  color: #000;
+  font-size: 0.5rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+}
+.alt-count-badge.hidden { display: none; }
+
+.alt-selector-panel {
+  background: rgba(12, 17, 30, 0.98);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  animation: altPanelIn 0.2s ease;
+}
+.alt-selector-panel.hidden { display: none; }
+
+@keyframes altPanelIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.alt-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.alt-selector-title {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.alt-selector-actions {
+  display: flex;
+  gap: 4px;
+}
+.alt-action-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.alt-action-btn:hover {
+  background: rgba(163, 126, 58, 0.15);
+  color: var(--neon-cyan);
+}
+
+.alt-coin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 4px;
+}
+
+.alt-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.alt-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--chip-color, #888);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.alt-chip:hover {
+  border-color: rgba(255,255,255,0.15);
+}
+.alt-chip:hover::before {
+  opacity: 0.06;
+}
+.alt-chip.active {
+  border-color: var(--chip-color, var(--neon-cyan));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--chip-color, var(--neon-cyan)) 25%, transparent);
+}
+.alt-chip.active::before {
+  opacity: 0.1;
+}
+.alt-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.alt-chip-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-main);
+  position: relative;
+  z-index: 1;
+}
+.alt-chip-name {
+  font-family: var(--font-mono);
+  font-size: 0.45rem;
+  color: var(--text-muted);
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alt-chip.active .alt-chip-label {
+  color: var(--chip-color, var(--neon-cyan));
+}
+
 /* Price Card Container */
 #realtime-prices.price-panel {
   display: flex !important;

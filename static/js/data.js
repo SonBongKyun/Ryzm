@@ -1368,21 +1368,95 @@ let _wsHostIdx = 0;
 let _priceFilter = 'all';   // 'all' | 'crypto' | 'macro'
 let _priceSort = 'default'; // 'default' | 'change-desc' | 'change-asc' | 'vol-desc'
 
-// Crypto coins (3) + Macro items
-const _cryptoKeys = ['BTC','ETH','SOL'];
-const _macroKeys = ['VIX','DXY','USD/KRW','USD/JPY'];
-const _allPriceKeys = [..._cryptoKeys, ..._macroKeys];
+/* ═══ Real-time Price Panel v6.0 (Dynamic Altcoin Selector + Binance WS) ═══ */
+const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol, mcap}, ... }
+const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 50 pts)
+const _tickDirs = {};      // { BTC: ['up','down','up',...], ... } last 5 tick directions
+let _priceWs = null;
+let _priceWsRetry = 0;
+const _wsHosts = [
+  'wss://stream.binance.com:9443',
+  'wss://stream.binance.com:443',
+  'wss://fstream.binance.com'
+];
+let _wsHostIdx = 0;
+let _priceFilter = 'all';   // 'all' | 'crypto' | 'macro'
+let _priceSort = 'default'; // 'default' | 'change-desc' | 'change-asc' | 'vol-desc'
 
-const _wsStreamMap = {
-  BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL'
-};
+// ── Core coins (always shown) + Macro ──
+const _coreCoins = ['BTC','ETH','SOL'];
+const _macroKeys = ['VIX','DXY','USD/KRW','USD/JPY'];
+
+// ── Altcoin Catalog ──
+const _altCatalog = [
+  {key:'XRP',  symbol:'XRPUSDT',  name:'Ripple',    color:'#00aae4'},
+  {key:'DOGE', symbol:'DOGEUSDT', name:'Dogecoin',  color:'#c2a633'},
+  {key:'ADA',  symbol:'ADAUSDT',  name:'Cardano',   color:'#0033ad'},
+  {key:'AVAX', symbol:'AVAXUSDT', name:'Avalanche', color:'#e84142'},
+  {key:'DOT',  symbol:'DOTUSDT',  name:'Polkadot',  color:'#e6007a'},
+  {key:'LINK', symbol:'LINKUSDT', name:'Chainlink', color:'#375bd2'},
+  {key:'SUI',  symbol:'SUIUSDT',  name:'Sui',       color:'#6fbcf0'},
+  {key:'ARB',  symbol:'ARBUSDT',  name:'Arbitrum',  color:'#28a0f0'},
+  {key:'OP',   symbol:'OPUSDT',   name:'Optimism',  color:'#ff0420'},
+  {key:'NEAR', symbol:'NEARUSDT', name:'NEAR',      color:'#00ec97'},
+  {key:'TRX',  symbol:'TRXUSDT',  name:'Tron',      color:'#eb0029'},
+  {key:'LTC',  symbol:'LTCUSDT',  name:'Litecoin',  color:'#bfbbbb'},
+  {key:'UNI',  symbol:'UNIUSDT',  name:'Uniswap',   color:'#ff007a'},
+  {key:'ATOM', symbol:'ATOMUSDT', name:'Cosmos',    color:'#6f7390'},
+  {key:'POL',  symbol:'POLUSDT',  name:'Polygon',   color:'#8247e5'},
+  {key:'PEPE', symbol:'PEPEUSDT', name:'Pepe',      color:'#4ca22c'},
+  {key:'SHIB', symbol:'SHIBUSDT', name:'Shiba Inu', color:'#ffa409'},
+  {key:'APT',  symbol:'APTUSDT',  name:'Aptos',     color:'#2ed8a3'},
+  {key:'AAVE', symbol:'AAVEUSDT', name:'Aave',      color:'#b6509e'},
+  {key:'BNB',  symbol:'BNBUSDT',  name:'BNB',       color:'#f0b90b'},
+];
+
+// ── Selected altcoins (persisted to localStorage) ──
+let _selectedAlts = _loadSelectedAlts();
+
+function _loadSelectedAlts() {
+  try {
+    const raw = localStorage.getItem('ryzm_selected_alts');
+    if (raw) {
+      const arr = JSON.parse(raw);
+      const validKeys = new Set(_altCatalog.map(a => a.key));
+      return arr.filter(k => validKeys.has(k));
+    }
+  } catch {}
+  return [];
+}
+function _saveSelectedAlts() {
+  try { localStorage.setItem('ryzm_selected_alts', JSON.stringify(_selectedAlts)); } catch {}
+}
+
+// ── Dynamic keys ──
+function _getCryptoKeys() { return [..._coreCoins, ..._selectedAlts]; }
+function _getAllPriceKeys() { return [..._getCryptoKeys(), ..._macroKeys]; }
+
+// backward-compat references (used by other parts of data.js)
+let _cryptoKeys = _getCryptoKeys();
+let _allPriceKeys = _getAllPriceKeys();
+function _refreshKeyArrays() {
+  _cryptoKeys = _getCryptoKeys();
+  _allPriceKeys = _getAllPriceKeys();
+}
+
+// ── WS stream map (dynamic) ──
+function _getWsStreamMap() {
+  const map = {};
+  _getCryptoKeys().forEach(k => { map[k.toUpperCase() + 'USDT'] = k; });
+  return map;
+}
+let _wsStreamMap = _getWsStreamMap();
 
 function initBinanceWebSocket() {
-  if (_priceWs && _priceWs.readyState <= 1) return;
-  const streams = _cryptoKeys.map(k => `${k.toLowerCase()}usdt@miniTicker`).join('/');
+  if (_priceWs && _priceWs.readyState <= 1) { _priceWs.close(); _priceWs = null; }
+  _wsStreamMap = _getWsStreamMap();
+  const cryptoKeys = _getCryptoKeys();
+  const streams = cryptoKeys.map(k => `${k.toLowerCase()}usdt@miniTicker`).join('/');
   const host = _wsHosts[_wsHostIdx % _wsHosts.length];
   const url = `${host}/stream?streams=${streams}`;
-  console.log(`[WS] Connecting to ${host} (3 streams)...`);
+  console.log(`[WS] Connecting to ${host} (${cryptoKeys.length} streams)...`);
   try { _priceWs = new WebSocket(url); } catch (e) { _wsHostIdx++; scheduleWsReconnect(); return; }
 
   const connectTimeout = setTimeout(() => {
@@ -1392,7 +1466,7 @@ function initBinanceWebSocket() {
   _priceWs.onopen = () => {
     clearTimeout(connectTimeout);
     _priceWsRetry = 0;
-    console.log('[WS] Binance connected via ' + host + ' ??3 crypto streams');
+    console.log('[WS] Binance connected via ' + host + ' — ' + cryptoKeys.length + ' crypto streams');
     _updateConnectionBanner('connected');
     _updateWsBadge('connected');
   };
@@ -1595,22 +1669,37 @@ function updateMiniChart(key, price, change) {
   `;
 }
 
-// Inline SVG icons for each ticker (3 crypto + 4 macro)
+// Inline SVG icons for core + macro tickers
 const _tickerIcons = {
   BTC: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#f7931a"/><path d="M22.5 14.2c.3-2-1.2-3.1-3.3-3.8l.7-2.7-1.6-.4-.6 2.6c-.4-.1-.9-.2-1.3-.3l.7-2.6-1.7-.4-.7 2.7c-.4-.1-.7-.2-1-.2l-2.3-.6-.4 1.7s1.2.3 1.2.3c.7.2.8.6.8 1l-.8 3.3c0 .1.1.1.1.1l-.1 0-1.2 4.7c-.1.2-.3.6-.8.4 0 0-1.2-.3-1.2-.3l-.8 1.9 2.2.5c.4.1.8.2 1.2.3l-.7 2.8 1.6.4.7-2.7c.5.1.9.2 1.3.3l-.7 2.7 1.7.4.7-2.8c2.8.5 4.9.3 5.8-2.2.7-2 0-3.2-1.5-3.9 1.1-.3 1.9-1 2.1-2.5zm-3.7 5.2c-.5 2-3.9.9-5 .7l.9-3.6c1.1.3 4.7.8 4.1 2.9zm.5-5.3c-.5 1.8-3.3.9-4.2.7l.8-3.2c.9.2 3.9.7 3.4 2.5z" fill="#fff"/></svg>`,
   ETH: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#627eea"/><path d="M16.5 4v8.9l7.5 3.3z" fill="#fff" opacity=".6"/><path d="M16.5 4L9 16.2l7.5-3.3z" fill="#fff"/><path d="M16.5 21.9v6.1l7.5-10.4z" fill="#fff" opacity=".6"/><path d="M16.5 28V21.9L9 17.6z" fill="#fff"/><path d="M16.5 20.6l7.5-4.4-7.5-3.3z" fill="#fff" opacity=".2"/><path d="M9 16.2l7.5 4.4v-7.7z" fill="#fff" opacity=".5"/></svg>`,
   SOL: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#000"/><linearGradient id="sol-g" x1="5" y1="27" x2="27" y2="5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9945ff"/><stop offset=".5" stop-color="#14f195"/><stop offset="1" stop-color="#00d1ff"/></linearGradient><path d="M9.5 20.1h13.6l-3 3H6.5z M9.5 14.5h13.6l-3-3H6.5z M9.5 8.9h13.6l-3 3H6.5z" fill="url(#sol-g)" transform="translate(0,0.5)"/></svg>`,
   VIX: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><path d="M8 22l4-8 3 5 3-10 3 7 3-6" stroke="#f97316" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   DXY: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#C9A96E" font-size="14" font-weight="bold" font-family="sans-serif">$</text></svg>`,
-  'USD/KRW': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#eab308" font-size="12" font-weight="bold" font-family="sans-serif">??/text></svg>`,
-  'USD/JPY': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold" font-family="sans-serif">¥</text></svg>`
+  'USD/KRW': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#eab308" font-size="12" font-weight="bold" font-family="sans-serif">\u20A9</text></svg>`,
+  'USD/JPY': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold" font-family="sans-serif">\u00A5</text></svg>`
 };
 
-const _tickerCategory = {};
-_cryptoKeys.forEach(k => { _tickerCategory[k] = 'crypto'; });
-_macroKeys.forEach(k => { _tickerCategory[k] = k.startsWith('USD/') ? 'fx' : 'macro'; });
+// Generate generic altcoin icon from catalog color
+function _altIcon(key) {
+  if (_tickerIcons[key]) return _tickerIcons[key];
+  const alt = _altCatalog.find(a => a.key === key);
+  const color = alt ? alt.color : '#888';
+  const letter = key.charAt(0);
+  return `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="${color}"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="13" font-weight="bold" font-family="sans-serif">${letter}</text></svg>`;
+}
+
+function _rebuildTickerCategory() {
+  const cat = {};
+  _getCryptoKeys().forEach(k => { cat[k] = 'crypto'; });
+  _macroKeys.forEach(k => { cat[k] = k.startsWith('USD/') ? 'fx' : 'macro'; });
+  return cat;
+}
+let _tickerCategory = _rebuildTickerCategory();
 
 function buildPriceCards() {
+  _refreshKeyArrays();
+  _tickerCategory = _rebuildTickerCategory();
   const container = document.getElementById('realtime-prices');
   if (!container) return;
 
@@ -1619,7 +1708,7 @@ function buildPriceCards() {
 
   let html = '';
   _allPriceKeys.forEach((key, idx) => {
-    const icon = _tickerIcons[key] || '';
+    const icon = _altIcon(key);
     const cardKey = key.replace('/', '');
     const cat = _tickerCategory[key] || 'macro';
     const tagClass = cat === 'crypto' ? 'tag-crypto' : (cat === 'fx' ? 'tag-fx' : 'tag-macro');
@@ -1685,6 +1774,120 @@ function buildPriceCards() {
   _initPriceHover();
   _initThemeToggle();
   _cloneMarqueeForSeamless();
+  _initAltSelector();
+}
+
+/* ═══ Altcoin Selector ═══ */
+function _initAltSelector() {
+  const toggle = document.getElementById('alt-selector-toggle');
+  const panel = document.getElementById('alt-selector-panel');
+  const grid = document.getElementById('alt-coin-grid');
+  const badge = document.getElementById('alt-count-badge');
+  const selectAllBtn = document.getElementById('alt-select-all');
+  const clearAllBtn = document.getElementById('alt-clear-all');
+  if (!toggle || !panel || !grid) return;
+
+  // Build coin chips
+  let html = '';
+  _altCatalog.forEach(alt => {
+    const isActive = _selectedAlts.includes(alt.key);
+    html += `
+      <button class="alt-chip${isActive ? ' active' : ''}" data-key="${alt.key}" style="--chip-color:${alt.color}">
+        <span class="alt-chip-dot" style="background:${alt.color}"></span>
+        <span class="alt-chip-label">${alt.key}</span>
+        <span class="alt-chip-name">${alt.name}</span>
+      </button>`;
+  });
+  grid.innerHTML = html;
+  _updateAltBadge();
+
+  // Toggle panel
+  toggle.addEventListener('click', () => {
+    panel.classList.toggle('hidden');
+    toggle.querySelector('.alt-chevron')?.classList.toggle('rotated');
+  });
+
+  // Chip click
+  grid.addEventListener('click', (e) => {
+    const chip = e.target.closest('.alt-chip');
+    if (!chip) return;
+    const key = chip.dataset.key;
+    if (chip.classList.contains('active')) {
+      chip.classList.remove('active');
+      _selectedAlts = _selectedAlts.filter(k => k !== key);
+    } else {
+      chip.classList.add('active');
+      _selectedAlts.push(key);
+    }
+    _saveSelectedAlts();
+    _onAltSelectionChange();
+  });
+
+  // Select All
+  if (selectAllBtn) selectAllBtn.addEventListener('click', () => {
+    _selectedAlts = _altCatalog.map(a => a.key);
+    grid.querySelectorAll('.alt-chip').forEach(c => c.classList.add('active'));
+    _saveSelectedAlts();
+    _onAltSelectionChange();
+  });
+
+  // Clear All
+  if (clearAllBtn) clearAllBtn.addEventListener('click', () => {
+    _selectedAlts = [];
+    grid.querySelectorAll('.alt-chip').forEach(c => c.classList.remove('active'));
+    _saveSelectedAlts();
+    _onAltSelectionChange();
+  });
+}
+
+function _updateAltBadge() {
+  const badge = document.getElementById('alt-count-badge');
+  if (badge) {
+    badge.textContent = _selectedAlts.length;
+    badge.classList.toggle('hidden', _selectedAlts.length === 0);
+  }
+}
+
+function _onAltSelectionChange() {
+  _updateAltBadge();
+  // Rebuild cards with new coin set
+  buildPriceCards();
+  // Reconnect WS with updated streams
+  initBinanceWebSocket();
+  // Fetch initial prices for new coins
+  _fetchAltPricesFromBinance();
+}
+
+/** Fetch 24h ticker for all selected alts from Binance REST (one batch call) */
+async function _fetchAltPricesFromBinance() {
+  const alts = _selectedAlts.filter(k => !_livePrices[k] || !_livePrices[k].price);
+  if (alts.length === 0) return;
+  const symbols = alts.map(k => k.toUpperCase() + 'USDT');
+  const param = '%5B' + symbols.map(s => '%22' + s + '%22').join('%2C') + '%5D';
+  try {
+    const resp = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=' + param);
+    if (!resp.ok) return;
+    const tickers = await resp.json();
+    tickers.forEach(t => {
+      const key = t.symbol.replace('USDT','');
+      const price = parseFloat(t.lastPrice || 0);
+      const change = parseFloat(t.priceChangePercent || 0);
+      const prev = _livePrices[key];
+      _livePrices[key] = {
+        price: price,
+        change: round2(change),
+        prevPrice: prev ? prev.price : price,
+        high: parseFloat(t.highPrice || 0),
+        low: parseFloat(t.lowPrice || 0),
+        vol: parseFloat(t.volume || 0),
+        mcap: prev ? prev.mcap : 0,
+        _wsTime: Date.now(),
+        _source: 'rest'
+      };
+      renderPriceCard(key);
+    });
+    _updatePriceSummary();
+  } catch (e) { console.warn('[Alt] Binance REST fetch error:', e); }
 }
 
 /* Sort & Filter */
