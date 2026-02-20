@@ -14,8 +14,13 @@ const BinanceDirect = (() => {
   const SCANNER_SYMBOLS = [
     'BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','DOGEUSDT',
     'ADAUSDT','AVAXUSDT','TRXUSDT','LINKUSDT','MATICUSDT',
-    'DOTUSDT','LTCUSDT','SHIBUSDT','UNIUSDT','ATOMUSDT'
+    'DOTUSDT','LTCUSDT','1000SHIBUSDT','UNIUSDT','ATOMUSDT'
   ];
+
+  /** Extract display coin name from fapi symbol (handles 1000SHIB → SHIB) */
+  function _coinName(sym) {
+    return sym.replace('USDT', '').replace(/^1000/, '');
+  }
 
   /** Simple fetch with timeout */
   async function _get(url, timeoutMs = 8000) {
@@ -272,7 +277,7 @@ const BinanceDirect = (() => {
 
           const closes = klines.map(k => parseFloat(k[4]));
           const volumes = klines.map(k => parseFloat(k[5]));
-          const coin = sym.replace('USDT', '');
+          const coin = _coinName(sym);
 
           // Last close & change
           const last = closes[closes.length - 1];
