@@ -1353,21 +1353,6 @@ function replaceSkeleton(container) {
   container.addEventListener('animationend', () => container.classList.remove('data-loaded'), { once: true });
 }
 
-/* ?�?� Real-time Price Panel v5.6 (Binance WebSocket + Backend Macro) ?�?� */
-const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol, mcap}, ... }
-const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 50 pts)
-const _tickDirs = {};      // { BTC: ['up','down','up',...], ... } last 5 tick directions
-let _priceWs = null;
-let _priceWsRetry = 0;
-const _wsHosts = [
-  'wss://stream.binance.com:9443',
-  'wss://stream.binance.com:443',
-  'wss://fstream.binance.com'
-];
-let _wsHostIdx = 0;
-let _priceFilter = 'all';   // 'all' | 'crypto' | 'macro'
-let _priceSort = 'default'; // 'default' | 'change-desc' | 'change-asc' | 'vol-desc'
-
 /* ═══ Real-time Price Panel v6.0 (Dynamic Altcoin Selector + Binance WS) ═══ */
 const _livePrices = {};   // { BTC: {price, change, prevPrice, high, low, vol, mcap}, ... }
 const _priceHistory = {};  // { BTC: [p1, p2, ...], ... } mini sparkline data (max 50 pts)
