@@ -2124,7 +2124,7 @@ const _COIN_MAP = {
   'BNB': 'bnb', 'Binance': 'bnb',
   'Dogecoin': 'doge', 'DOGE': 'doge',
   'Cardano': 'ada', 'ADA': 'ada',
-  'Polygon': 'default', 'MATIC': 'default',
+  'Polygon': 'default', 'MATIC': 'default', 'POL': 'default',
   'Avalanche': 'default', 'AVAX': 'default',
   'Chainlink': 'default', 'LINK': 'default',
 };

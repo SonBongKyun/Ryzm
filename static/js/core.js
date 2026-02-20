@@ -567,7 +567,7 @@ const _POPULAR_SYMBOLS = [
   { sym: 'ADAUSDT', name: 'Cardano' },
   { sym: 'AVAXUSDT', name: 'Avalanche' },
   { sym: 'DOTUSDT', name: 'Polkadot' },
-  { sym: 'MATICUSDT', name: 'Polygon' },
+  { sym: 'POLUSDT', name: 'Polygon' },
   { sym: 'LINKUSDT', name: 'Chainlink' },
   { sym: 'SHIBUSDT', name: 'Shiba Inu' },
   { sym: 'LTCUSDT', name: 'Litecoin' },

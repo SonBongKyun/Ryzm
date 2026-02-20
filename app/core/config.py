@@ -5,7 +5,7 @@ All environment variables, API keys, Pydantic models, and static data.
 import os
 import pathlib
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from dotenv import load_dotenv
 
 # ── Project Root ──
@@ -68,7 +68,7 @@ PRO_PRICE_USD = 20  # monthly price in USD
 STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")  # Stripe Price ID
 PRO_TRIAL_DAYS = int(os.getenv("PRO_TRIAL_DAYS", "7"))  # Free trial period
 
-PRO_FEATURES = {
+PRO_FEATURES: frozenset[str] = frozenset({
     "unlimited_validate",
     "unlimited_council",
     "unlimited_chat",
@@ -78,7 +78,7 @@ PRO_FEATURES = {
     # "export_pdf",       # Coming soon — v2.0
     # "telegram_alerts",  # Coming soon — v2.0
     # "backtest",         # Coming soon — v2.0
-}
+})
 
 # ── Yahoo Finance ──
 ENABLE_YAHOO = os.getenv("ENABLE_YAHOO", "true").lower() in ("true", "1", "yes")
@@ -92,7 +92,7 @@ if CG_DEMO_API_KEY:
 # ── Alpha Scanner Configuration ──
 TARGET_COINS = [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT",
-    "ADAUSDT", "AVAXUSDT", "TRXUSDT", "LINKUSDT", "MATICUSDT",
+    "ADAUSDT", "AVAXUSDT", "TRXUSDT", "LINKUSDT", "POLUSDT",
     "DOTUSDT", "LTCUSDT", "SHIBUSDT", "UNIUSDT", "ATOMUSDT"
 ]
 
@@ -163,20 +163,23 @@ class LayoutSaveRequest(BaseModel):
     panels: dict = Field(default_factory=dict)
 
 
+# ── Email pattern (basic RFC-ish check without extra dependency) ──
+_EMAIL_RE = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+
 # ── Auth Request Models ──
 class RegisterRequest(BaseModel):
-    email: str = Field(..., max_length=200)
+    email: str = Field(..., max_length=200, pattern=_EMAIL_RE)
     password: str = Field(..., min_length=8, max_length=200)
     display_name: str = Field(default="", max_length=50)
     accept_tos: bool = Field(default=False)
     invite_code: str = Field(default="", max_length=50)
 
 class LoginRequest(BaseModel):
-    email: str = Field(..., max_length=200)
+    email: str = Field(..., max_length=200, pattern=_EMAIL_RE)
     password: str = Field(..., max_length=200)
 
 class ForgotPasswordRequest(BaseModel):
-    email: str = Field(..., max_length=200)
+    email: str = Field(..., max_length=200, pattern=_EMAIL_RE)
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., max_length=200)
@@ -232,35 +235,41 @@ class JournalUpdateRequest(BaseModel):
 # Pydantic Models (AI Response Validation)
 # ───────────────────────────────────────
 class CouncilVibe(BaseModel):
+    model_config = ConfigDict(frozen=True)
     status: str = "UNKNOWN"
     color: str = "#555"
     message: str = ""
 
 class CouncilAgent(BaseModel):
+    model_config = ConfigDict(frozen=True)
     name: str = ""
     status: str = "NEUTRAL"
     message: str = ""
 
 class CouncilNarrative(BaseModel):
+    model_config = ConfigDict(frozen=True)
     name: str = ""
     score: int = 50
     trend: str = "FLAT"
 
 class CouncilResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
     vibe: CouncilVibe = CouncilVibe()
     narratives: List[CouncilNarrative] = []
-    strategies: list = []
+    strategies: List[dict] = []
     agents: List[CouncilAgent] = []
     consensus_score: int = Field(default=50, ge=0, le=100)
-    strategic_narrative: list = []
+    strategic_narrative: List[dict] = []
 
 class ValidatorResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
     overall_score: int = Field(default=50, ge=0, le=100)
     verdict: str = "UNKNOWN"
     win_rate: str = "N/A"
-    personas: list = []
+    personas: List[dict] = []
     summary: str = ""
 
 class ChatResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
     response: str = "System maintenance."
     confidence: str = "LOW"
