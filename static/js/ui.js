@@ -248,7 +248,12 @@ function toggleBrowserNotif(on) {
 /*  Alpha Scanner  */
 async function fetchScanner() {
   try {
-    const data = await apiFetch('/api/scanner', { silent: true, timeoutMs: 20000 });
+    let data;
+    if (typeof BinanceDirect !== 'undefined' && await BinanceDirect.isFapiAvailable()) {
+      data = await BinanceDirect.scanner();
+    } else {
+      data = await apiFetch('/api/scanner', { silent: true, timeoutMs: 20000 });
+    }
     const feed = document.getElementById('scanner-feed');
     if (!feed) return;
 
@@ -375,7 +380,12 @@ async function fetchWhaleWallets() {
 /*  Liquidation Kill Zone  */
 async function fetchLiqZones() {
   try {
-    const data = await apiFetch('/api/liq-zones', { silent: true });
+    let data;
+    if (typeof BinanceDirect !== 'undefined' && await BinanceDirect.isFapiAvailable()) {
+      data = await BinanceDirect.liqZones();
+    } else {
+      data = await apiFetch('/api/liq-zones', { silent: true });
+    }
     const el = document.getElementById('liq-zones');
     if (!el) return;
 
@@ -1708,7 +1718,12 @@ function renderMultiTimeframe(data) {
    ?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═?═??*/
 async function fetchOnChainData() {
   try {
-    const data = await apiFetch('/api/onchain', { silent: true });
+    let data;
+    if (typeof BinanceDirect !== 'undefined' && await BinanceDirect.isFapiAvailable()) {
+      data = await BinanceDirect.onchainData();
+    } else {
+      data = await apiFetch('/api/onchain', { silent: true });
+    }
     renderOnChainData(data);
   } catch (e) {
     console.error('[OnChain]', e);

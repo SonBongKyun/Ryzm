@@ -40,7 +40,12 @@ async function fetchBriefing() {
 
 async function fetchFundingRate() {
   try {
-    const data = await apiFetch('/api/funding-rate', { silent: true });
+    let data;
+    if (typeof BinanceDirect !== 'undefined' && await BinanceDirect.isFapiAvailable()) {
+      data = await BinanceDirect.fundingRate();
+    } else {
+      data = await apiFetch('/api/funding-rate', { silent: true });
+    }
     if (!data.rates || data.rates.length === 0) return;
     data.rates.forEach(r => {
       const sym = String(r.symbol).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -66,7 +71,12 @@ async function fetchFundingRate() {
 
 async function fetchWhaleFeed() {
   try {
-    const data = await apiFetch('/api/liquidations', { silent: true });
+    let data;
+    if (typeof BinanceDirect !== 'undefined' && await BinanceDirect.isFapiAvailable()) {
+      data = await BinanceDirect.whaleTrades();
+    } else {
+      data = await apiFetch('/api/liquidations', { silent: true });
+    }
     const container = document.getElementById('whale-feed');
     if (!container) return;
     if (!data.trades || data.trades.length === 0) {
@@ -948,7 +958,12 @@ function _initLsTabs() {
 
 async function fetchLongShortRatio() {
   try {
-    const data = await apiFetch('/api/long-short', { silent: true });
+    let data;
+    if (typeof BinanceDirect !== 'undefined' && await BinanceDirect.isFapiAvailable()) {
+      data = await BinanceDirect.longShort();
+    } else {
+      data = await apiFetch('/api/long-short', { silent: true });
+    }
     
     // Parse multi-coin data
     if (data.coins) {
