@@ -1715,7 +1715,7 @@ function buildPriceCards() {
     const tagLabel = cat === 'crypto' ? 'CRYPTO' : (cat === 'fx' ? 'FX' : 'INDEX');
 
     html += `
-      <div class="price-card" id="price-card-${cardKey}" data-key="${key}" data-cat="${cat}" style="display:grid;width:100%;box-sizing:border-box;margin-bottom:3px;animation-delay:${idx * 0.04}s">
+      <div class="price-card" id="price-card-${cardKey}" data-key="${key}" data-cat="${cat}" style="width:100%;box-sizing:border-box;margin-bottom:3px;animation-delay:${idx * 0.04}s">
         <canvas class="price-card-particle" width="200" height="80"></canvas>
         <div class="price-card-icon">${icon}</div>
         <div class="price-card-info">
