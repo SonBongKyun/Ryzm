@@ -3882,7 +3882,7 @@ button:active::before {
   }
 }
 
-/* ?�?� Briefing Panel ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?� */
+/* ═══ Briefing Panel ═══ */
 .briefing-panel {
   position: fixed;
   bottom: 40px;
@@ -3891,12 +3891,12 @@ button:active::before {
   width: min(92vw, 800px);
   display: flex;
   flex-direction: column;
-  background: rgba(255,255,255,0.97);
+  background: var(--bg-panel);
   backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-dim);
   border-left: 4px solid var(--neon-cyan);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
   z-index: 1000;
   animation: briefingSlideUp 0.4s ease-out;
   overflow: hidden;
@@ -3906,8 +3906,8 @@ button:active::before {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(90deg, rgba(163,126,58,0.06), transparent);
+  border-bottom: 1px solid var(--border-dim);
+  background: linear-gradient(90deg, rgba(201,169,110,0.08), transparent);
 }
 .briefing-badge {
   font-size: 0.6rem;
@@ -3930,14 +3930,14 @@ button:active::before {
 }
 .briefing-time {
   font-size: 0.65rem;
-  color: var(--text-dim);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 .briefing-close {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-dim);
+  color: var(--text-muted);
   padding: 2px;
   flex-shrink: 0;
   transition: color 0.2s;
@@ -3955,6 +3955,22 @@ button:active::before {
 @keyframes briefingSlideUp {
   from { opacity: 0; transform: translateX(-50%) translateY(30px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+}
+/* Briefing trigger button dot */
+.briefing-trigger-btn { position: relative; }
+.briefing-dot {
+  position: absolute;
+  top: -2px; right: -2px;
+  width: 7px; height: 7px;
+  background: var(--neon-green);
+  border-radius: 50%;
+  display: none;
+  animation: briefDotPulse 1.5s infinite;
+}
+@keyframes briefDotPulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.4; }
 }
 
 /* ?�?� Theme Toggle Button ?�?� */
@@ -7590,6 +7606,19 @@ body.white-theme .price-card-tag { background: rgba(156, 125, 58, 0.08); }
 body.white-theme .price-card-tag.tag-crypto { color: #9C7D3A; background: rgba(156, 125, 58, 0.1); }
 body.white-theme .price-card-tag.tag-macro { color: #6b5b3a; background: rgba(156, 125, 58, 0.08); }
 body.white-theme .price-card-tag.tag-fx { color: #8B6914; background: rgba(139, 105, 20, 0.08); }
+
+/* ── Briefing Panel (light-mode) ── */
+body.white-theme .briefing-panel {
+  background: rgba(255,255,255,0.97);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+body.white-theme .briefing-header {
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+body.white-theme .briefing-title { color: #1a1a1a; }
+body.white-theme .briefing-content { color: #333; }
+body.white-theme .briefing-close { color: #999; }
+body.white-theme .briefing-close:hover { color: #1a1a1a; }
 
 /* ── Price flash (light-mode safe) ── */
 body.white-theme .price-flash-up {

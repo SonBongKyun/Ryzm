@@ -1,40 +1,69 @@
 
+/* ═══ Briefing (click-to-show) ═══ */
+let _briefingCache = null;
+
 async function fetchBriefing() {
   try {
     const data = await apiFetch('/api/briefing', { silent: true });
-    const panel = document.getElementById('briefing-panel');
-    const titleEl = document.getElementById('briefing-title');
-    const contentEl = document.getElementById('briefing-content');
-    const timeEl = document.getElementById('briefing-time');
-    const closeBtn = document.getElementById('briefing-close');
-
-    if (!panel || data.status === 'empty' || !data.title) {
-      if (panel) panel.style.display = 'none';
-      return;
-    }
-
-    // Don't re-show if user already dismissed this briefing
-    const dismissedKey = `briefing_dismissed_${data.time}`;
-    if (sessionStorage.getItem(dismissedKey)) return;
-
-    titleEl.innerText = data.title;
-    contentEl.innerText = data.content;
-    timeEl.innerText = data.time;
-    panel.style.display = 'flex';
-
-    // Close handler ??always update dismissedKey via data attribute
-    closeBtn.dataset.dismissKey = dismissedKey;
-    if (!closeBtn.dataset.bound) {
-      closeBtn.addEventListener('click', () => {
-        panel.style.display = 'none';
-        const key = closeBtn.dataset.dismissKey;
-        if (key) sessionStorage.setItem(key, '1');
-        playSound('click');
-      });
-      closeBtn.dataset.bound = 'true';
-    }
+    if (!data || data.status === 'empty' || !data.title) { _briefingCache = null; return; }
+    _briefingCache = data;
+    // Show dot indicator on the header button
+    const dot = document.getElementById('briefing-dot');
+    if (dot) dot.style.display = '';
   } catch (e) {
-    console.error('Briefing Error:', e);
+    console.error('Briefing fetch error:', e);
+  }
+}
+
+function showBriefingPanel() {
+  const panel = document.getElementById('briefing-panel');
+  if (!panel) return;
+
+  // If panel is already visible, toggle off
+  if (panel.style.display === 'flex') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  // No cached data — fetch first, then show
+  if (!_briefingCache) {
+    apiFetch('/api/briefing', { silent: true }).then(data => {
+      if (!data || data.status === 'empty' || !data.title) {
+        showToast?.('No briefing available yet', 'info');
+        return;
+      }
+      _briefingCache = data;
+      _renderBriefing();
+    }).catch(() => showToast?.('Briefing load failed', 'error'));
+    return;
+  }
+  _renderBriefing();
+}
+
+function _renderBriefing() {
+  const panel = document.getElementById('briefing-panel');
+  const titleEl = document.getElementById('briefing-title');
+  const contentEl = document.getElementById('briefing-content');
+  const timeEl = document.getElementById('briefing-time');
+  const closeBtn = document.getElementById('briefing-close');
+  if (!panel || !_briefingCache) return;
+
+  titleEl.innerText = _briefingCache.title;
+  contentEl.innerText = _briefingCache.content;
+  timeEl.innerText = _briefingCache.time;
+  panel.style.display = 'flex';
+
+  // Hide dot indicator
+  const dot = document.getElementById('briefing-dot');
+  if (dot) dot.style.display = 'none';
+
+  // Close handler
+  if (!closeBtn.dataset.bound) {
+    closeBtn.addEventListener('click', () => {
+      panel.style.display = 'none';
+      playSound?.('click');
+    });
+    closeBtn.dataset.bound = 'true';
   }
 }
 

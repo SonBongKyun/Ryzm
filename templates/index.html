@@ -39,7 +39,7 @@
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=8.7" />
+  <link rel="stylesheet" href="/static/styles.css?v=8.8" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0D0D0F" />
@@ -187,6 +187,13 @@
     <span id="header-usage-counter" class="usage-counter-badge" style="display:none;" title="Today's AI usage (Council / Validator / Chat)">
       AI <span class="usage-val" id="usage-council">0</span><span class="usage-sep">/</span><span class="usage-max" id="usage-council-max">10</span>
     </span>
+
+    <!-- Briefing Toggle Button -->
+    <button id="btn-briefing" class="daily-report-btn briefing-trigger-btn" title="Show Briefing" onclick="showBriefingPanel()">
+      <i data-lucide="zap" style="width:13px;height:13px;"></i>
+      <span>Briefing</span>
+      <span id="briefing-dot" class="briefing-dot"></span>
+    </button>
 
     <!-- Daily Report Button -->
     <button id="btn-daily-report" class="daily-report-btn" title="Get Daily Briefing" onclick="openDailyReportModal()">
@@ -1383,15 +1390,15 @@
     </div>
   </div>
 
-  <!-- JS Modules (v8.7 — filter CSS specificity fix) -->
-  <script src="/static/js/api.js?v=8.7"></script>
-  <script src="/static/js/binance-direct.js?v=8.7"></script>
-  <script src="/static/js/chart.js?v=8.7"></script>
-  <script src="/static/js/core.js?v=8.7"></script>
-  <script src="/static/js/data.js?v=8.7"></script>
-  <script src="/static/js/council.js?v=8.7"></script>
-  <script src="/static/js/ui.js?v=8.7"></script>
-  <script src="/static/js/portfolio.js?v=8.7"></script>
+  <!-- JS Modules (v8.8 — briefing click-to-show + dark mode) -->
+  <script src="/static/js/api.js?v=8.8"></script>
+  <script src="/static/js/binance-direct.js?v=8.8"></script>
+  <script src="/static/js/chart.js?v=8.8"></script>
+  <script src="/static/js/core.js?v=8.8"></script>
+  <script src="/static/js/data.js?v=8.8"></script>
+  <script src="/static/js/council.js?v=8.8"></script>
+  <script src="/static/js/ui.js?v=8.8"></script>
+  <script src="/static/js/portfolio.js?v=8.8"></script>
 
   <!-- ?먥븧??Auth Modal ?먥븧??-->
   <div id="auth-modal" class="auth-modal" style="display:none;">

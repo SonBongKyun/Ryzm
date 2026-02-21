@@ -833,7 +833,8 @@ function initDataFeeds() {
   RyzmScheduler.register('news',          60000,  fetchNews);
   RyzmScheduler.register('realtimePrices',10000,  fetchRealtimePrices);
   RyzmScheduler.register('lsRatio',       60000,  fetchLongShortRatio);
-  RyzmScheduler.register('briefing',     120000,  fetchBriefing);
+  // briefing: now click-triggered only (showBriefingPanel), background cache fetch every 5min
+  RyzmScheduler.register('briefing',     300000,  fetchBriefing);
   RyzmScheduler.register('fundingRate',   60000,  fetchFundingRate);
   RyzmScheduler.register('whaleFeed',     30000,  fetchWhaleFeed);
   RyzmScheduler.register('calendar',     300000,  fetchCalendar);
