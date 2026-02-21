@@ -1267,6 +1267,7 @@ html[data-theme="dark"] .snav-item.active {
 .price-card-tag.tag-crypto { color: #C9A96E; background: rgba(201,169,110,0.08); }
 .price-card-tag.tag-macro { color: #a78bfa; background: rgba(212,184,120,0.08); }
 .price-card-tag.tag-fx { color: #eab308; background: rgba(234,179,8,0.08); }
+.price-card-tag.tag-commodity { color: #d4a017; background: rgba(212,160,23,0.10); }
 
 /* Bottom row: vol + sparkline + high/low bar — hidden by default, show on hover */
 .price-card-bottom {

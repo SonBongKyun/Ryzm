@@ -1222,7 +1222,7 @@ async function fetchMacroTicker() {
       }
     }
 
-    const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'USD/KRW', 'USD/JPY'];
+    const order = ['BTC', 'ETH', 'SOL', 'VIX', 'DXY', 'GOLD', 'SILVER', 'USD/KRW', 'USD/JPY'];
     let html = '';
 
     order.forEach(key => {
@@ -1370,7 +1370,7 @@ let _priceSort = 'default'; // 'default' | 'change-desc' | 'change-asc' | 'vol-d
 
 // ── Core coins (always shown) + Macro ──
 const _coreCoins = ['BTC','ETH','SOL'];
-const _macroKeys = ['VIX','DXY','USD/KRW','USD/JPY'];
+const _macroKeys = ['VIX','DXY','GOLD','SILVER','USD/KRW','USD/JPY'];
 
 // ── Altcoin Catalog ──
 const _altCatalog = [
@@ -1662,7 +1662,9 @@ const _tickerIcons = {
   VIX: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><path d="M8 22l4-8 3 5 3-10 3 7 3-6" stroke="#f97316" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   DXY: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#C9A96E" font-size="14" font-weight="bold" font-family="sans-serif">$</text></svg>`,
   'USD/KRW': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#eab308" font-size="12" font-weight="bold" font-family="sans-serif">\u20A9</text></svg>`,
-  'USD/JPY': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold" font-family="sans-serif">\u00A5</text></svg>`
+  'USD/JPY': `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#1e293b"/><text x="16" y="21" text-anchor="middle" fill="#dc2626" font-size="12" font-weight="bold" font-family="sans-serif">\u00A5</text></svg>`,
+  GOLD: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#d4a017"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold" font-family="sans-serif">Au</text></svg>`,
+  SILVER: `<svg viewBox="0 0 32 32" class="ticker-icon"><circle cx="16" cy="16" r="16" fill="#a8a9ad"/><text x="16" y="21" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold" font-family="sans-serif">Ag</text></svg>`
 };
 
 // Generate generic altcoin icon from catalog color
@@ -1677,7 +1679,11 @@ function _altIcon(key) {
 function _rebuildTickerCategory() {
   const cat = {};
   _getCryptoKeys().forEach(k => { cat[k] = 'crypto'; });
-  _macroKeys.forEach(k => { cat[k] = k.startsWith('USD/') ? 'fx' : 'macro'; });
+  _macroKeys.forEach(k => {
+    if (k.startsWith('USD/')) cat[k] = 'fx';
+    else if (k === 'GOLD' || k === 'SILVER') cat[k] = 'commodity';
+    else cat[k] = 'macro';
+  });
   return cat;
 }
 let _tickerCategory = _rebuildTickerCategory();
@@ -1696,8 +1702,8 @@ function buildPriceCards() {
     const icon = _altIcon(key);
     const cardKey = key.replace('/', '');
     const cat = _tickerCategory[key] || 'macro';
-    const tagClass = cat === 'crypto' ? 'tag-crypto' : (cat === 'fx' ? 'tag-fx' : 'tag-macro');
-    const tagLabel = cat === 'crypto' ? 'CRYPTO' : (cat === 'fx' ? 'FX' : 'INDEX');
+    const tagClass = cat === 'crypto' ? 'tag-crypto' : (cat === 'fx' ? 'tag-fx' : (cat === 'commodity' ? 'tag-commodity' : 'tag-macro'));
+    const tagLabel = cat === 'crypto' ? 'CRYPTO' : (cat === 'fx' ? 'FX' : (cat === 'commodity' ? 'CMDTY' : 'INDEX'));
 
     html += `
       <div class="price-card" id="price-card-${cardKey}" data-key="${key}" data-cat="${cat}" style="width:100%;box-sizing:border-box;margin-bottom:3px;animation-delay:${idx * 0.04}s">
@@ -1907,7 +1913,7 @@ function _applyPriceFilterSort() {
     const cat = card.dataset.cat;
     const show = _priceFilter === 'all' ||
       (_priceFilter === 'crypto' && cat === 'crypto') ||
-      (_priceFilter === 'macro' && (cat === 'macro' || cat === 'fx'));
+      (_priceFilter === 'macro' && (cat === 'macro' || cat === 'fx' || cat === 'commodity'));
     card.classList.toggle('hidden-card', !show);
   });
 

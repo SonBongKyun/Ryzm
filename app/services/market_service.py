@@ -177,7 +177,9 @@ def fetch_market_data():
 
     macro_tickers = {
         "%5EVIX": ("VIX", 18.5),
-        "DX-Y.NYB": ("DXY", 104.0)
+        "DX-Y.NYB": ("DXY", 104.0),
+        "GC%3DF": ("GOLD", 2650.0),
+        "SI%3DF": ("SILVER", 31.0),
     }
     for symbol, (name, fallback_price) in macro_tickers.items():
         closes = fetch_yahoo_chart(symbol, range_str="5d", interval="1d")
