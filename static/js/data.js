@@ -1766,6 +1766,9 @@ function buildPriceCards() {
   _initThemeToggle();
   _cloneMarqueeForSeamless();
   _initAltSelector();
+
+  // Re-apply current filter/sort after rebuilding cards
+  _applyPriceFilterSort();
 }
 
 /* ═══ Altcoin Selector ═══ */
@@ -1882,7 +1885,10 @@ async function _fetchAltPricesFromBinance() {
 }
 
 /* Sort & Filter */
+let _toolbarInited = false;
 function _initPriceToolbar() {
+  if (_toolbarInited) return;
+  _toolbarInited = true;
   // Filter buttons
   document.querySelectorAll('.price-filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
