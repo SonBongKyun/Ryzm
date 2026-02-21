@@ -1222,7 +1222,7 @@ html[data-theme="dark"] .snav-item.active {
   transform: translateY(-1px);
   background: linear-gradient(135deg, rgba(163,126,58,0.06) 0%, var(--bg-panel) 100%);
 }
-.price-card.hidden-card { display: none !important; }
+#realtime-prices .price-card.hidden-card { display: none !important; }
 
 /* Left: Icon */
 .price-card-icon {
