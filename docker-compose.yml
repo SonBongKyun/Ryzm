@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ryzm-data:/app/data
+      - ryzm-data:/app
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; r=requests.get('http://localhost:8000/health'); exit(0 if r.status_code==200 else 1)"]
       interval: 30s

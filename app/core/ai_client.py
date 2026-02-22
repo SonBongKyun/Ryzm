@@ -32,8 +32,12 @@ def call_gemini(
     temperature: float = 0.7,
     json_mode: bool = True,
     max_retries: int = 2,
+    timeout_sec: int = 45,
 ) -> str:
-    """Call Gemini and return raw text. Retries on transient failures."""
+    """Call Gemini and return raw text. Retries on transient failures.
+    Hard timeout (default 45s) prevents background thread from blocking indefinitely."""
+    import signal
+    import threading
     config_kwargs = {
         "max_output_tokens": max_tokens,
         "temperature": temperature,
@@ -44,7 +48,10 @@ def call_gemini(
     config = types.GenerateContentConfig(**config_kwargs)
 
     last_err = None
+    deadline = time.time() + timeout_sec
     for attempt in range(max_retries + 1):
+        if time.time() > deadline:
+            raise TimeoutError(f"Gemini call exceeded {timeout_sec}s deadline")
         try:
             response = _get_client().models.generate_content(
                 model=model,

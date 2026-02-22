@@ -26,8 +26,6 @@ from app.services.analysis_service import (
     simulate_risk_gauge,
 )
 
-import sqlite3
-
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
@@ -86,15 +84,15 @@ async def get_sw():
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
+# Module-level start time for health check uptime
+_HEALTH_START_TIME = time.time()
+
+
 @router.get("/health")
 async def health_check():
     import os
     from datetime import datetime, timezone
-    _start_time = getattr(health_check, '_start_time', None)
-    if _start_time is None:
-        health_check._start_time = time.time()
-        _start_time = health_check._start_time
-    uptime_sec = round(time.time() - _start_time)
+    uptime_sec = round(time.time() - _HEALTH_START_TIME)
     return {
         "status": "ok",
         "ryzm_os": "online",
@@ -130,6 +128,7 @@ async def get_long_short():
 @router.get("/api/briefing")
 def get_briefing():
     try:
+        import sqlite3
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute("SELECT id, title, content, created_at_utc FROM briefings ORDER BY id DESC LIMIT 1")
             row = c.fetchone()
@@ -148,6 +147,7 @@ def get_briefing():
 def get_briefing_history(days: int = 7):
     try:
         from datetime import datetime, timezone, timedelta
+        import sqlite3
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute(
@@ -493,6 +493,9 @@ def get_public_config():
 async def subscribe_briefing_endpoint(request: Request):
     """Store email subscription for daily briefing."""
     import re
+    from app.core.security import check_rate_limit
+    if not check_rate_limit(request.client.host, "auth"):
+        return {"status": "error", "message": "Too many requests. Please wait a moment."}
     try:
         body = await request.json()
         email = (body.get("email") or "").strip().lower()

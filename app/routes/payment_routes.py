@@ -84,6 +84,9 @@ def create_checkout(request: Request):
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
     """Handle Stripe webhook events (subscription lifecycle). Idempotent."""
+    if not STRIPE_WEBHOOK_SECRET:
+        logger.error("[Stripe] STRIPE_WEBHOOK_SECRET not configured")
+        raise HTTPException(503, "Webhook not configured")
     stripe = _get_stripe()
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")

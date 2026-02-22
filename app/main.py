@@ -73,7 +73,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         # Always tag version
-        response.headers["X-Ryzm-Version"] = "7.0"
+        response.headers["X-Ryzm-Version"] = "8.9"
         # Prevent clickjacking
         response.headers["X-Frame-Options"] = "DENY"
         # Prevent MIME-type sniffing
@@ -85,6 +85,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Permissions Policy (disable unused browser features)
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(self)"
         # Content Security Policy
+        # NOTE: 'unsafe-eval' required by TradingView charting library (s3.tradingview.com)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://cdn.jsdelivr.net https://unpkg.com https://html2canvas.hertzen.com; "

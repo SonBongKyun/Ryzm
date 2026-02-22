@@ -78,7 +78,6 @@ def send_daily_briefing():
     # Also store in DB for history
     try:
         from app.core.database import db_session
-        import sqlite3
         with db_session() as (conn, c):
             c.execute("INSERT INTO briefings (title, content, created_at_utc) VALUES (?, ?, ?)",
                       (title, text, now_str))

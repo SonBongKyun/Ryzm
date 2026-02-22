@@ -5,6 +5,7 @@ Pushes real-time updates to connected clients: alerts, council results, notifica
 import asyncio
 import json
 import time
+from collections import deque
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Request
@@ -17,16 +18,18 @@ router = APIRouter(tags=["sse"])
 
 # ── Shared event bus (in-memory) ──
 _event_subscribers: list = []
+_MAX_SSE_CLIENTS = 500
+_MAX_QUEUE_SIZE = 100
 
 
 def broadcast_event(event_type: str, data: dict):
     """Push an event to all connected SSE clients."""
     event = {"type": event_type, "data": data, "ts": time.time()}
-    # Add to queue for each subscriber
+    # Add to queue for each subscriber (bounded deque)
     dead = []
     for i, q in enumerate(_event_subscribers):
         try:
-            q.append(event)
+            q.append(event)  # deque auto-evicts oldest if maxlen exceeded
         except Exception:
             dead.append(i)
     # Clean dead subscribers
@@ -39,7 +42,7 @@ def broadcast_event(event_type: str, data: dict):
 
 async def _event_generator(request: Request) -> AsyncGenerator[str, None]:
     """SSE generator that yields events to a single client."""
-    queue: list = []
+    queue = deque(maxlen=_MAX_QUEUE_SIZE)
     _event_subscribers.append(queue)
     client_id = id(queue)
     logger.info(f"[SSE] Client connected #{client_id} (total: {len(_event_subscribers)})")
@@ -56,7 +59,7 @@ async def _event_generator(request: Request) -> AsyncGenerator[str, None]:
         while True:
             # Check for broadcast events
             while queue:
-                event = queue.pop(0)
+                event = queue.popleft()
                 yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
 
             # Periodic market snapshot (every 30s)
@@ -115,6 +118,9 @@ async def _event_generator(request: Request) -> AsyncGenerator[str, None]:
 @router.get("/api/events")
 async def sse_stream(request: Request):
     """SSE endpoint for real-time event streaming."""
+    if len(_event_subscribers) >= _MAX_SSE_CLIENTS:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"error": "Too many SSE connections"}, status_code=503)
     return StreamingResponse(
         _event_generator(request),
         media_type="text/event-stream",

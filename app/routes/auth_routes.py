@@ -42,6 +42,8 @@ def register(body: RegisterRequest, request: Request):
     """Register a new account with email + password. Sends verification email."""
     if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
         raise HTTPException(429, "Too many requests. Please wait a moment.")
+    if not getattr(body, 'accept_tos', False):
+        raise HTTPException(400, "Terms of Service acceptance is required.")
     # Beta invite code gate (if configured)
     if BETA_INVITE_CODE and body.invite_code.strip() != BETA_INVITE_CODE:
         raise HTTPException(403, "Invalid invite code. Ryzm is currently in closed beta.")
@@ -227,6 +229,8 @@ def do_reset_password(body: ResetPasswordRequest):
 @router.post("/update-profile")
 def update_profile(body: UpdateProfileRequest, request: Request):
     """Update display name for the current user."""
+    if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
+        raise HTTPException(429, "Too many requests. Please wait a moment.")
     user_data = get_current_user(request)
     if not user_data:
         raise HTTPException(401, "Not authenticated")
@@ -242,6 +246,8 @@ def update_profile(body: UpdateProfileRequest, request: Request):
 @router.post("/change-password")
 def change_password(body: ChangePasswordRequest, request: Request):
     """Change password for the current user (requires current password)."""
+    if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
+        raise HTTPException(429, "Too many requests. Please wait a moment.")
     user_data = get_current_user(request)
     if not user_data:
         raise HTTPException(401, "Not authenticated")

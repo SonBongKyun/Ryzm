@@ -26,7 +26,8 @@ def get_genai_api_key() -> str:
         raise ValueError("GENAI_API_KEY is required. Please check your .env file.")
     return _GENAI_API_KEY
 
-# Backward-compat alias (read-only; modules that just need the value)
+# Backward-compat alias (DEPRECATED — use get_genai_api_key() instead)
+# This is an empty string at import time; do NOT use for actual API calls.
 GENAI_API_KEY = os.getenv("GENAI_API_KEY", "")
 
 # ── Admin / Discord ──

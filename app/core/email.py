@@ -8,6 +8,7 @@ import time
 from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from html import escape as _html_escape
 
 from app.core.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, BASE_URL
 from app.core.logger import logger
@@ -16,6 +17,8 @@ from app.core.logger import logger
 _email_timestamps: dict[str, list[float]] = defaultdict(list)
 _EMAIL_WINDOW = 600  # 10 minutes
 _EMAIL_MAX = 5
+_EMAIL_CLEANUP_INTERVAL = 3600  # cleanup stale keys every hour
+_email_last_cleanup = time.time()
 
 
 def _smtp_configured() -> bool:
@@ -31,6 +34,13 @@ def _send_email(to: str, subject: str, html_body: str) -> bool:
 
     # Rate limit per recipient
     now = time.time()
+    # Periodic cleanup of stale keys
+    global _email_last_cleanup
+    if now - _email_last_cleanup > _EMAIL_CLEANUP_INTERVAL:
+        _email_last_cleanup = now
+        stale = [k for k, v in _email_timestamps.items() if not v or now - v[-1] > _EMAIL_WINDOW]
+        for k in stale:
+            del _email_timestamps[k]
     _email_timestamps[to] = [t for t in _email_timestamps[to] if now - t < _EMAIL_WINDOW]
     if len(_email_timestamps[to]) >= _EMAIL_MAX:
         logger.warning(f"[Email] Rate limited: {to} ({_EMAIL_MAX} emails in {_EMAIL_WINDOW}s)")
@@ -152,7 +162,7 @@ def send_price_alert_email(to: str, symbol: str, direction: str, target_price: f
 
 def send_trial_welcome_email(to: str, display_name: str = "") -> bool:
     """Send welcome email when user starts Pro trial."""
-    name = display_name or "Trader"
+    name = _html_escape(display_name or "Trader")
     html = f"""
     <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
         <div style="text-align:center;margin-bottom:20px;">
@@ -185,7 +195,7 @@ def send_trial_welcome_email(to: str, display_name: str = "") -> bool:
 
 def send_payment_failed_email(to: str, display_name: str = "") -> bool:
     """Send email when payment fails."""
-    name = display_name or "Trader"
+    name = _html_escape(display_name or "Trader")
     html = f"""
     <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
         <div style="text-align:center;margin-bottom:20px;">

@@ -19,6 +19,7 @@ from app.core.database import (
     utc_now_str, db_session,
     save_council_record, store_price_snapshot,
     evaluate_council_accuracy, expire_trials,
+    cleanup_old_webhook_events,
 )
 from app.core.security import cleanup_rate_limits
 
@@ -44,6 +45,7 @@ from app.services.briefing_service import _build_briefing_text
 _last_auto_council = 0
 _last_critical_alert = 0
 _last_trial_check = 0
+_last_webhook_cleanup = 0
 _bg_started = False
 _bg_lock = threading.Lock()
 
@@ -415,6 +417,16 @@ def refresh_cache():
                     logger.info(f"[Trial] Expired {expired_count} trial(s)")
             except Exception as e:
                 logger.error(f"[Trial] Expiry check error: {e}")
+
+        # Cleanup old webhook events (daily)
+        global _last_webhook_cleanup
+        if _now_ts - _last_webhook_cleanup > 86400:
+            _last_webhook_cleanup = _now_ts
+            try:
+                cleanup_old_webhook_events(30)
+                logger.info("[Webhook] Old events cleaned up")
+            except Exception as e:
+                logger.error(f"[Webhook] Cleanup error: {e}")
 
         time.sleep(60)
 

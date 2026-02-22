@@ -5,6 +5,7 @@ Rate limiter, admin auth, input sanitization, AI response parsing/validation.
 import re
 import json
 import os
+import secrets
 import time
 import uuid
 from collections import defaultdict
@@ -71,8 +72,8 @@ if not ADMIN_TOKEN:
 def require_admin(request: Request) -> None:
     if not ADMIN_TOKEN:
         raise HTTPException(status_code=503, detail="Admin access not configured")
-    token = request.headers.get("X-Admin-Token")
-    if token != ADMIN_TOKEN:
+    token = request.headers.get("X-Admin-Token") or ""
+    if not secrets.compare_digest(token, ADMIN_TOKEN):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 

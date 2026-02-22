@@ -24,10 +24,12 @@ if USE_PG:
     import psycopg2.extras
     import psycopg2.pool
     logger.info("[DB] PostgreSQL mode (DATABASE_URL detected)")
-    # Connection pool: min 2, max 10 connections
+    # Connection pool: configurable via PG_POOL_MIN / PG_POOL_MAX env vars
+    _pg_pool_min = int(os.getenv("PG_POOL_MIN", "2"))
+    _pg_pool_max = int(os.getenv("PG_POOL_MAX", "10"))
     try:
-        _pg_pool = psycopg2.pool.ThreadedConnectionPool(2, 10, DATABASE_URL)
-        logger.info("[DB] PostgreSQL connection pool created (2-10)")
+        _pg_pool = psycopg2.pool.ThreadedConnectionPool(_pg_pool_min, _pg_pool_max, DATABASE_URL)
+        logger.info(f"[DB] PostgreSQL connection pool created ({_pg_pool_min}-{_pg_pool_max})")
     except Exception as _pool_err:
         logger.error(f"[DB] Failed to create PG pool: {_pool_err}")
         _pg_pool = None
