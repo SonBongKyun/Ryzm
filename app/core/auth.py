@@ -14,7 +14,18 @@ from fastapi import Request
 from app.core.logger import logger
 
 # ── Config ──
-JWT_SECRET = os.getenv("JWT_SECRET", "ryzm-default-secret-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+if not JWT_SECRET:
+    _env = os.getenv("APP_ENV", "").lower()
+    if _env == "production":
+        raise RuntimeError(
+            "FATAL: JWT_SECRET environment variable is required in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    # Dev fallback — NEVER use in production
+    JWT_SECRET = "dev-only-insecure-secret-do-not-deploy"
+    logger.warning("[Auth] ⚠️  Using insecure dev JWT_SECRET. Set JWT_SECRET env var for production.")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "168"))  # 7 days
 

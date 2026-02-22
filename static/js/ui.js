@@ -532,7 +532,6 @@ function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
       .then(reg => {
-        console.log('SW registered:', reg.scope);
         // Force check for updates on every page load
         reg.update().catch(() => {});
       })
@@ -1308,10 +1307,8 @@ document.addEventListener('visibilitychange', () => {
   isPageVisible = !document.hidden;
   if (typeof RyzmScheduler === 'undefined') return;
   if (isPageVisible) {
-    console.log('[Visibility] Page visible ??resuming scheduler');
     RyzmScheduler.resumeAll();
   } else {
-    console.log('[Visibility] Page hidden ??pausing scheduler');
     RyzmScheduler.pauseAll();
   }
 });

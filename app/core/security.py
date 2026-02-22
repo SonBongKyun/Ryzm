@@ -58,11 +58,19 @@ def cleanup_rate_limits():
         logger.debug(f"[RateLimit] Cleaned {len(stale)} stale keys")
 
 
+# ── Startup validation ──
+if not ADMIN_TOKEN:
+    _env = os.getenv("APP_ENV", "").lower()
+    if _env == "production":
+        logger.critical("[Security] ⚠️  ADMIN_TOKEN not set in production! Admin endpoints disabled.")
+    else:
+        logger.warning("[Security] ADMIN_TOKEN not set. Admin endpoints disabled.")
+
+
 # ── Admin Auth ──
 def require_admin(request: Request) -> None:
     if not ADMIN_TOKEN:
-        logger.error("ADMIN_TOKEN is not configured")
-        raise HTTPException(status_code=500, detail="Admin token not configured")
+        raise HTTPException(status_code=503, detail="Admin access not configured")
     token = request.headers.get("X-Admin-Token")
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")

@@ -4,11 +4,18 @@ Sends verification and password reset emails via SMTP.
 Falls back to logging when SMTP is not configured (dev mode).
 """
 import smtplib
+import time
+from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from app.core.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, BASE_URL
 from app.core.logger import logger
+
+# ── Email rate limit (max 5 emails per address per 10 min) ──
+_email_timestamps: dict[str, list[float]] = defaultdict(list)
+_EMAIL_WINDOW = 600  # 10 minutes
+_EMAIL_MAX = 5
 
 
 def _smtp_configured() -> bool:
@@ -21,6 +28,14 @@ def _send_email(to: str, subject: str, html_body: str) -> bool:
         logger.warning(f"[Email] SMTP not configured. Would send to={to}, subject={subject}")
         logger.info(f"[Email] Body preview: {html_body[:300]}...")
         return True  # Treat as success in dev
+
+    # Rate limit per recipient
+    now = time.time()
+    _email_timestamps[to] = [t for t in _email_timestamps[to] if now - t < _EMAIL_WINDOW]
+    if len(_email_timestamps[to]) >= _EMAIL_MAX:
+        logger.warning(f"[Email] Rate limited: {to} ({_EMAIL_MAX} emails in {_EMAIL_WINDOW}s)")
+        return False
+    _email_timestamps[to].append(now)
 
     try:
         msg = MIMEMultipart("alternative")
@@ -166,3 +181,31 @@ def send_trial_welcome_email(to: str, display_name: str = "") -> bool:
     </div>
     """
     return _send_email(to, "🎉 Your Ryzm Pro Trial has started!", html)
+
+
+def send_payment_failed_email(to: str, display_name: str = "") -> bool:
+    """Send email when payment fails."""
+    name = display_name or "Trader"
+    html = f"""
+    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
+        <div style="text-align:center;margin-bottom:20px;">
+            <span style="color:#C9A96E;font-size:24px;font-weight:bold;">⚡ Ryzm Terminal</span>
+        </div>
+        <h2 style="color:#f43f5e;font-size:16px;">⚠️ Payment Failed</h2>
+        <p style="font-size:13px;line-height:1.6;">
+            Hi {name}, your latest Pro subscription payment could not be processed.
+            Stripe will retry automatically, but please update your payment method to avoid losing Pro access.
+        </p>
+        <div style="text-align:center;margin:24px 0;">
+            <a href="{BASE_URL}/app?manage=billing" style="background:#f43f5e;color:#fff;padding:12px 32px;
+               text-decoration:none;font-weight:bold;border-radius:4px;font-size:14px;">
+                Update Payment
+            </a>
+        </div>
+        <hr style="border-color:#333;margin:20px 0;">
+        <p style="font-size:10px;color:#555;">
+            If you believe this is an error, contact support.
+        </p>
+    </div>
+    """
+    return _send_email(to, "⚠️ Ryzm Pro — Payment Failed", html)

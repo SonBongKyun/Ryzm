@@ -1470,7 +1470,6 @@ function initBinanceWebSocket() {
   const streams = cryptoKeys.map(k => `${k.toLowerCase()}usdt@miniTicker`).join('/');
   const host = _wsHosts[_wsHostIdx % _wsHosts.length];
   const url = `${host}/stream?streams=${streams}`;
-  console.log(`[WS] Connecting to ${host} (${cryptoKeys.length} streams)...`);
   try { _priceWs = new WebSocket(url); } catch (e) { _wsHostIdx++; scheduleWsReconnect(); return; }
 
   const connectTimeout = setTimeout(() => {
@@ -1480,7 +1479,6 @@ function initBinanceWebSocket() {
   _priceWs.onopen = () => {
     clearTimeout(connectTimeout);
     _priceWsRetry = 0;
-    console.log('[WS] Binance connected via ' + host + ' — ' + cryptoKeys.length + ' crypto streams');
     _updateConnectionBanner('connected');
     _updateWsBadge('connected');
   };
@@ -1519,7 +1517,6 @@ function initBinanceWebSocket() {
 
   _priceWs.onclose = () => {
     clearTimeout(connectTimeout);
-    console.log('[WS] Binance disconnected, trying next host...');
     _wsHostIdx++;
     _updateConnectionBanner('reconnecting');
     _updateWsBadge('reconnecting');
@@ -1535,7 +1532,6 @@ function initBinanceWebSocket() {
 
 function scheduleWsReconnect() {
   const delay = Math.min(15000, 1000 * Math.pow(2, _priceWsRetry++));
-  console.log(`[WS] Reconnect in ${delay}ms (attempt ${_priceWsRetry})`);
   _priceWs = null;
   setTimeout(initBinanceWebSocket, delay);
 }
@@ -1778,17 +1774,6 @@ function buildPriceCards() {
   container.style.overflowX = 'hidden';
   container.style.maxHeight = '600px';
   container.style.width = '100%';
-
-  // Diagnostic log
-  requestAnimationFrame(() => {
-    const cs = getComputedStyle(container);
-    console.log('[PRICE-DIAG] container display:', cs.display, 'flex-direction:', cs.flexDirection, 'flex-wrap:', cs.flexWrap);
-    const firstCard = container.querySelector('.price-card');
-    if (firstCard) {
-      const ccs = getComputedStyle(firstCard);
-      console.log('[PRICE-DIAG] card display:', ccs.display, 'float:', ccs.cssFloat, 'position:', ccs.position, 'width:', ccs.width);
-    }
-  });
 
   _initPriceToolbar();
   _initPriceHover();

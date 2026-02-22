@@ -22,8 +22,17 @@ USE_PG = bool(DATABASE_URL)
 if USE_PG:
     import psycopg2
     import psycopg2.extras
+    import psycopg2.pool
     logger.info("[DB] PostgreSQL mode (DATABASE_URL detected)")
+    # Connection pool: min 2, max 10 connections
+    try:
+        _pg_pool = psycopg2.pool.ThreadedConnectionPool(2, 10, DATABASE_URL)
+        logger.info("[DB] PostgreSQL connection pool created (2-10)")
+    except Exception as _pool_err:
+        logger.error(f"[DB] Failed to create PG pool: {_pool_err}")
+        _pg_pool = None
 else:
+    _pg_pool = None
     _app_env = os.getenv("APP_ENV", "").lower()
     if _app_env == "production":
         logger.warning(
@@ -37,6 +46,11 @@ else:
 DB_PATH = str(PROJECT_ROOT / "council_history.db")
 
 _db_lock = threading.Lock()
+
+
+def _need_lock() -> bool:
+    """Only serialize DB access for SQLite; PostgreSQL handles concurrency natively."""
+    return not USE_PG
 
 
 class _AutoCursor:
@@ -85,10 +99,11 @@ def _migrate_col(cursor, table, col_name, col_def):
 
 
 def db_connect():
-    """Create a database connection (PostgreSQL or SQLite)."""
+    """Create a database connection (PostgreSQL pool or SQLite)."""
     if USE_PG:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
+        if _pg_pool:
+            return _pg_pool.getconn()
+        return psycopg2.connect(DATABASE_URL)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
@@ -108,7 +123,9 @@ class db_session:
         self._row_factory = row_factory
 
     def __enter__(self):
-        _db_lock.acquire()
+        if _need_lock():
+            _db_lock.acquire()
+        self._locked = _need_lock()
         self._conn = db_connect()
         if USE_PG:
             if self._row_factory:
@@ -130,9 +147,13 @@ class db_session:
                 self._conn.rollback()
         finally:
             try:
-                self._conn.close()
+                if USE_PG and _pg_pool:
+                    _pg_pool.putconn(self._conn)
+                else:
+                    self._conn.close()
             finally:
-                _db_lock.release()
+                if self._locked:
+                    _db_lock.release()
         return False  # propagate exceptions
 
 
@@ -313,6 +334,15 @@ def init_council_db():
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             """)
+            # ── Webhook Idempotency table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS webhook_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id TEXT UNIQUE NOT NULL,
+                    event_type TEXT NOT NULL,
+                    processed_at_utc TEXT NOT NULL
+                )
+            """)
             # Migration: add trial columns to users
             for col_name, col_def in [
                 ("trial_used", "INTEGER DEFAULT 0"),
@@ -346,6 +376,30 @@ def init_council_db():
                 ("sc", "REAL DEFAULT 0"),
             ]:
                 _migrate_col(c, "risk_history", col_name, col_def)
+
+            # ── Indexes (idempotent — IF NOT EXISTS for PG, try/except for SQLite) ──
+            _indexes = [
+                ("idx_users_email", "users", "email"),
+                ("idx_users_uid", "users", "uid"),
+                ("idx_ai_usage_uid", "ai_usage", "uid"),
+                ("idx_ai_usage_used_at", "ai_usage", "used_at_utc"),
+                ("idx_price_alerts_uid", "price_alerts", "uid"),
+                ("idx_price_alerts_triggered", "price_alerts", "triggered"),
+                ("idx_council_history_ts", "council_history", "timestamp"),
+                ("idx_council_history_ts_ms", "council_history", "timestamp_ms"),
+                ("idx_risk_history_ts", "risk_history", "timestamp"),
+                ("idx_price_snapshots_ts", "price_snapshots", "ts_utc"),
+                ("idx_subscriptions_user", "subscriptions", "user_id"),
+                ("idx_signal_journal_user", "signal_journal", "user_id"),
+                ("idx_portfolio_user", "portfolio_holdings", "user_id"),
+                ("idx_webhook_events_eid", "webhook_events", "event_id"),
+            ]
+            for idx_name, table, col in _indexes:
+                try:
+                    c.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({col})")
+                except Exception:
+                    pass  # table may not exist yet or index already exists
+
         logger.info("[DB] Council + Risk + PriceSnapshot + Eval + Briefings + Usage + Auth database initialized")
     except Exception as e:
         logger.error(f"[DB] Failed to initialize database: {e}")
@@ -1525,6 +1579,69 @@ def mark_user_trial_used(user_id: int):
             c.execute("UPDATE users SET trial_used = 1, trial_started_at = ? WHERE id = ?", (utc_now_str(), user_id))
     except Exception as e:
         logger.error(f"[DB] Mark trial used error: {e}")
+
+
+def expire_trials(trial_days: int = 7) -> int:
+    """Downgrade users whose Pro trial has expired. Returns count of expired users."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=trial_days)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with db_session() as (conn, c):
+            # Find users who: have trial, are still 'pro', started before cutoff, and have no active Stripe sub
+            c.execute(
+                "SELECT id, email FROM users "
+                "WHERE trial_used = 1 AND tier = 'pro' AND trial_started_at IS NOT NULL AND trial_started_at < ?",
+                (cutoff,)
+            )
+            expired = c.fetchall()
+            count = 0
+            for row in expired:
+                uid = row[0]
+                # Check if user has an active Stripe subscription (don't expire paying users)
+                c.execute(
+                    "SELECT id FROM subscriptions WHERE user_id = ? AND status = 'active'", (uid,)
+                )
+                if c.fetchone():
+                    continue  # Has active paid sub — skip
+                c.execute("UPDATE users SET tier = 'free' WHERE id = ?", (uid,))
+                count += 1
+                logger.info(f"[Trial] Expired trial for user {uid} (email={row[1]})")
+        return count
+    except Exception as e:
+        logger.error(f"[DB] Trial expiry error: {e}")
+        return 0
+
+
+# ── Webhook Idempotency (DB-backed) ──
+def is_webhook_duplicate(event_id: str) -> bool:
+    """Check if a webhook event was already processed. Returns True if duplicate."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT id FROM webhook_events WHERE event_id = ?", (event_id,))
+            return c.fetchone() is not None
+    except Exception:
+        return False
+
+
+def record_webhook_event(event_id: str, event_type: str):
+    """Record a processed webhook event for idempotency."""
+    try:
+        with db_session() as (conn, c):
+            c.execute(
+                "INSERT INTO webhook_events (event_id, event_type, processed_at_utc) VALUES (?, ?, ?)",
+                (event_id, event_type, utc_now_str())
+            )
+    except Exception as e:
+        logger.warning(f"[DB] Record webhook event error (may be duplicate): {e}")
+
+
+def cleanup_old_webhook_events(days: int = 30):
+    """Remove webhook events older than N days."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with db_session() as (conn, c):
+            c.execute("DELETE FROM webhook_events WHERE processed_at_utc < ?", (cutoff,))
+    except Exception as e:
+        logger.error(f"[DB] Cleanup webhook events error: {e}")
 
 
 # ── Initialize DB on import ──

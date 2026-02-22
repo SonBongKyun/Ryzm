@@ -18,7 +18,7 @@ from app.core.cache import cache
 from app.core.database import (
     utc_now_str, db_session,
     save_council_record, store_price_snapshot,
-    evaluate_council_accuracy,
+    evaluate_council_accuracy, expire_trials,
 )
 from app.core.security import cleanup_rate_limits
 
@@ -43,6 +43,7 @@ from app.services.briefing_service import _build_briefing_text
 # ── Module-level state ──
 _last_auto_council = 0
 _last_critical_alert = 0
+_last_trial_check = 0
 _bg_started = False
 _bg_lock = threading.Lock()
 
@@ -402,6 +403,18 @@ def refresh_cache():
             evaluate_council_accuracy([15, 60, 240, 1440])
         except Exception as e:
             logger.error(f"[Eval] Error: {e}")
+
+        # Expire Pro trials (check every ~60 min)
+        global _last_trial_check
+        _now_ts = time.time()
+        if _now_ts - _last_trial_check > 3600:
+            _last_trial_check = _now_ts
+            try:
+                expired_count = expire_trials()
+                if expired_count:
+                    logger.info(f"[Trial] Expired {expired_count} trial(s)")
+            except Exception as e:
+                logger.error(f"[Trial] Expiry check error: {e}")
 
         time.sleep(60)
 

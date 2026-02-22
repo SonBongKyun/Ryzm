@@ -5,7 +5,6 @@ Stripe is lazy-loaded so the app runs fine without STRIPE_SECRET_KEY.
 """
 import os
 import time
-from collections import OrderedDict
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -16,7 +15,7 @@ from app.core.database import (
     get_user_by_id, update_user_tier, update_user_stripe_customer,
     create_subscription, update_subscription_status,
     get_active_subscription, get_subscription_by_stripe_id,
-    mark_user_trial_used,
+    mark_user_trial_used, is_webhook_duplicate, record_webhook_event,
 )
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -29,21 +28,6 @@ SITE_URL = os.getenv("SITE_URL", os.getenv("APP_BASE_URL", "http://localhost:800
 PRO_TRIAL_DAYS = int(os.getenv("PRO_TRIAL_DAYS", "7"))
 
 _stripe = None
-
-# ── Idempotency: track recently processed webhook event IDs ──
-_processed_events: OrderedDict = OrderedDict()
-_MAX_PROCESSED_EVENTS = 500
-
-
-def _is_duplicate_event(event_id: str) -> bool:
-    """Check if this webhook event was already processed (idempotent)."""
-    if event_id in _processed_events:
-        return True
-    _processed_events[event_id] = time.time()
-    # Evict oldest entries to prevent memory leak
-    while len(_processed_events) > _MAX_PROCESSED_EVENTS:
-        _processed_events.popitem(last=False)
-    return False
 
 
 def _get_stripe():
@@ -110,15 +94,18 @@ async def stripe_webhook(request: Request):
         logger.error(f"[Stripe] Webhook verification failed: {e}")
         raise HTTPException(400, "Invalid webhook signature")
 
-    # Idempotency: skip duplicate events
+    # Idempotency: skip duplicate events (DB-backed)
     event_id = event.get("id", "")
-    if _is_duplicate_event(event_id):
+    if is_webhook_duplicate(event_id):
         logger.info(f"[Stripe] Duplicate event skipped: {event_id}")
         return {"received": True, "duplicate": True}
 
     etype = event["type"]
     data = event["data"]["object"]
     logger.info(f"[Stripe] Webhook: {etype} (event_id={event_id})")
+
+    # Record event as processed
+    record_webhook_event(event_id, etype)
 
     try:
         if etype == "checkout.session.completed":
@@ -162,6 +149,17 @@ async def stripe_webhook(request: Request):
             sub_id = data.get("subscription")
             customer_id = data.get("customer")
             logger.warning(f"[Stripe] Payment failed: customer={customer_id}, sub={sub_id}")
+            # Send payment failure email to user
+            try:
+                if sub_id:
+                    sub_record = get_subscription_by_stripe_id(sub_id)
+                    if sub_record:
+                        user = get_user_by_id(sub_record["user_id"])
+                        if user and user.get("email"):
+                            from app.core.email import send_payment_failed_email
+                            send_payment_failed_email(user["email"], user.get("display_name", ""))
+            except Exception as mail_err:
+                logger.warning(f"[Stripe] Payment failure email error: {mail_err}")
             # Grace period: don't immediately downgrade. Stripe retries automatically.
             # If all retries fail, subscription.deleted event will fire.
 

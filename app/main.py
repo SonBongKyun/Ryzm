@@ -6,13 +6,14 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.config import ALLOWED_ORIGINS
+from app.core.config import ALLOWED_ORIGINS, SMTP_HOST
 from app.core.logger import logger
+from app.core.security import check_rate_limit
 from app.routes.data_routes import router as data_router
 from app.routes.ai_routes import router as ai_router
 from app.routes.admin_routes import router as admin_router
@@ -37,6 +38,14 @@ if SENTRY_DSN:
         logger.warning("[Sentry] sentry-sdk not installed. pip install sentry-sdk to enable.")
     except Exception as e:
         logger.warning(f"[Sentry] Init failed: {e}")
+else:
+    _env = os.getenv("APP_ENV", "").lower()
+    if _env == "production":
+        logger.warning("[Sentry] ⚠️  SENTRY_DSN not set. Error tracking disabled in production.")
+
+# ── SMTP check ──
+if not SMTP_HOST and os.getenv("APP_ENV", "").lower() == "production":
+    logger.warning("[Email] ⚠️  SMTP not configured in production. Emails will be silently skipped.")
 
 
 @asynccontextmanager
@@ -146,13 +155,36 @@ app.include_router(portfolio_router)
 app.include_router(sse_router)
 
 
-# ── Client-side JS Error Collector (debug) ──
+# ── Global Exception Handler ──
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    return RedirectResponse("/")
+
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc):
+    logger.error(f"[500] {request.method} {request.url.path}: {exc}")
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(f"[Unhandled] {request.method} {request.url.path}: {type(exc).__name__}: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+# ── Client-side JS Error Collector (rate-limited) ──
 @app.post("/api/client-error")
 async def collect_client_error(request: Request):
     """Receive JS errors from browser and log them server-side."""
+    ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(ip, "client_error"):
+        return Response(status_code=429)
     try:
         body = await request.body()
-        logger.error(f"[JS-ERROR] {body.decode('utf-8', errors='replace')}")
+        logger.error(f"[JS-ERROR] {body.decode('utf-8', errors='replace')[:2000]}")
     except Exception:
         pass
     return Response(status_code=204)
@@ -165,6 +197,20 @@ _FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><t
 async def favicon():
     return Response(content=_FAVICON_SVG, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=604800"})
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    from fastapi.responses import FileResponse
+    return FileResponse("static/robots.txt", media_type="text/plain",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml():
+    from fastapi.responses import FileResponse
+    return FileResponse("static/sitemap.xml", media_type="application/xml",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 # Static file mount (after API routes)

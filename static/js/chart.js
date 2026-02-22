@@ -370,8 +370,6 @@ const RyzmChart = (() => {
     const binInt = INTERVALS[interval] || interval;
     const host = _WS_HOSTS[_wsHostIdx % _WS_HOSTS.length];
     const wsUrl = `${host}/${symbol.toLowerCase()}@kline_${binInt}`;
-    console.log(`[RyzmChart] WS connecting to ${host}...`);
-
     try {
       _ws = new WebSocket(wsUrl);
     } catch (e) {
@@ -392,7 +390,6 @@ const RyzmChart = (() => {
       _wsRetry = 0;
       _wsConnected = true;
       _stopRestPoll(); // WS connected, stop REST polling
-      console.log('[RyzmChart] WS connected via ' + host);
     };
 
     _ws.onmessage = (evt) => {
@@ -419,7 +416,6 @@ const RyzmChart = (() => {
     _ws.onclose = () => {
       clearTimeout(connectTimeout);
       _wsConnected = false;
-      console.log('[RyzmChart] WS closed, scheduling reconnect...');
       _wsHostIdx++;
       _scheduleWsReconnect(symbol, interval);
       _startRestPoll(symbol, interval); // Resume REST polling
@@ -429,14 +425,12 @@ const RyzmChart = (() => {
   function _scheduleWsReconnect(symbol, interval) {
     if (_wsReconnectTimer) clearTimeout(_wsReconnectTimer);
     const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(_wsRetry++, 5)));
-    console.log(`[RyzmChart] WS reconnect in ${delay}ms (attempt ${_wsRetry})`);
     _wsReconnectTimer = setTimeout(() => _connectWsAttempt(symbol, interval), delay);
   }
 
   /** REST polling fallback: fetch latest klines every 10s when WS is down */
   function _startRestPoll(symbol, interval) {
     if (_restPollTimer || _wsConnected) return;
-    console.log('[RyzmChart] Starting REST poll fallback');
     _restPollTimer = setInterval(async () => {
       if (_wsConnected) { _stopRestPoll(); return; }
       try {
