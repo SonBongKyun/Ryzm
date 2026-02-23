@@ -125,23 +125,23 @@
 <!-- ?? Live Ticker Strip ?? -->
 <section class="home-ticker-strip">
   <div class="home-ticker-inner" id="home-ticker-track">
-    <span class="home-tk">BTC <em>$67,501.35</em></span>
-    <span class="home-tk">ETH <em>$3,241.20</em></span>
-    <span class="home-tk">SOL <em>$142.80</em></span>
-    <span class="home-tk">XRP <em>$0.621</em></span>
-    <span class="home-tk">DOGE <em>$0.0812</em></span>
-    <span class="home-tk">ADA <em>$0.452</em></span>
-    <span class="home-tk">AVAX <em>$38.90</em></span>
-    <span class="home-tk">LINK <em>$18.42</em></span>
+    <span class="home-tk" data-sym="BTCUSDT">BTC <em>--</em></span>
+    <span class="home-tk" data-sym="ETHUSDT">ETH <em>--</em></span>
+    <span class="home-tk" data-sym="SOLUSDT">SOL <em>--</em></span>
+    <span class="home-tk" data-sym="XRPUSDT">XRP <em>--</em></span>
+    <span class="home-tk" data-sym="DOGEUSDT">DOGE <em>--</em></span>
+    <span class="home-tk" data-sym="ADAUSDT">ADA <em>--</em></span>
+    <span class="home-tk" data-sym="AVAXUSDT">AVAX <em>--</em></span>
+    <span class="home-tk" data-sym="LINKUSDT">LINK <em>--</em></span>
     <!-- duplicate for seamless scroll -->
-    <span class="home-tk">BTC <em>$67,501.35</em></span>
-    <span class="home-tk">ETH <em>$3,241.20</em></span>
-    <span class="home-tk">SOL <em>$142.80</em></span>
-    <span class="home-tk">XRP <em>$0.621</em></span>
-    <span class="home-tk">DOGE <em>$0.0812</em></span>
-    <span class="home-tk">ADA <em>$0.452</em></span>
-    <span class="home-tk">AVAX <em>$38.90</em></span>
-    <span class="home-tk">LINK <em>$18.42</em></span>
+    <span class="home-tk" data-sym="BTCUSDT">BTC <em>--</em></span>
+    <span class="home-tk" data-sym="ETHUSDT">ETH <em>--</em></span>
+    <span class="home-tk" data-sym="SOLUSDT">SOL <em>--</em></span>
+    <span class="home-tk" data-sym="XRPUSDT">XRP <em>--</em></span>
+    <span class="home-tk" data-sym="DOGEUSDT">DOGE <em>--</em></span>
+    <span class="home-tk" data-sym="ADAUSDT">ADA <em>--</em></span>
+    <span class="home-tk" data-sym="AVAXUSDT">AVAX <em>--</em></span>
+    <span class="home-tk" data-sym="LINKUSDT">LINK <em>--</em></span>
   </div>
 </section>
 
@@ -358,6 +358,29 @@
   }
   fetchHeroBTC();
   setInterval(fetchHeroBTC, 15000);
+
+  /* 🔥 #8: Live Ticker Strip — real-time from Binance 🔥 */
+  async function fetchTickerPrices() {
+    try {
+      const symbols = ['BTCUSDT','ETHUSDT','SOLUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT'];
+      const qs = symbols.map(s => `"${s}"`).join(',');
+      const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbols=[${qs}]`);
+      const data = await r.json();
+      data.forEach(item => {
+        const spans = document.querySelectorAll(`.home-tk[data-sym="${item.symbol}"]`);
+        const price = Number(item.price);
+        const fmt = price >= 100 ? price.toLocaleString(undefined, {maximumFractionDigits:2})
+                  : price >= 1  ? price.toFixed(3)
+                  : price.toPrecision(4);
+        spans.forEach(span => {
+          const em = span.querySelector('em');
+          if (em) em.textContent = '$' + fmt;
+        });
+      });
+    } catch(e) { console.warn('Ticker fetch error:', e); }
+  }
+  fetchTickerPrices();
+  setInterval(fetchTickerPrices, 10000);
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>

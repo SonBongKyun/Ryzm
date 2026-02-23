@@ -35,6 +35,10 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 ADMIN_EMAILS = [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
+# ── Telegram Bot ──
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_DEFAULT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
 # ── CORS ──
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
 
@@ -187,6 +191,7 @@ class TradeValidationRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=500)
+    history: list = Field(default_factory=list)  # #9: Chat memory — last N exchanges
 
 class PriceAlertRequest(BaseModel):
     symbol: str = Field(..., max_length=20)

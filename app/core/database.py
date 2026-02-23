@@ -345,6 +345,39 @@ def init_council_db():
                     processed_at_utc TEXT NOT NULL
                 )
             """)
+            # ── AI Feedback table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS ai_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uid TEXT NOT NULL,
+                    feature TEXT NOT NULL,
+                    reference_id TEXT DEFAULT NULL,
+                    vote INTEGER NOT NULL,
+                    created_at_utc TEXT NOT NULL
+                )
+            """)
+            # ── Watchlist table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uid TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    created_at_utc TEXT NOT NULL,
+                    UNIQUE(uid, symbol)
+                )
+            """)
+            # ── Notifications table ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    uid TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    read INTEGER DEFAULT 0,
+                    created_at_utc TEXT NOT NULL
+                )
+            """)
             # Migration: add trial columns to users
             for col_name, col_def in [
                 ("trial_used", "INTEGER DEFAULT 0"),
@@ -395,6 +428,9 @@ def init_council_db():
                 ("idx_signal_journal_user", "signal_journal", "user_id"),
                 ("idx_portfolio_user", "portfolio_holdings", "user_id"),
                 ("idx_webhook_events_eid", "webhook_events", "event_id"),
+                ("idx_ai_feedback_uid", "ai_feedback", "uid"),
+                ("idx_watchlist_uid", "watchlist", "uid"),
+                ("idx_notifications_uid", "notifications", "uid"),
             ]
             for idx_name, table, col in _indexes:
                 try:
@@ -1614,6 +1650,124 @@ def expire_trials(trial_days: int = 7) -> int:
         return 0
 
 
+# ───────────────────────────────────────
+# AI Feedback (thumbs up/down)
+# ───────────────────────────────────────
+def save_ai_feedback(uid: str, feature: str, vote: int, reference_id: str = None):
+    """Save AI feedback (+1 or -1)."""
+    try:
+        with db_session() as (conn, c):
+            c.execute(
+                "INSERT INTO ai_feedback (uid, feature, reference_id, vote, created_at_utc) VALUES (?, ?, ?, ?, ?)",
+                (uid, feature, reference_id, vote, utc_now_str())
+            )
+    except Exception as e:
+        logger.error(f"[DB] Save AI feedback error: {e}")
+
+
+def get_ai_feedback_stats(feature: str = None) -> dict:
+    """Get AI feedback aggregated stats."""
+    try:
+        with db_session() as (conn, c):
+            if feature:
+                c.execute("SELECT vote, COUNT(*) FROM ai_feedback WHERE feature = ? GROUP BY vote", (feature,))
+            else:
+                c.execute("SELECT vote, COUNT(*) FROM ai_feedback GROUP BY vote")
+            rows = c.fetchall()
+            stats = {"up": 0, "down": 0}
+            for row in rows:
+                if row[0] == 1:
+                    stats["up"] = row[1]
+                elif row[0] == -1:
+                    stats["down"] = row[1]
+            stats["total"] = stats["up"] + stats["down"]
+            stats["positive_rate"] = round(stats["up"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0
+            return stats
+    except Exception as e:
+        logger.error(f"[DB] Get AI feedback stats error: {e}")
+        return {"up": 0, "down": 0, "total": 0, "positive_rate": 0}
+
+
+# ───────────────────────────────────────
+# Watchlist
+# ───────────────────────────────────────
+def get_watchlist(uid: str) -> list:
+    """Get user's watchlist symbols."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT symbol FROM watchlist WHERE uid = ? ORDER BY created_at_utc", (uid,))
+            return [row[0] for row in c.fetchall()]
+    except Exception as e:
+        logger.error(f"[DB] Get watchlist error: {e}")
+        return []
+
+
+def toggle_watchlist(uid: str, symbol: str) -> bool:
+    """Toggle symbol in watchlist. Returns True if added, False if removed."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT id FROM watchlist WHERE uid = ? AND symbol = ?", (uid, symbol))
+            if c.fetchone():
+                c.execute("DELETE FROM watchlist WHERE uid = ? AND symbol = ?", (uid, symbol))
+                return False
+            else:
+                c.execute("INSERT INTO watchlist (uid, symbol, created_at_utc) VALUES (?, ?, ?)",
+                         (uid, symbol, utc_now_str()))
+                return True
+    except Exception as e:
+        logger.error(f"[DB] Toggle watchlist error: {e}")
+        return False
+
+
+# ───────────────────────────────────────
+# Notifications
+# ───────────────────────────────────────
+def add_notification(uid: str, ntype: str, title: str, message: str):
+    """Add a notification for a user."""
+    try:
+        with db_session() as (conn, c):
+            c.execute(
+                "INSERT INTO notifications (uid, type, title, message, created_at_utc) VALUES (?, ?, ?, ?, ?)",
+                (uid, ntype, title, message, utc_now_str())
+            )
+    except Exception as e:
+        logger.error(f"[DB] Add notification error: {e}")
+
+
+def get_notifications(uid: str, limit: int = 20) -> list:
+    """Get user's recent notifications."""
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            c.execute(
+                "SELECT id, type, title, message, read, created_at_utc FROM notifications "
+                "WHERE uid = ? ORDER BY created_at_utc DESC LIMIT ?",
+                (uid, limit)
+            )
+            return [dict(r) for r in c.fetchall()]
+    except Exception as e:
+        logger.error(f"[DB] Get notifications error: {e}")
+        return []
+
+
+def mark_notifications_read(uid: str):
+    """Mark all notifications as read for a user."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE notifications SET read = 1 WHERE uid = ? AND read = 0", (uid,))
+    except Exception as e:
+        logger.error(f"[DB] Mark notifications read error: {e}")
+
+
+def get_unread_count(uid: str) -> int:
+    """Get unread notification count."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT COUNT(*) FROM notifications WHERE uid = ? AND read = 0", (uid,))
+            row = c.fetchone()
+            return row[0] if row else 0
+    except Exception as e:
+        logger.error(f"[DB] Get unread count error: {e}")
+        return 0
 # ── Webhook Idempotency (DB-backed) ──
 def is_webhook_duplicate(event_id: str) -> bool:
     """Check if a webhook event was already processed. Returns True if duplicate."""

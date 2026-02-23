@@ -2431,3 +2431,108 @@ function _updateNewsCount(count) {
   });
   observer.observe(document.body, { childList: true, subtree: true });
 })();
+
+
+/* ═══════════════════
+   #17 BACKTEST SIMULATOR
+   ═══════════════════ */
+async function runBacktest() {
+  const stats = document.getElementById('backtest-stats');
+  const canvas = document.getElementById('backtest-canvas');
+  if (!canvas) return;
+  if (stats) stats.textContent = 'Loading...';
+
+  try {
+    const data = await apiFetch('/api/council/backtest?limit=200', { silent: true });
+    if (!data || !data.equity_curve || data.equity_curve.length < 2) {
+      if (stats) stats.textContent = 'Not enough data for backtest.';
+      return;
+    }
+
+    const curve = data.equity_curve;
+    const finalCap = data.final_capital;
+    const pnl = ((finalCap - 10000) / 10000 * 100).toFixed(2);
+    const totalTrades = data.backtest.length;
+    const wins = data.backtest.filter(d => d.hit === 1).length;
+    const winRate = totalTrades > 0 ? (wins / totalTrades * 100).toFixed(1) : '0';
+
+    if (stats) {
+      stats.innerHTML = `
+        <span>Final: <strong>$${finalCap.toLocaleString()}</strong></span>
+        <span>PnL: <strong style="color:${pnl >= 0 ? '#22c55e' : '#ef4444'}">${pnl}%</strong></span>
+        <span>Win Rate: <strong>${winRate}%</strong> (${wins}/${totalTrades})</span>
+      `;
+    }
+
+    // Draw simple equity curve on canvas
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = 180 * dpr;
+    ctx.scale(dpr, dpr);
+    const W = canvas.offsetWidth;
+    const H = 180;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const equities = curve.map(c => c.equity);
+    const minE = Math.min(...equities) * 0.998;
+    const maxE = Math.max(...equities) * 1.002;
+    const rangeE = maxE - minE || 1;
+
+    // Equity line
+    ctx.beginPath();
+    ctx.strokeStyle = '#C9A96E';
+    ctx.lineWidth = 2;
+    curve.forEach((pt, i) => {
+      const x = (i / (curve.length - 1)) * W;
+      const y = H - ((pt.equity - minE) / rangeE) * (H - 20) - 10;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Fill under curve
+    const lastX = W;
+    ctx.lineTo(lastX, H);
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, 'rgba(201,169,110,0.25)');
+    grad.addColorStop(1, 'rgba(201,169,110,0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // BTC overlay (if available)
+    const btcPrices = curve.map(c => c.btc).filter(Boolean);
+    if (btcPrices.length > 2) {
+      const minB = Math.min(...btcPrices) * 0.998;
+      const maxB = Math.max(...btcPrices) * 1.002;
+      const rangeB = maxB - minB || 1;
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(100,150,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      let idx = 0;
+      curve.forEach((pt, i) => {
+        if (!pt.btc) return;
+        const x = (i / (curve.length - 1)) * W;
+        const y = H - ((pt.btc - minB) / rangeB) * (H - 20) - 10;
+        idx === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        idx++;
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Labels
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#C9A96E';
+    ctx.fillText('Equity', 4, 12);
+    ctx.fillStyle = 'rgba(100,150,255,0.7)';
+    ctx.fillText('BTC', 60, 12);
+
+  } catch (e) {
+    console.error('[Backtest]', e);
+    if (stats) stats.textContent = 'Backtest failed.';
+  }
+}

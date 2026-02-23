@@ -3,13 +3,16 @@ Ryzm Terminal — FastAPI Application Entry Point
 Creates app, adds middleware, includes routers, mounts static files.
 """
 import os
+import time
 import uuid
+import collections
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.core.config import ALLOWED_ORIGINS, SMTP_HOST
 from app.core.logger import logger
@@ -76,7 +79,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         elif request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         # Always tag version
-        response.headers["X-Ryzm-Version"] = "8.11"
+        response.headers["X-Ryzm-Version"] = "8.12"
         # Prevent clickjacking
         response.headers["X-Frame-Options"] = "DENY"
         # Prevent MIME-type sniffing
@@ -120,6 +123,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityHeadersMiddleware)
 
+# ── GZip Compression (HTML, JSON, CSS, JS) ──
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 
 # ── Anonymous UID Middleware ──
 class UIDMiddleware(BaseHTTPMiddleware):
@@ -137,6 +143,35 @@ class UIDMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(UIDMiddleware)
+
+# ── #15 Prometheus-style Metrics Collector ──
+import collections
+_metrics = {
+    "http_requests_total": collections.defaultdict(int),  # (method, path, status) -> count
+    "http_request_duration_seconds": [],  # (duration, method, path) — last 1000
+    "start_time": time.time(),
+}
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Collect request count and latency for /metrics endpoint."""
+    async def dispatch(self, request: Request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        duration = time.time() - start
+        path = request.url.path
+        # Normalize path to avoid cardinality explosion
+        if path.startswith("/static/"):
+            path = "/static/*"
+        method = request.method
+        status = response.status_code
+        _metrics["http_requests_total"][(method, path, status)] += 1
+        buf = _metrics["http_request_duration_seconds"]
+        buf.append((duration, method, path))
+        if len(buf) > 1000:
+            _metrics["http_request_duration_seconds"] = buf[-500:]
+        return response
+
+app.add_middleware(MetricsMiddleware)
 
 # CORS
 app.add_middleware(

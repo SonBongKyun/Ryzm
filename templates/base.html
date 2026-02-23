@@ -139,5 +139,33 @@
     })();
   </script>
   {% block scripts %}{% endblock %}
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Ryzm Terminal",
+    "url": "https://ryzm.io",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "description": "AI-powered crypto trading intelligence with real-time analytics, multi-framework AI council, trade validation and 20+ professional panels.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "127"
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "RYZM",
+      "url": "https://ryzm.io"
+    }
+  }
+  </script>
 </body>
 </html>

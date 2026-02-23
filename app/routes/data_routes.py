@@ -13,7 +13,13 @@ from fastapi.templating import Jinja2Templates
 from app.core.logger import logger
 from app.core.config import CACHE_TTL, MUSEUM_OF_SCARS
 from app.core.cache import cache, build_api_meta
-from app.core.database import get_risk_history, db_session, get_risk_component_changes, get_component_sparklines, subscribe_briefing as db_subscribe_briefing
+from app.core.database import (
+    get_risk_history, db_session, get_risk_component_changes, get_component_sparklines,
+    subscribe_briefing as db_subscribe_briefing,
+    save_ai_feedback, get_ai_feedback_stats,
+    get_watchlist, toggle_watchlist,
+    get_notifications, mark_notifications_read, get_unread_count,
+)
 from app.core.http_client import get_api_health
 from app.services.market_service import fetch_multi_timeframe
 from app.services.onchain_service import (
@@ -515,3 +521,189 @@ async def subscribe_briefing_endpoint(request: Request):
     except Exception as e:
         logger.error(f"[Briefing] Subscribe error: {e}")
         return {"status": "error", "message": "Subscription failed. Please try again."}
+
+# ── AI Feedback (#5) ──
+@router.post("/api/ai-feedback")
+async def submit_ai_feedback(request: Request):
+    """Submit thumbs up/down feedback on AI results."""
+    from app.core.security import get_or_create_uid
+    from fastapi import Response as Resp
+    resp = Resp()
+    uid = get_or_create_uid(request, resp)
+    try:
+        body = await request.json()
+        feature = body.get("feature", "council")
+        vote = int(body.get("vote", 0))
+        reference_id = body.get("reference_id", None)
+        if vote not in (1, -1):
+            return {"status": "error", "message": "Vote must be 1 or -1"}
+        save_ai_feedback(uid, feature, vote, reference_id)
+        return {"status": "ok", "message": "Thanks for the feedback!"}
+    except Exception as e:
+        logger.error(f"[API] AI Feedback error: {e}")
+        return {"status": "error", "message": "Feedback failed."}
+
+
+@router.get("/api/ai-feedback/stats")
+async def get_feedback_stats(feature: str = None):
+    """Get AI feedback stats."""
+    return get_ai_feedback_stats(feature)
+
+
+# ── Watchlist (#13) ──
+@router.get("/api/watchlist")
+async def get_user_watchlist(request: Request):
+    """Get user's watchlist."""
+    from app.core.security import get_or_create_uid
+    from fastapi import Response as Resp
+    resp = Resp()
+    uid = get_or_create_uid(request, resp)
+    return {"symbols": get_watchlist(uid)}
+
+
+@router.post("/api/watchlist/toggle")
+async def toggle_user_watchlist(request: Request):
+    """Add/remove symbol from watchlist."""
+    from app.core.security import get_or_create_uid
+    from fastapi import Response as Resp
+    resp = Resp()
+    uid = get_or_create_uid(request, resp)
+    try:
+        body = await request.json()
+        symbol = (body.get("symbol") or "").upper().strip()
+        if not symbol or len(symbol) > 20:
+            return {"status": "error", "message": "Invalid symbol"}
+        added = toggle_watchlist(uid, symbol)
+        return {"status": "ok", "added": added, "symbol": symbol}
+    except Exception as e:
+        logger.error(f"[API] Watchlist toggle error: {e}")
+        return {"status": "error", "message": "Watchlist update failed."}
+
+
+# ── Notifications (#12) ──
+@router.get("/api/notifications")
+async def get_user_notifications(request: Request):
+    """Get user's notifications."""
+    from app.core.security import get_or_create_uid
+    from fastapi import Response as Resp
+    resp = Resp()
+    uid = get_or_create_uid(request, resp)
+    return {"notifications": get_notifications(uid), "unread": get_unread_count(uid)}
+
+
+@router.post("/api/notifications/read")
+async def mark_user_notifications_read(request: Request):
+    """Mark all notifications as read."""
+    from app.core.security import get_or_create_uid
+    from fastapi import Response as Resp
+    resp = Resp()
+    uid = get_or_create_uid(request, resp)
+    mark_notifications_read(uid)
+    return {"status": "ok"}
+
+
+# ── #11 Telegram Bot ──
+from app.services.telegram_service import is_configured as tg_configured, send_message as tg_send
+
+
+@router.post("/api/telegram/send")
+async def telegram_send_endpoint(request: Request):
+    """Send a message via Telegram bot (admin only)."""
+    from app.core.config import ADMIN_TOKEN
+    body = await request.json()
+    token = body.get("admin_token", "")
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    if not tg_configured():
+        raise HTTPException(status_code=503, detail="Telegram not configured")
+    text = body.get("text", "")
+    chat_id = body.get("chat_id", None)
+    ok = tg_send(text, chat_id)
+    return {"status": "sent" if ok else "failed"}
+
+
+@router.get("/api/telegram/status")
+async def telegram_status():
+    """Check if Telegram bot is configured."""
+    return {"configured": tg_configured()}
+
+
+# ── #15 Prometheus-style Metrics ──
+from fastapi.responses import PlainTextResponse
+
+@router.get("/metrics")
+async def prometheus_metrics(request: Request):
+    """Expose Prometheus-style metrics (admin only via query param or internal)."""
+    from app.core.config import ADMIN_TOKEN
+    token = request.query_params.get("token", "")
+    if ADMIN_TOKEN and token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    from app.main import _metrics
+    import time as _time
+
+    lines = []
+    lines.append("# HELP http_requests_total Total HTTP requests")
+    lines.append("# TYPE http_requests_total counter")
+    for (method, path, status), count in sorted(_metrics["http_requests_total"].items()):
+        lines.append(f'http_requests_total{{method="{method}",path="{path}",status="{status}"}} {count}')
+
+    # Uptime
+    uptime = _time.time() - _metrics.get("start_time", _time.time())
+    lines.append("# HELP ryzm_uptime_seconds Server uptime in seconds")
+    lines.append("# TYPE ryzm_uptime_seconds gauge")
+    lines.append(f"ryzm_uptime_seconds {uptime:.0f}")
+
+    # Average latency from recent requests
+    durations = _metrics.get("http_request_duration_seconds", [])
+    if durations:
+        avg = sum(d[0] for d in durations) / len(durations)
+        lines.append("# HELP http_request_duration_avg_seconds Average request duration")
+        lines.append("# TYPE http_request_duration_avg_seconds gauge")
+        lines.append(f"http_request_duration_avg_seconds {avg:.4f}")
+
+    # Cache health
+    for key, entry in cache.items():
+        age = _time.time() - entry.get("ts", 0)
+        lines.append(f'ryzm_cache_age_seconds{{key="{key}"}} {age:.0f}')
+
+    # API health
+    health = get_api_health()
+    for domain, info in health.items():
+        lines.append(f'ryzm_api_fails{{domain="{domain}"}} {info["fails"]}')
+        lines.append(f'ryzm_api_backoff_remaining{{domain="{domain}"}} {info["backoff_remaining"]}')
+
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+
+
+# ── #17 Backtest Simulator ──
+from app.core.database import get_council_history
+
+
+@router.get("/api/council/backtest")
+async def council_backtest(limit: int = 100):
+    """Return council history with BTC price for backtest charting."""
+    records = get_council_history(limit=min(limit, 500))
+    # Build backtest data: each record has timestamp, verdict, score, btc_price, btc_price_after, hit
+    data = []
+    for r in records:
+        verdict = r.get("prediction") or r.get("vibe_status") or "NEUTRAL"
+        data.append({
+            "ts": r.get("timestamp") or r.get("timestamp_ms"),
+            "verdict": verdict,
+            "score": r.get("consensus_score", 50),
+            "btc_price": r.get("btc_price"),
+            "btc_price_after": r.get("btc_price_after"),
+            "hit": r.get("hit"),
+        })
+    # Simulate simple PnL: +1% on correct, -1% on wrong
+    capital = 10000
+    equity_curve = []
+    for d in reversed(data):
+        hit = d.get("hit")
+        if hit == 1:
+            capital *= 1.01
+        elif hit == 0:
+            capital *= 0.99
+        equity_curve.append({"ts": d["ts"], "equity": round(capital, 2), "btc": d["btc_price"]})
+    return {"backtest": data, "equity_curve": equity_curve, "final_capital": round(capital, 2)}

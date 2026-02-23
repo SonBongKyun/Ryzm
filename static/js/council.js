@@ -359,6 +359,12 @@ function renderCouncil(data) {
   if (data.strategic_narrative) {
     renderStrategicNarrative(data.strategic_narrative);
   }
+
+  // Inject AI Feedback buttons (#5)
+  const feedbackTarget = document.getElementById('strategy-list') || document.getElementById('agents-grid');
+  if (feedbackTarget) {
+    injectFeedbackButtons(feedbackTarget, 'council', data.consensus_score?.toString());
+  }
 }
 
 /* ?�═??Narrative Radar Chart ?�═??*/
@@ -619,7 +625,10 @@ function displayValidationResult(data) {
   lucide.createIcons();
 }
 
-/* ?�?�?� Ask Ryzm Chat ?�?�?� */
+/* 💬🎯 Ask Ryzm Chat 💬🎯 */
+// #9: Chat Memory — keep last 5 exchanges
+let _chatHistory = [];
+
 function initChat() {
   const chatFloatBtn = document.getElementById('chat-float-btn');
   const chatOverlay = document.getElementById('chat-overlay');
@@ -655,6 +664,10 @@ function initChat() {
     chatInput.value = '';
     playSound('hover');
 
+    // #9: Add to history
+    _chatHistory.push({ role: 'user', content: message });
+    if (_chatHistory.length > 10) _chatHistory = _chatHistory.slice(-10);
+
     // Add "thinking" message
     const thinkingId = Date.now();
     addChatMessage('ai', '...', thinkingId);
@@ -663,7 +676,7 @@ function initChat() {
       const data = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message, history: _chatHistory.slice(-10) })
       });
 
       // Remove thinking message
@@ -673,6 +686,10 @@ function initChat() {
       // Display AI response
       addChatMessage('ai', data.response, null, data.confidence);
       playSound('alert');
+
+      // #9: Add AI response to history
+      _chatHistory.push({ role: 'assistant', content: data.response });
+      if (_chatHistory.length > 10) _chatHistory = _chatHistory.slice(-10);
 
     } catch (e) {
       const thinkingEl = document.querySelector(`[data-id="${thinkingId}"]`);
@@ -733,3 +750,95 @@ function refreshAllQuotas() {
     .catch(() => {});
 }
 
+
+/* ═══ #5 AI Feedback 👍👎 ═══ */
+function initAIFeedback() {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ai-feedback-btn');
+    if (!btn) return;
+    const vote = parseInt(btn.dataset.vote);
+    const feature = btn.dataset.feature || 'council';
+    const refId = btn.dataset.refId || null;
+    const container = btn.closest('.ai-feedback-group');
+    apiFetch('/api/ai-feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature, vote, reference_id: refId })
+    }).then(() => {
+      if (container) {
+        container.innerHTML = '<span style="color:var(--neon-cyan);font-size:0.7rem;">✓ 피드백 감사합니다!</span>';
+      }
+    }).catch(() => {});
+  });
+}
+document.addEventListener('DOMContentLoaded', initAIFeedback);
+
+function injectFeedbackButtons(parentEl, feature, refId) {
+  if (!parentEl) return;
+  const group = document.createElement('div');
+  group.className = 'ai-feedback-group';
+  group.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+  group.innerHTML = `
+    <button class="ai-feedback-btn" data-vote="1" data-feature="${feature}" data-ref-id="${refId || ''}" title="도움이 됐어요" style="background:none;border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--neon-green);font-size:0.75rem;">👍</button>
+    <button class="ai-feedback-btn" data-vote="-1" data-feature="${feature}" data-ref-id="${refId || ''}" title="별로예요" style="background:none;border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--neon-red);font-size:0.75rem;">👎</button>
+  `;
+  parentEl.appendChild(group);
+}
+
+
+/* ═══ #7 Council Social Share ═══ */
+function shareCouncil(platform) {
+  const data = window._lastCouncilData;
+  if (!data) { showToast?.('warning', '공유', '먼저 Council을 실행하세요.'); return; }
+  const score = data.consensus_score || 50;
+  const vibe = data.vibe?.status || 'NEUTRAL';
+  const pred = data.prediction || 'NEUTRAL';
+  const text = `🚀 Ryzm AI Council\n📊 Score: ${score}/100 | Vibe: ${vibe} | Signal: ${pred}\n\n#Bitcoin #Crypto #Ryzm\nhttps://ryzm.io`;
+
+  if (platform === 'twitter') {
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+  } else if (platform === 'telegram') {
+    window.open(`https://t.me/share/url?url=https://ryzm.io&text=${encodeURIComponent(text)}`, '_blank');
+  } else {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast?.('success', '복사됨', '분석 결과가 클립보드에 복사되었습니다.');
+    });
+  }
+}
+
+
+/* ═══ #14 Council PDF Export ═══ */
+async function exportCouncilPDF() {
+  const data = window._lastCouncilData;
+  if (!data) { showToast?.('warning', 'PDF', '먼저 Council을 실행하세요.'); return; }
+  showToast?.('info', 'PDF', 'PDF 생성 중...');
+  try {
+    const section = document.getElementById('council-section');
+    if (!section) return;
+    const canvas = await html2canvas(section, {
+      backgroundColor: '#0a0a0f',
+      scale: 2,
+      ignoreElements: (el) => el.id === 'matrix-bg' || el.id === 'dash-globe'
+    });
+    if (typeof window.jspdf === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+      document.head.appendChild(script);
+      await new Promise((resolve) => { script.onload = resolve; });
+    }
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const imgData = canvas.toDataURL('image/png');
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = (canvas.height * pdfW) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, Math.min(pdfH, pdf.internal.pageSize.getHeight()));
+    pdf.setFontSize(8);
+    pdf.setTextColor(100);
+    pdf.text(`Ryzm Terminal | ${new Date().toISOString().slice(0, 16)} UTC`, 10, pdf.internal.pageSize.getHeight() - 5);
+    pdf.save(`Ryzm_Council_${new Date().toISOString().slice(0, 10)}.pdf`);
+    showToast?.('success', 'PDF', 'PDF가 다운로드되었습니다.');
+  } catch (e) {
+    console.error('PDF export error:', e);
+    showToast?.('error', 'PDF', 'PDF 생성에 실패했습니다.');
+  }
+}

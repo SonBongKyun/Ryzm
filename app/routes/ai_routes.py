@@ -42,29 +42,38 @@ ENABLE_CHAT = os.getenv("ENABLE_CHAT", "true").lower() in ("true", "1", "yes")
 ENABLE_VALIDATOR = os.getenv("ENABLE_VALIDATOR", "true").lower() in ("true", "1", "yes")
 
 
-@router.get("/api/council")
-async def get_council(request: Request, response: Response):
-    """Convene AI Round Table."""
-    if not ENABLE_COUNCIL:
-        raise HTTPException(status_code=503, detail="AI Council is temporarily disabled for maintenance.")
+# ── DRY Rate-limit + Usage Guard (#6) ──
+def _ai_guard(request: Request, response: Response, feature: str, kill_switch: bool):
+    """Common rate-limit, usage-check, and kill-switch logic for all AI endpoints.
+    Returns (uid, tier) on success, or raises HTTPException.
+    """
+    if not kill_switch:
+        raise HTTPException(status_code=503, detail=f"AI {feature} is temporarily disabled for maintenance.")
     if not check_rate_limit(request.client.host, "ai"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     uid = get_or_create_uid(request, response)
     tier = get_user_tier(uid)
-    # Pro per-user rate limit (cost defence)
-    if tier == "pro" and not check_pro_rate_limit(uid, "council"):
+    if tier == "pro" and not check_pro_rate_limit(uid, feature):
         raise HTTPException(status_code=429, detail="Pro rate limit: too many requests per minute.")
     limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
-    used = count_usage_today(uid, "council")
-    if used >= limits["council"]:
-        return JSONResponse(status_code=403, content={
+    used = count_usage_today(uid, feature)
+    limit_val = limits.get(feature, limits.get("chat", 20))
+    if used >= limit_val:
+        raise HTTPException(status_code=403, detail=json.dumps({
             "code": "LIMIT_REACHED",
-            "feature": "council",
+            "feature": feature,
             "remaining": 0,
             "used": used,
-            "limit": limits["council"],
-            "detail": f"Daily limit reached ({limits['council']} councils/day). Upgrade to Pro for unlimited access.",
-        })
+            "limit": limit_val,
+            "detail": f"Daily limit reached ({limit_val} {feature}/day). Upgrade to Pro for unlimited access.",
+        }))
+    return uid, tier
+
+
+@router.get("/api/council")
+async def get_council(request: Request, response: Response):
+    """Convene AI Round Table."""
+    uid, tier = _ai_guard(request, response, "council", ENABLE_COUNCIL)
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -228,25 +237,7 @@ async def get_council_history_api(limit: int = 50):
 @router.post("/api/validate")
 async def validate_trade(request: TradeValidationRequest, http_request: Request, response: Response):
     """AI evaluates user's trading plan."""
-    if not ENABLE_VALIDATOR:
-        raise HTTPException(status_code=503, detail="Trade Validator is temporarily disabled for maintenance.")
-    if not check_rate_limit(http_request.client.host, "ai"):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
-    uid = get_or_create_uid(http_request, response)
-    tier = get_user_tier(uid)
-    if tier == "pro" and not check_pro_rate_limit(uid, "validate"):
-        raise HTTPException(status_code=429, detail="Pro rate limit: too many requests per minute.")
-    limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
-    used = count_usage_today(uid, "validate")
-    if used >= limits["validate"]:
-        return JSONResponse(status_code=403, content={
-            "code": "LIMIT_REACHED",
-            "feature": "validate",
-            "remaining": 0,
-            "used": used,
-            "limit": limits["validate"],
-            "detail": f"Daily limit reached ({limits['validate']} validations/day). Upgrade to Pro for unlimited access.",
-        })
+    uid, tier = _ai_guard(http_request, response, "validate", ENABLE_VALIDATOR)
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -295,25 +286,7 @@ News:
 @router.post("/api/chat")
 async def chat_with_ryzm(request: ChatRequest, http_request: Request, response: Response):
     """Real-time AI Chat."""
-    if not ENABLE_CHAT:
-        raise HTTPException(status_code=503, detail="AI Chat is temporarily disabled for maintenance.")
-    if not check_rate_limit(http_request.client.host, "ai"):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
-    uid = get_or_create_uid(http_request, response)
-    tier = get_user_tier(uid)
-    if tier == "pro" and not check_pro_rate_limit(uid, "chat"):
-        raise HTTPException(status_code=429, detail="Pro rate limit: too many requests per minute.")
-    limits = DAILY_PRO_LIMITS if tier == "pro" else DAILY_FREE_LIMITS
-    used = count_usage_today(uid, "chat")
-    if used >= limits["chat"]:
-        return JSONResponse(status_code=403, content={
-            "code": "LIMIT_REACHED",
-            "feature": "chat",
-            "remaining": 0,
-            "used": used,
-            "limit": limits["chat"],
-            "detail": f"Daily limit reached ({limits['chat']} chats/day). Upgrade to Pro for unlimited access.",
-        })
+    uid, tier = _ai_guard(http_request, response, "chat", ENABLE_CHAT)
     try:
         market = cache["market"]["data"]
         news = cache["news"]["data"]
@@ -321,6 +294,18 @@ async def chat_with_ryzm(request: ChatRequest, http_request: Request, response: 
 
         mkt = compress_market(market)
         nws = compress_news(news, n=3)
+
+        # #9: Build conversation history context (last 5 exchanges max)
+        history_ctx = ""
+        if request.history:
+            recent = request.history[-10:]  # max 5 pairs
+            for msg in recent:
+                role = msg.get("role", "user")
+                content = sanitize_external_text(str(msg.get("content", "")), 200)
+                if role == "user":
+                    history_ctx += f"User: {content}\n"
+                else:
+                    history_ctx += f"Ryzm: {content}\n"
 
         prompt = f"""You are "Ryzm", a sharp crypto analyst AI. Answer concisely (max 3 sentences). Use crypto slang.
 Always respond in Korean (한국어).
@@ -332,6 +317,7 @@ F&G: {fg_data.get('score', 50)}/100 ({fg_data.get('label', 'Neutral')})
 News:
 {nws}
 
+{f"[CONVERSATION HISTORY]{chr(10)}{history_ctx}" if history_ctx else ""}
 [QUESTION] {sanitize_external_text(request.message, 500)}
 
 Return JSON: {{"response":"<answer>","confidence":"HIGH|MED|LOW"}}"""
@@ -348,3 +334,61 @@ Return JSON: {{"response":"<answer>","confidence":"HIGH|MED|LOW"}}"""
     except Exception as e:
         logger.error(f"[Chat] Error: {e}")
         return {"response": "System temporarily offline. Try again in a moment.", "confidence": "LOW", "_ai_fallback": True}
+
+
+# ── #10 AI SSE Streaming ──
+from fastapi.responses import StreamingResponse
+
+
+@router.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest, http_request: Request, response: Response):
+    """SSE streaming AI Chat — token-by-token response."""
+    uid, tier = _ai_guard(http_request, response, "chat", ENABLE_CHAT)
+
+    market = cache["market"]["data"]
+    news = cache["news"]["data"]
+    fg_data = cache["fear_greed"]["data"]
+
+    mkt = compress_market(market)
+    nws = compress_news(news, n=3)
+
+    # Build conversation history
+    history_ctx = ""
+    if request.history:
+        recent = request.history[-10:]
+        for msg in recent:
+            role = msg.get("role", "user")
+            content = sanitize_external_text(str(msg.get("content", "")), 200)
+            if role == "user":
+                history_ctx += f"User: {content}\n"
+            else:
+                history_ctx += f"Ryzm: {content}\n"
+
+    prompt = f"""You are "Ryzm", a sharp crypto analyst AI. Answer concisely (max 3 sentences). Use crypto slang.
+Always respond in Korean (한국어). Do NOT wrap in JSON — respond in plain text only.
+
+[CONTEXT]
+Market: {mkt}
+F&G: {fg_data.get('score', 50)}/100 ({fg_data.get('label', 'Neutral')})
+News:
+{nws}
+
+{f"[CONVERSATION HISTORY]{chr(10)}{history_ctx}" if history_ctx else ""}
+[QUESTION] {sanitize_external_text(request.message, 500)}"""
+
+    async def event_generator():
+        try:
+            from app.core.ai_client import call_gemini_stream
+            for chunk in call_gemini_stream(prompt):
+                yield f"data: {json.dumps({'token': chunk})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+            record_usage(uid, "chat")
+        except Exception as e:
+            logger.error(f"[Chat Stream] Error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )

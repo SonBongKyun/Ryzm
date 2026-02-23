@@ -50,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initStatusBar();
   initPulseIndicators();
   initSectionNav();
+  initNotificationCenter();
+  initWatchlist();
 });
 
 /*  Section Navigation (scroll-to + active highlight)  */
@@ -2892,3 +2894,229 @@ document.getElementById('btn-export-csv')?.addEventListener('click', async () =>
     showToast('error', '??Export Failed', 'Could not export data.');
   }
 });
+
+
+/* ═══════════════════
+   #12 NOTIFICATION CENTER
+   ═══════════════════ */
+let _notifPollTimer = null;
+
+function initNotificationCenter() {
+  const bell = document.getElementById('btn-notifications');
+  const panel = document.getElementById('notification-panel');
+  if (!bell || !panel) return;
+
+  bell.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleNotificationCenter();
+  });
+
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (panel.style.display === 'flex' && !panel.contains(e.target) && e.target !== bell) {
+      panel.style.display = 'none';
+    }
+  });
+
+  // Close button
+  const closeBtn = panel.querySelector('.notif-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
+
+  // Mark all read
+  const readBtn = panel.querySelector('.notif-read-all');
+  if (readBtn) readBtn.addEventListener('click', markAllNotificationsRead);
+
+  // Poll unread count every 30s
+  fetchUnreadCount();
+  _notifPollTimer = setInterval(fetchUnreadCount, 30000);
+}
+
+function toggleNotificationCenter() {
+  const panel = document.getElementById('notification-panel');
+  if (!panel) return;
+  if (panel.style.display === 'flex') {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'flex';
+    fetchNotifications();
+  }
+}
+
+async function fetchUnreadCount() {
+  try {
+    const data = await apiFetch('/api/notifications?limit=0', { silent: true });
+    const badge = document.getElementById('notif-badge');
+    if (badge && data && typeof data.unread === 'number') {
+      badge.textContent = data.unread > 99 ? '99+' : data.unread;
+      badge.style.display = data.unread > 0 ? '' : 'none';
+    }
+  } catch (_) {}
+}
+
+async function fetchNotifications() {
+  try {
+    const data = await apiFetch('/api/notifications', { silent: true });
+    renderNotifications(data.notifications || []);
+  } catch (_) {
+    renderNotifications([]);
+  }
+}
+
+function renderNotifications(items) {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = '<div class="notif-empty">알림이 없습니다</div>';
+    return;
+  }
+  list.innerHTML = items.map(n => {
+    const icon = n.type === 'alert' ? '🚨' : n.type === 'council' ? '🏛️' : '🔔';
+    const readCls = n.read ? 'notif-read' : 'notif-unread';
+    return `<div class="notif-item ${readCls}">
+      <span class="notif-icon">${icon}</span>
+      <div class="notif-body">
+        <div class="notif-title">${escapeHtml(n.title)}</div>
+        <div class="notif-msg">${escapeHtml(n.message)}</div>
+        <div class="notif-time">${escapeHtml(n.created_at_utc || '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await apiFetch('/api/notifications/read', { method: 'POST', silent: true });
+    const badge = document.getElementById('notif-badge');
+    if (badge) badge.style.display = 'none';
+    document.querySelectorAll('.notif-unread').forEach(el => {
+      el.classList.remove('notif-unread');
+      el.classList.add('notif-read');
+    });
+    showToast('success', '✅', '모든 알림을 읽음 처리했습니다.');
+  } catch (_) {}
+}
+
+
+/* ═══════════════════
+   #13 COIN WATCHLIST
+   ═══════════════════ */
+let _watchlistSet = new Set();
+
+function initWatchlist() {
+  fetchWatchlist();
+}
+
+async function fetchWatchlist() {
+  try {
+    const data = await apiFetch('/api/watchlist', { silent: true });
+    _watchlistSet = new Set((data.watchlist || []).map(s => s.toUpperCase()));
+    renderWatchlistStars();
+  } catch (_) {}
+}
+
+function renderWatchlistStars() {
+  document.querySelectorAll('[data-symbol]').forEach(card => {
+    const sym = card.dataset.symbol.toUpperCase();
+    let star = card.querySelector('.watchlist-star');
+    if (!star) {
+      star = document.createElement('button');
+      star.className = 'watchlist-star';
+      star.title = 'Add to Watchlist';
+      star.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleWatchlistStar(sym);
+      });
+      card.style.position = 'relative';
+      card.appendChild(star);
+    }
+    star.textContent = _watchlistSet.has(sym) ? '★' : '☆';
+    star.classList.toggle('active', _watchlistSet.has(sym));
+  });
+}
+
+async function toggleWatchlistStar(symbol) {
+  try {
+    const data = await apiFetch('/api/watchlist/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ symbol }),
+      headers: { 'Content-Type': 'application/json' },
+      silent: true,
+    });
+    if (data.action === 'added') {
+      _watchlistSet.add(symbol.toUpperCase());
+      showToast('success', '⭐', `${symbol} 워치리스트에 추가`);
+    } else {
+      _watchlistSet.delete(symbol.toUpperCase());
+      showToast('info', '☆', `${symbol} 워치리스트에서 제거`);
+    }
+    renderWatchlistStars();
+  } catch (_) {
+    showToast('error', '❌', '워치리스트 변경 실패');
+  }
+}
+
+
+/* ═══════════════════
+   #16 GUIDED TOUR
+   ═══════════════════ */
+const _tourSteps = [
+  { target: '#section-nav',        title: '섹션 내비게이션', desc: '각 섹션으로 빠르게 이동할 수 있습니다.' },
+  { target: '#panel-left',         title: '리스크 게이지 & 데이터', desc: 'Fear & Greed, 김프, 경제캘린더 등 핵심 지표를 확인하세요.' },
+  { target: '#council-section',    title: 'AI Council', desc: 'AI 위원회가 시장 분석 후 LONG/SHORT 판정을 내립니다.' },
+  { target: '#panel-right',        title: '가격 & 뉴스 패널', desc: '실시간 가격, 뉴스, 온체인 데이터를 모아봅니다.' },
+  { target: '#chat-overlay',       title: 'AI 챗봇', desc: 'Ryzm AI에게 무엇이든 물어보세요.' },
+  { target: '#btn-notifications',  title: '알림 센터', desc: '중요 알림과 시장 이벤트를 놓치지 마세요.' },
+];
+
+let _tourIdx = -1;
+let _tourOverlay = null;
+
+function startGuidedTour() {
+  _tourIdx = 0;
+  _showTourStep();
+}
+
+function _showTourStep() {
+  _removeTourOverlay();
+  if (_tourIdx < 0 || _tourIdx >= _tourSteps.length) {
+    _removeTourOverlay();
+    showToast('success', '🎉', '투어 완료! 이제 대시보드를 자유롭게 탐색해보세요.');
+    return;
+  }
+  const step = _tourSteps[_tourIdx];
+  const el = document.querySelector(step.target);
+  if (!el) { _tourIdx++; _showTourStep(); return; }
+
+  // Scroll into view
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  setTimeout(() => {
+    const rect = el.getBoundingClientRect();
+
+    // Create overlay
+    _tourOverlay = document.createElement('div');
+    _tourOverlay.className = 'tour-overlay';
+    _tourOverlay.innerHTML = `
+      <div class="tour-spotlight" style="top:${rect.top - 8}px;left:${rect.left - 8}px;width:${rect.width + 16}px;height:${rect.height + 16}px;"></div>
+      <div class="tour-tooltip" style="top:${rect.bottom + 16}px;left:${Math.max(16, rect.left)}px;">
+        <div class="tour-step-count">${_tourIdx + 1} / ${_tourSteps.length}</div>
+        <div class="tour-title">${escapeHtml(step.title)}</div>
+        <div class="tour-desc">${escapeHtml(step.desc)}</div>
+        <div class="tour-actions">
+          <button class="tour-btn tour-skip" onclick="_endTour()">건너뛰기</button>
+          <button class="tour-btn tour-next" onclick="_nextTourStep()">${_tourIdx === _tourSteps.length - 1 ? '완료' : '다음'}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(_tourOverlay);
+    _tourOverlay.addEventListener('click', (e) => {
+      if (e.target === _tourOverlay) _nextTourStep();
+    });
+  }, 400);
+}
+
+function _nextTourStep() { _tourIdx++; _showTourStep(); }
+function _endTour() { _tourIdx = -1; _removeTourOverlay(); }
+function _removeTourOverlay() {
+  if (_tourOverlay) { _tourOverlay.remove(); _tourOverlay = null; }
+}

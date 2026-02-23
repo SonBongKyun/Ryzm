@@ -32,15 +32,25 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap"
     rel="stylesheet" />
 
+  <!-- Resource Hints -->
+  <link rel="dns-prefetch" href="https://api.binance.com" />
+  <link rel="dns-prefetch" href="https://fapi.binance.com" />
+  <link rel="dns-prefetch" href="https://stream.binance.com" />
+  <link rel="dns-prefetch" href="https://api.coingecko.com" />
+  <link rel="dns-prefetch" href="https://api.alternative.me" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preload" href="/static/styles.css?v=8.12" as="style" />
+
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <script defer src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
+  <script defer src="https://html2canvas.hertzen.com/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <!-- TradingView Lightweight Charts -->
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=8.11" />
+  <link rel="stylesheet" href="/static/styles.css?v=8.12" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0D0D0F" />
@@ -198,6 +208,12 @@
       <span id="briefing-dot" class="briefing-dot"></span>
     </button>
 
+    <!-- #12 Notification Bell -->
+    <button id="btn-notifications" class="daily-report-btn" title="Notifications" onclick="toggleNotificationCenter()" style="position:relative;">
+      <i data-lucide="bell" style="width:13px;height:13px;"></i>
+      <span id="notif-badge" class="notif-badge" style="display:none;">0</span>
+    </button>
+
     <!-- Daily Report Button -->
     <button id="btn-daily-report" class="daily-report-btn" title="Get Daily Briefing" onclick="openDailyReportModal()">
       <i data-lucide="bell-ring" style="width:13px;height:13px;"></i>
@@ -208,6 +224,12 @@
     <button id="btn-help-faq" class="daily-report-btn" title="Help & FAQ" onclick="openHelpModal()" style="border-color:var(--text-secondary);color:var(--text-secondary);">
       <i data-lucide="help-circle" style="width:13px;height:13px;"></i>
       <span>Help</span>
+    </button>
+
+    <!-- #16 Guided Tour Button -->
+    <button id="btn-tour" class="daily-report-btn" title="Dashboard Tour" onclick="startGuidedTour()" style="border-color:var(--accent);color:var(--accent);">
+      <i data-lucide="compass" style="width:13px;height:13px;"></i>
+      <span>Tour</span>
     </button>
 
     <!-- FX Rate -->
@@ -763,6 +785,22 @@
         <i data-lucide="copy"></i> <span data-i18n-text="copy_report">COPY REPORT FOR X</span>
       </button>
 
+      <!-- #7 Social Share + #14 PDF Export Buttons -->
+      <div style="display:flex; gap:8px; margin-top:8px; justify-content:center; flex-wrap:wrap;">
+        <button onclick="shareCouncil('twitter')" class="ai-scan-btn secondary-btn" style="background:var(--bg-panel);border:1px solid #1da1f2;color:#1da1f2;font-size:0.7rem;padding:5px 12px;">
+          <i data-lucide="twitter" style="width:12px;height:12px;"></i> Twitter
+        </button>
+        <button onclick="shareCouncil('telegram')" class="ai-scan-btn secondary-btn" style="background:var(--bg-panel);border:1px solid #0088cc;color:#0088cc;font-size:0.7rem;padding:5px 12px;">
+          <i data-lucide="send" style="width:12px;height:12px;"></i> Telegram
+        </button>
+        <button onclick="shareCouncil('clipboard')" class="ai-scan-btn secondary-btn" style="background:var(--bg-panel);border:1px solid var(--text-muted);color:var(--text-muted);font-size:0.7rem;padding:5px 12px;">
+          <i data-lucide="clipboard" style="width:12px;height:12px;"></i> 복사
+        </button>
+        <button onclick="exportCouncilPDF()" class="ai-scan-btn secondary-btn" style="background:var(--bg-panel);border:1px solid var(--neon-cyan);color:var(--neon-cyan);font-size:0.7rem;padding:5px 12px;">
+          <i data-lucide="file-text" style="width:12px;height:12px;"></i> PDF
+        </button>
+      </div>
+
       <!-- Strategic Narrative -->
       <div id="strategic-narrative" class="strategic-narrative" style="display:none;">
         <div class="sn-header" data-i18n-text="strategic_narrative">
@@ -930,6 +968,18 @@
           <div id="corr-matrix" style="min-height:80px;">
             <div class="skeleton-loader"><div class="skeleton skeleton-block"></div></div>
           </div>
+        </div>
+      </div>
+
+      <!-- #17 Backtest Simulator -->
+      <div class="glass-panel" style="margin-top:12px;">
+        <div class="panel-title"><i data-lucide="bar-chart-2"></i> AI Council Backtest <i data-lucide="chevron-down" class="collapse-icon" style="width:14px;height:14px;"></i></div>
+        <div class="panel-body">
+          <div id="backtest-chart" style="min-height:180px;position:relative;">
+            <canvas id="backtest-canvas" style="width:100%;height:180px;"></canvas>
+          </div>
+          <div id="backtest-stats" style="display:flex;gap:16px;margin-top:8px;font-size:.78rem;color:var(--text-secondary);flex-wrap:wrap;"></div>
+          <button class="btn-outline" onclick="runBacktest()" style="margin-top:8px;font-size:.75rem;">Run Backtest</button>
         </div>
       </div>
     </div>
@@ -1361,6 +1411,20 @@
     </div>
   </div>
 
+  <!-- #12 Notification Center Panel -->
+  <div id="notification-panel" style="display:none;">
+    <div class="notif-header">
+      <span><i data-lucide="bell" style="width:14px;height:14px;"></i> 알림 센터</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="notif-read-all">모두 읽음</button>
+        <button class="notif-close" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2rem;">&times;</button>
+      </div>
+    </div>
+    <div id="notif-list" class="notif-list">
+      <div class="notif-empty">알림이 없습니다.</div>
+    </div>
+  </div>
+
   <!-- Ryzm Chart Modal (price card click) -->
   <div id="tv-modal" class="tv-modal" style="display:none;">
     <div class="tv-modal-content">
@@ -1394,16 +1458,16 @@
   </div>
 
   <!-- JS Modules (v8.9 ??pre-launch hardening) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-  <script src="/static/js/globe.js?v=8.12"></script>
-  <script src="/static/js/api.js?v=8.11"></script>
-  <script src="/static/js/binance-direct.js?v=8.11"></script>
-  <script src="/static/js/chart.js?v=8.11"></script>
-  <script src="/static/js/core.js?v=8.11"></script>
-  <script src="/static/js/data.js?v=8.11"></script>
-  <script src="/static/js/council.js?v=8.11"></script>
-  <script src="/static/js/ui.js?v=8.11"></script>
-  <script src="/static/js/portfolio.js?v=8.11"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script defer src="/static/js/globe.js?v=8.12"></script>
+  <script defer src="/static/js/api.js?v=8.12"></script>
+  <script defer src="/static/js/binance-direct.js?v=8.12"></script>
+  <script defer src="/static/js/chart.js?v=8.12"></script>
+  <script defer src="/static/js/core.js?v=8.12"></script>
+  <script defer src="/static/js/data.js?v=8.12"></script>
+  <script defer src="/static/js/council.js?v=8.12"></script>
+  <script defer src="/static/js/ui.js?v=8.12"></script>
+  <script defer src="/static/js/portfolio.js?v=8.12"></script>
 
   <!-- ?癒λ름??Auth Modal ?癒λ름??-->
   <div id="auth-modal" class="auth-modal" style="display:none;">
