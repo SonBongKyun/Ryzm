@@ -47,6 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initKeyboardShortcutsModal(); // ? key help
   initPriceAlerts();       // Price alerts UI
   lucide.createIcons();
+  // 3D Globe background
+  if (typeof RyzmGlobe !== 'undefined') {
+    RyzmGlobe.init('#dash-globe', { size: 'small' });
+  }
 });
 
 /* ── 0. Audio Engine (BGM & SFX) ── */

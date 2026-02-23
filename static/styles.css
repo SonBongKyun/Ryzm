@@ -3864,6 +3864,26 @@ button:active::before {
   display: none;
 }
 
+/* ── 3D Globe (Dashboard background) ── */
+.dash-globe-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 800px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.25;
+  mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 65%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 65%);
+}
+.dash-globe-container canvas { display: block; }
+@media (max-width: 768px) {
+  .dash-globe-container { width: 400px; height: 400px; opacity: 0.15; }
+}
+html[data-theme="light"] .dash-globe-container { opacity: 0.12; }
+
 @keyframes float {
   0% {
     transform: translateY(0px) translateX(0px) rotate(0deg);

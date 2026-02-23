@@ -187,6 +187,30 @@ img { max-width: 100%; }
 /* ══════════════════════════════════════════
    HERO (Home)
    ══════════════════════════════════════════ */
+/* ── 3D Globe (Landing Hero) ── */
+.hero-globe-container {
+  position: absolute;
+  top: 50%;
+  right: -5%;
+  transform: translateY(-50%);
+  width: 650px;
+  height: 650px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.7;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+}
+.hero-globe-container canvas { display: block; }
+@media (max-width: 768px) {
+  .hero-globe-container {
+    width: 350px; height: 350px;
+    right: -10%; top: 15%;
+    opacity: 0.4;
+    transform: none;
+  }
+}
+
 .hero {
   position: relative;
   min-height: 100vh;
@@ -210,6 +234,8 @@ img { max-width: 100%; }
 .hero-content {
   flex: 1;
   max-width: 580px;
+  position: relative;
+  z-index: 2;
 }
 .hero-badge {
   display: inline-block;
@@ -273,6 +299,8 @@ img { max-width: 100%; }
   flex: 1;
   display: flex;
   justify-content: center;
+  position: relative;
+  z-index: 2;
 }
 .hero-mockup {
   width: 100%;
