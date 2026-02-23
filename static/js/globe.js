@@ -78,10 +78,10 @@ const RyzmGlobe = (() => {
     const GLOBE_RADIUS = 1;
     const globeGeo  = new THREE.SphereGeometry(GLOBE_RADIUS, 48, 48);
     const globeMat  = new THREE.MeshBasicMaterial({
-      color: 0xc9a96e,
+      color: isLarge ? 0xc9a96e : 0x00e5ff,
       wireframe: true,
       transparent: true,
-      opacity: 0.08,
+      opacity: isLarge ? 0.08 : 0.13,
     });
     const globe = new THREE.Mesh(globeGeo, globeMat);
     scene.add(globe);
@@ -98,9 +98,9 @@ const RyzmGlobe = (() => {
     /* ── Latitude / Longitude rings ── */
     const ringGroup = new THREE.Group();
     const ringMat = new THREE.LineBasicMaterial({
-      color: 0xc9a96e,
+      color: isLarge ? 0xc9a96e : 0x00e5ff,
       transparent: true,
-      opacity: 0.04,
+      opacity: isLarge ? 0.04 : 0.07,
     });
     // Latitude rings
     for (let lat = -60; lat <= 60; lat += 30) {
@@ -184,9 +184,9 @@ const RyzmGlobe = (() => {
       const pts = createArc(positions[i].pos, positions[j].pos, GLOBE_RADIUS);
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       const mat = new THREE.LineBasicMaterial({
-        color: 0xc9a96e,
+        color: isLarge ? 0xc9a96e : 0x00e5ff,
         transparent: true,
-        opacity: 0.12,
+        opacity: isLarge ? 0.12 : 0.18,
       });
       const line = new THREE.Line(geo, mat);
       line.userData.phase = Math.random() * Math.PI * 2;
@@ -196,7 +196,7 @@ const RyzmGlobe = (() => {
     scene.add(arcGroup);
 
     /* ── Ambient particles around globe ── */
-    const particleCount = isLarge ? 300 : 150;
+    const particleCount = isLarge ? 300 : 250;
     const particleGeo = new THREE.BufferGeometry();
     const pPositions = new Float32Array(particleCount * 3);
     const pSizes = new Float32Array(particleCount);
@@ -212,29 +212,29 @@ const RyzmGlobe = (() => {
     particleGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
     particleGeo.setAttribute('size', new THREE.BufferAttribute(pSizes, 1));
     const particleMat = new THREE.PointsMaterial({
-      color: 0xc9a96e,
-      size: 0.008,
+      color: isLarge ? 0xc9a96e : 0x00e5ff,
+      size: isLarge ? 0.008 : 0.01,
       transparent: true,
-      opacity: 0.35,
+      opacity: isLarge ? 0.35 : 0.5,
       sizeAttenuation: true,
     });
     const particles = new THREE.Points(particleGeo, particleMat);
     scene.add(particles);
 
     /* ── Outer atmosphere ring ── */
-    const atmosGeo = new THREE.TorusGeometry(GLOBE_RADIUS * 1.15, 0.003, 8, 128);
+    const atmosGeo = new THREE.TorusGeometry(GLOBE_RADIUS * 1.15, isLarge ? 0.003 : 0.004, 8, 128);
     const atmosMat = new THREE.MeshBasicMaterial({
-      color: 0xc9a96e,
+      color: isLarge ? 0xc9a96e : 0x00e5ff,
       transparent: true,
-      opacity: 0.12,
+      opacity: isLarge ? 0.12 : 0.2,
     });
     const atmos = new THREE.Mesh(atmosGeo, atmosMat);
     atmos.rotation.x = Math.PI / 2.2;
     scene.add(atmos);
 
     const atmos2 = new THREE.Mesh(
-      new THREE.TorusGeometry(GLOBE_RADIUS * 1.22, 0.002, 8, 128),
-      new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.06 })
+      new THREE.TorusGeometry(GLOBE_RADIUS * 1.22, isLarge ? 0.002 : 0.003, 8, 128),
+      new THREE.MeshBasicMaterial({ color: isLarge ? 0x00e5ff : 0xc9a96e, transparent: true, opacity: isLarge ? 0.06 : 0.12 })
     );
     atmos2.rotation.x = Math.PI / 1.8;
     atmos2.rotation.y = 0.3;
@@ -243,7 +243,7 @@ const RyzmGlobe = (() => {
     /* ── Animation loop ── */
     let frameId = null;
     let time = 0;
-    const rotateSpeed = isLarge ? 0.0008 : 0.0005;
+    const rotateSpeed = isLarge ? 0.0008 : 0.0006;
 
     function animate() {
       frameId = requestAnimationFrame(animate);

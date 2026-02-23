@@ -3870,19 +3870,19 @@ button:active::before {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 800px;
-  height: 800px;
+  width: 900px;
+  height: 900px;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.25;
-  mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 65%);
-  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 65%);
+  opacity: 0.55;
+  mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, black 25%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, black 25%, transparent 72%);
 }
 .dash-globe-container canvas { display: block; }
 @media (max-width: 768px) {
-  .dash-globe-container { width: 400px; height: 400px; opacity: 0.15; }
+  .dash-globe-container { width: 450px; height: 450px; opacity: 0.35; }
 }
-html[data-theme="light"] .dash-globe-container { opacity: 0.12; }
+html[data-theme="light"] .dash-globe-container { opacity: 0.2; }
 
 @keyframes float {
   0% {
