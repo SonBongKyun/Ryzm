@@ -48,6 +48,14 @@ async def read_pricing(request: Request):
 async def read_about(request: Request):
     return templates.TemplateResponse(request=request, name="about.html", context={"request": request, "active_page": "about"})
 
+@router.get("/terms")
+async def read_terms(request: Request):
+    return templates.TemplateResponse(request=request, name="terms.html", context={"request": request, "active_page": "terms"})
+
+@router.get("/privacy")
+async def read_privacy(request: Request):
+    return templates.TemplateResponse(request=request, name="privacy.html", context={"request": request, "active_page": "privacy"})
+
 # ── App (Dashboard) — always serve fresh HTML, never cache ──
 @router.get("/app")
 async def read_app(request: Request):

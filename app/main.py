@@ -66,14 +66,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
         # ── Force no-cache on ALL HTML pages (prevent stale dashboard) ──
-        _html_paths = {"/", "/app", "/features", "/pricing", "/about", "/verify-email", "/reset-password"}
+        _html_paths = {"/", "/app", "/features", "/pricing", "/about", "/terms", "/privacy", "/verify-email", "/reset-password"}
         _path = request.url.path.rstrip("/") or "/"
         if _path in _html_paths:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
+        # ── Long-term cache for versioned static assets (?v= cache-busted) ──
+        elif request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         # Always tag version
-        response.headers["X-Ryzm-Version"] = "8.9"
+        response.headers["X-Ryzm-Version"] = "8.11"
         # Prevent clickjacking
         response.headers["X-Frame-Options"] = "DENY"
         # Prevent MIME-type sniffing

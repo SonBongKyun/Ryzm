@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy — Ryzm Terminal{% endblock %}
+{% block description %}Ryzm Terminal Privacy Policy. Learn how we collect, use, and protect your personal information.{% endblock %}
+{% block canonical %}<link rel="canonical" href="https://ryzm.io/privacy" />{% endblock %}
+
+{% block body %}
+
+<!-- ── Hero ── -->
+<section class="page-hero">
+  <div class="page-hero-inner anim-fade-up">
+    <div class="hero-badge"><span class="hero-badge-dot"></span>LEGAL</div>
+    <h1>Privacy <span class="hero-highlight">Policy</span></h1>
+    <p>Last updated: 2025-07-01</p>
+  </div>
+</section>
+
+<!-- ── Content ── -->
+<section class="section">
+  <div class="section-inner narrow anim-fade-up legal-content">
+
+    <h2>1. 개인정보 처리방침 개요</h2>
+    <p>RYZM(이하 "회사")은 이용자의 개인정보를 중요하게 생각하며, 개인정보보호법 등 관련 법령을 준수합니다. 본 개인정보 처리방침은 회사가 수집하는 개인정보의 종류, 이용 목적, 보관 기간 등을 설명합니다.</p>
+
+    <h2>2. 수집하는 개인정보</h2>
+    <h3>필수 정보</h3>
+    <ul>
+      <li><strong>이메일 주소</strong> — 회원 가입, 로그인, 서비스 안내에 사용</li>
+      <li><strong>비밀번호</strong> — bcrypt 해시로 암호화 저장 (원본 저장 안 함)</li>
+      <li><strong>닉네임</strong> — 서비스 내 표시 이름</li>
+    </ul>
+    <h3>자동 수집 정보</h3>
+    <ul>
+      <li>접속 IP 주소, 브라우저 유형 (보안 및 서비스 개선 목적)</li>
+      <li>서비스 이용 기록 (AI 분석 요청 횟수 등)</li>
+      <li>쿠키: 인증 토큰 (JWT) 저장을 위한 HttpOnly 쿠키</li>
+    </ul>
+
+    <h2>3. 개인정보 이용 목적</h2>
+    <ul>
+      <li>회원 관리: 가입, 인증, 본인 확인</li>
+      <li>서비스 제공: AI 분석, 알림, 브리핑 이메일 발송</li>
+      <li>결제 처리: Stripe를 통한 구독 결제 관리</li>
+      <li>서비스 개선: 이용 통계 분석, 오류 추적</li>
+      <li>보안: 비정상 접근 탐지, Rate Limiting</li>
+    </ul>
+
+    <h2>4. 개인정보 제3자 제공</h2>
+    <p>회사는 이용자의 개인정보를 원칙적으로 외부에 제공하지 않습니다. 다만, 다음의 경우에 한하여 제공됩니다:</p>
+    <ul>
+      <li><strong>Stripe</strong> — 결제 처리를 위해 이메일이 전달됩니다. Stripe의 자체 개인정보 처리방침이 적용됩니다.</li>
+      <li><strong>법률 요구</strong> — 법원의 명령 또는 법률에 의한 경우</li>
+    </ul>
+
+    <h2>5. 개인정보 보관 기간</h2>
+    <ul>
+      <li>회원 정보: 탈퇴 시까지 보관, 탈퇴 즉시 영구 삭제</li>
+      <li>AI 이용 기록: 계정 삭제 시 함께 삭제</li>
+      <li>결제 기록: 관련 법률에 따라 5년간 보관</li>
+      <li>접속 로그: 보안 목적으로 최대 90일 보관</li>
+    </ul>
+
+    <h2>6. 개인정보 보호 조치</h2>
+    <ul>
+      <li>비밀번호 bcrypt 해시 암호화</li>
+      <li>JWT 토큰 기반 인증, HttpOnly Secure 쿠키</li>
+      <li>HTTPS (TLS 1.2+) 통신 암호화</li>
+      <li>API Rate Limiting 및 보안 헤더 적용</li>
+      <li>Content Security Policy (CSP) 적용</li>
+    </ul>
+
+    <h2>7. 이용자의 권리</h2>
+    <ul>
+      <li><strong>열람권</strong>: 자신의 개인정보 열람을 요청할 수 있습니다.</li>
+      <li><strong>수정권</strong>: 프로필 설정에서 닉네임을 변경할 수 있습니다.</li>
+      <li><strong>삭제권</strong>: 설정에서 계정 삭제를 통해 모든 개인정보를 즉시 삭제할 수 있습니다.</li>
+      <li><strong>동의 철회권</strong>: 서비스 이용을 중단하고 계정을 삭제할 수 있습니다.</li>
+    </ul>
+
+    <h2>8. 쿠키 정책</h2>
+    <p>Ryzm Terminal은 인증을 위해 필수 쿠키만 사용합니다:</p>
+    <ul>
+      <li><strong>ryzm_token</strong> — JWT 인증 토큰 (HttpOnly, Secure, SameSite=Lax)</li>
+    </ul>
+    <p>광고 또는 추적용 쿠키는 사용하지 않습니다.</p>
+
+    <h2>9. 만 14세 미만 아동</h2>
+    <p>본 서비스는 만 14세 미만의 아동을 대상으로 하지 않습니다. 만 14세 미만임이 확인된 계정은 삭제될 수 있습니다.</p>
+
+    <h2>10. 개인정보 처리방침 변경</h2>
+    <p>본 방침은 변경될 수 있으며, 중요한 변경 사항은 서비스 내 공지 또는 이메일을 통해 안내합니다.</p>
+
+    <h2>11. 문의</h2>
+    <p>개인정보 관련 문의는 <a href="mailto:support@ryzm.io">support@ryzm.io</a>로 보내주시기 바랍니다.</p>
+
+  </div>
+</section>
+
+{% endblock %}

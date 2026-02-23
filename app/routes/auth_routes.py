@@ -5,11 +5,11 @@ forgot‑password, reset‑password.
 """
 import re
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.core.logger import logger
-from app.core.config import RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, UpdateProfileRequest, ChangePasswordRequest, BASE_URL, ADMIN_EMAILS
+from app.core.config import RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, UpdateProfileRequest, ChangePasswordRequest, DeleteAccountRequest, BASE_URL, ADMIN_EMAILS
 
 # ── Beta Invite Code (optional gating) ──
 import os
@@ -24,6 +24,7 @@ from app.core.database import (
     set_email_verify_token, verify_email_token,
     set_password_reset_token, validate_reset_token, reset_password,
     update_user_display_name, update_user_password_hash,
+    admin_delete_user,
 )
 from app.core.email import send_verification_email, send_password_reset_email
 
@@ -264,3 +265,43 @@ def change_password(body: ChangePasswordRequest, request: Request):
         raise HTTPException(500, "Failed to change password")
     logger.info(f"[Auth] Password changed for user {user['id']}")
     return {"status": "ok", "message": "Password changed successfully."}
+
+
+@router.delete("/delete-account")
+def delete_account(body: DeleteAccountRequest, request: Request, response: Response):
+    """Permanently delete the current user's account and all associated data."""
+    if not check_rate_limit(request.client.host, RATE_LIMIT_AUTH):
+        raise HTTPException(429, "Too many requests. Please wait a moment.")
+    user_data = get_current_user(request)
+    if not user_data:
+        raise HTTPException(401, "Not authenticated")
+    user = get_user_by_id(int(user_data["sub"]))
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(400, "Password is incorrect. Account deletion requires your current password.")
+
+    # Cancel active Stripe subscription if any
+    stripe_customer_id = user.get("stripe_customer_id")
+    if stripe_customer_id:
+        try:
+            import stripe as stripe_lib
+            subs = stripe_lib.Subscription.list(customer=stripe_customer_id, status="active", limit=10)
+            for sub in subs.auto_paging_iter():
+                stripe_lib.Subscription.cancel(sub.id)
+                logger.info(f"[Auth] Cancelled Stripe subscription {sub.id} for user {user['id']}")
+        except Exception as e:
+            logger.warning(f"[Auth] Failed to cancel Stripe subscriptions for user {user['id']}: {e}")
+
+    # Delete user and all related data
+    success = admin_delete_user(user["id"])
+    if not success:
+        raise HTTPException(500, "Failed to delete account. Please contact support.")
+
+    # Clear auth cookie
+    response.delete_cookie("ryzm_token", path="/")
+    logger.info(f"[Auth] Account deleted: user {user['id']} ({user.get('email', 'unknown')})")
+    return JSONResponse(
+        content={"status": "ok", "message": "Account permanently deleted."},
+        headers=dict(response.headers),
+    )

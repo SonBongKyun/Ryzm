@@ -1363,6 +1363,7 @@ def admin_delete_user(user_id: int) -> bool:
                 c.execute("DELETE FROM user_layouts WHERE uid = ?", (uid,))
             c.execute("DELETE FROM signal_journal WHERE user_id = ?", (user_id,))
             c.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
+            c.execute("DELETE FROM portfolio_holdings WHERE user_id = ?", (user_id,))
             c.execute("DELETE FROM users WHERE id = ?", (user_id,))
         logger.info(f"[Admin] Deleted user {user_id}")
         return True

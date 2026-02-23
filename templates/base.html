@@ -11,9 +11,10 @@
   <meta property="og:type" content="website" />
   <meta property="og:title" content="{% block og_title %}Ryzm - AI Powered Crypto Intelligence{% endblock %}" />
   <meta property="og:description" content="{% block og_desc %}AI Council이 분석한 실시간 비트코인 매매 전략 & 온체인 데이터.{% endblock %}" />
-  <meta property="og:image" content="/static/og-ryzm.png" />
+  <meta property="og:image" content="https://ryzm.io/static/og-ryzm.png" />
   <meta property="og:site_name" content="Ryzm" />
   <meta name="twitter:card" content="summary_large_image" />
+  {% block canonical %}<link rel="canonical" href="https://ryzm.io{{ request.path }}" />{% endblock %}
 
   <!-- Google Fonts — Ryzm Brand Kit -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -80,8 +81,8 @@
         </div>
         <div class="footer-col">
           <h4>Legal</h4>
-          <a href="#">Terms of Service</a>
-          <a href="#">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="/privacy">Privacy Policy</a>
         </div>
       </div>
     </div>

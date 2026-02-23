@@ -361,6 +361,15 @@ img { max-width: 100%; }
   margin: 0 auto;
 }
 .section-inner.narrow { max-width: 720px; }
+
+/* ── Legal pages (Terms / Privacy) ── */
+.legal-content h2 { font-family: var(--font-head); font-size: 1.15rem; color: var(--ryzm-white); margin: 32px 0 10px; }
+.legal-content h3 { font-size: 0.97rem; color: var(--ryzm-accent); margin: 18px 0 8px; }
+.legal-content p  { color: var(--ryzm-gray); line-height: 1.75; margin-bottom: 12px; }
+.legal-content ul { padding-left: 20px; margin-bottom: 12px; }
+.legal-content li { color: var(--ryzm-gray); line-height: 1.75; margin-bottom: 4px; }
+.legal-content a  { color: var(--ryzm-accent); text-decoration: underline; }
+
 .section-title {
   font-family: var(--font-head);
   font-size: 1.4rem;

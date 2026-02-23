@@ -227,6 +227,9 @@ class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., max_length=200)
     new_password: str = Field(..., min_length=8, max_length=200)
 
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(..., max_length=200)
+
 # ── Admin Request Models ──
 class AdminChangeTierRequest(BaseModel):
     tier: Literal["free", "pro"]

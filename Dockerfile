@@ -15,6 +15,9 @@ USER ryzm
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=15s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
