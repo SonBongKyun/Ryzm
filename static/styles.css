@@ -8526,3 +8526,320 @@ html[data-theme="dark"] .cg-ring-glow {
   .aurora-blob { animation: none !important; }
   .aurora-bg { opacity: 0 !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* ═══  v8.16 — 7 High-Impact Visual Upgrades                ═══ */
+/* ═══════════════════════════════════════════════════════════════ */
+
+/* ─── #1: Neon Glow Panel Border — Always-visible gold/cyan glow ─── */
+html[data-theme="dark"] .glass-panel {
+  border: 1px solid rgba(201, 169, 110, 0.18);
+  box-shadow:
+    0 0 12px rgba(201, 169, 110, 0.08),
+    0 0 30px rgba(201, 169, 110, 0.04),
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(201, 169, 110, 0.06);
+}
+html[data-theme="dark"] .glass-panel:hover {
+  border-color: rgba(201, 169, 110, 0.35);
+  box-shadow:
+    0 0 20px rgba(201, 169, 110, 0.15),
+    0 0 50px rgba(201, 169, 110, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(201, 169, 110, 0.1);
+}
+/* Alternate cyan glow for right-side panels */
+html[data-theme="dark"] #panel-right > .glass-panel {
+  border-color: rgba(0, 212, 255, 0.15);
+  box-shadow:
+    0 0 12px rgba(0, 212, 255, 0.06),
+    0 0 30px rgba(0, 212, 255, 0.03),
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(0, 212, 255, 0.05);
+}
+html[data-theme="dark"] #panel-right > .glass-panel:hover {
+  border-color: rgba(0, 212, 255, 0.30);
+  box-shadow:
+    0 0 20px rgba(0, 212, 255, 0.12),
+    0 0 50px rgba(0, 212, 255, 0.05),
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(0, 212, 255, 0.08);
+}
+
+/* ─── #2: Hero Number Enhancement — Gradient text + glow + bigger size ─── */
+html[data-theme="dark"] .price-value {
+  font-size: 1.0rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #C9A96E 0%, #f0d78c 50%, #C9A96E 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 4px rgba(201, 169, 110, 0.3));
+}
+
+/* Council Gauge score — big glowing number */
+html[data-theme="dark"] .cg-score {
+  font-size: 22px;
+  font-weight: 900;
+  fill: #C9A96E;
+  filter: drop-shadow(0 0 6px rgba(201, 169, 110, 0.5));
+}
+
+/* Vibe status — glow enhancement */
+html[data-theme="dark"] .vibe-status {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+}
+
+/* Price change badges — bolder */
+html[data-theme="dark"] .price-change {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+html[data-theme="dark"] .price-change.up {
+  background: rgba(6, 214, 160, 0.18);
+  box-shadow: 0 0 8px rgba(6, 214, 160, 0.15);
+}
+html[data-theme="dark"] .price-change.down {
+  background: rgba(239, 71, 111, 0.18);
+  box-shadow: 0 0 8px rgba(239, 71, 111, 0.15);
+}
+
+/* ─── #3: Panel Header Redesign — Color bar + bright text + icon glow ─── */
+html[data-theme="dark"] .panel-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 1.5px;
+  background: linear-gradient(
+    135deg,
+    rgba(201, 169, 110, 0.12) 0%,
+    rgba(201, 169, 110, 0.04) 50%,
+    transparent 100%
+  );
+  border-bottom: 1px solid rgba(201, 169, 110, 0.15);
+  padding: 13px 16px;
+  position: relative;
+}
+html[data-theme="dark"] .panel-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    rgba(201, 169, 110, 0.5) 0%,
+    rgba(0, 212, 255, 0.3) 50%,
+    transparent 100%
+  );
+}
+html[data-theme="dark"] .panel-title i[data-lucide] {
+  color: #C9A96E;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(201, 169, 110, 0.5));
+}
+/* Right-panel titles use cyan accent */
+html[data-theme="dark"] #panel-right .panel-title {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.10) 0%,
+    rgba(0, 212, 255, 0.03) 50%,
+    transparent 100%
+  );
+  border-bottom-color: rgba(0, 212, 255, 0.12);
+}
+html[data-theme="dark"] #panel-right .panel-title::after {
+  background: linear-gradient(90deg,
+    rgba(0, 212, 255, 0.5) 0%,
+    rgba(201, 169, 110, 0.2) 50%,
+    transparent 100%
+  );
+}
+html[data-theme="dark"] #panel-right .panel-title i[data-lucide] {
+  color: var(--accent-cyan);
+  filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.5));
+}
+
+/* ─── #4: Live Pulse Indicator — Breathing LED glow effect ─── */
+@keyframes breathePulse {
+  0%   { opacity: 1; box-shadow: 0 0 4px currentColor, 0 0 8px currentColor; transform: scale(1); }
+  50%  { opacity: 0.5; box-shadow: 0 0 2px currentColor; transform: scale(0.85); }
+  100% { opacity: 1; box-shadow: 0 0 4px currentColor, 0 0 8px currentColor; transform: scale(1); }
+}
+@keyframes breatheGlow {
+  0%   { opacity: 1; text-shadow: 0 0 6px currentColor, 0 0 12px currentColor; }
+  50%  { opacity: 0.6; text-shadow: 0 0 2px currentColor; }
+  100% { opacity: 1; text-shadow: 0 0 6px currentColor, 0 0 12px currentColor; }
+}
+
+html[data-theme="dark"] .price-ws-dot {
+  width: 8px;
+  height: 8px;
+  color: #059669;
+  animation: breathePulse 2s ease-in-out infinite;
+  box-shadow: 0 0 6px #059669, 0 0 12px rgba(5, 150, 105, 0.3);
+}
+html[data-theme="dark"] .price-ws-badge.ws-connected .price-ws-dot {
+  color: var(--accent-cyan);
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan), 0 0 12px rgba(0, 212, 255, 0.3);
+}
+html[data-theme="dark"] .price-ws-badge.ws-connected .price-ws-label {
+  color: var(--accent-cyan);
+  animation: breatheGlow 2s ease-in-out infinite;
+}
+html[data-theme="dark"] .price-live-dot {
+  font-size: 1.2rem;
+  animation: breatheGlow 1.5s ease-in-out infinite;
+  color: var(--accent-cyan);
+}
+
+/* Vibe bar status breathing */
+html[data-theme="dark"] .vibe-status {
+  animation: breatheGlow 3s ease-in-out infinite;
+}
+
+/* ─── #5: 3D Tilt Hover — perspective transform on panels ─── */
+html[data-theme="dark"] .glass-panel {
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease-out;
+  will-change: transform;
+}
+
+/* ─── #6: Price Change Color Intensity — Background glow based on direction ─── */
+html[data-theme="dark"] .price-card[data-dir="up"] {
+  border-color: rgba(6, 214, 160, 0.25);
+  background: linear-gradient(135deg, rgba(6, 214, 160, 0.08) 0%, var(--bg-panel) 60%);
+  box-shadow:
+    0 0 15px rgba(6, 214, 160, 0.10),
+    0 0 30px rgba(6, 214, 160, 0.04),
+    inset 0 0 20px rgba(6, 214, 160, 0.06);
+}
+html[data-theme="dark"] .price-card[data-dir="up"]::before {
+  background: var(--neon-green);
+  opacity: 1;
+  box-shadow: 0 0 12px var(--neon-green), 0 0 24px rgba(6, 214, 160, 0.3);
+}
+html[data-theme="dark"] .price-card[data-dir="down"] {
+  border-color: rgba(239, 71, 111, 0.25);
+  background: linear-gradient(135deg, rgba(239, 71, 111, 0.08) 0%, var(--bg-panel) 60%);
+  box-shadow:
+    0 0 15px rgba(239, 71, 111, 0.10),
+    0 0 30px rgba(239, 71, 111, 0.04),
+    inset 0 0 20px rgba(239, 71, 111, 0.06);
+}
+html[data-theme="dark"] .price-card[data-dir="down"]::before {
+  background: var(--neon-red);
+  opacity: 1;
+  box-shadow: 0 0 12px var(--neon-red), 0 0 24px rgba(239, 71, 111, 0.3);
+}
+
+/* Enhanced flash animations in dark mode */
+html[data-theme="dark"] .price-flash-up {
+  animation: darkFlashUp 0.8s ease;
+}
+html[data-theme="dark"] .price-flash-down {
+  animation: darkFlashDown 0.8s ease;
+}
+@keyframes darkFlashUp {
+  0%   { background: rgba(6, 214, 160, 0.25); border-color: #06d6a0; box-shadow: 0 0 30px rgba(6, 214, 160, 0.25), inset 0 0 30px rgba(6, 214, 160, 0.10); }
+  100% { background: var(--bg-panel); border-color: var(--border-dim); box-shadow: none; }
+}
+@keyframes darkFlashDown {
+  0%   { background: rgba(239, 71, 111, 0.25); border-color: #ef476f; box-shadow: 0 0 30px rgba(239, 71, 111, 0.25), inset 0 0 30px rgba(239, 71, 111, 0.10); }
+  100% { background: var(--bg-panel); border-color: var(--border-dim); box-shadow: none; }
+}
+
+/* ─── #7: Section Nav Redesign — Glow underline + active background ─── */
+html[data-theme="dark"] .section-nav {
+  background: rgba(8, 8, 10, 0.98);
+  border-bottom: 1px solid rgba(201, 169, 110, 0.12);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(201, 169, 110, 0.08);
+}
+html[data-theme="dark"] .snav-item {
+  font-size: 0.72rem;
+  padding: 8px 14px;
+  color: rgba(148, 163, 184, 0.8);
+  border-bottom: 2px solid transparent;
+  transition: all 0.25s ease;
+  position: relative;
+}
+html[data-theme="dark"] .snav-item i {
+  width: 14px;
+  height: 14px;
+}
+html[data-theme="dark"] .snav-item:hover {
+  color: #C9A96E;
+  background: rgba(201, 169, 110, 0.08);
+  border-radius: 6px 6px 0 0;
+}
+html[data-theme="dark"] .snav-item.active {
+  color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.08);
+  border-bottom: 2px solid var(--accent-cyan);
+  border-radius: 6px 6px 0 0;
+  text-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+  box-shadow: 0 2px 12px rgba(0, 212, 255, 0.12);
+}
+html[data-theme="dark"] .snav-item.active i {
+  filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.5));
+}
+html[data-theme="dark"] .snav-sep {
+  background: rgba(201, 169, 110, 0.15);
+  height: 20px;
+}
+
+/* ─── v8.16 Enhanced countup flash (more dramatic) ─── */
+@keyframes countFlashV2 {
+  0%   { opacity: 0.3; transform: translateY(-5px) scale(1.10); text-shadow: 0 0 16px var(--accent-cyan-glow), 0 0 30px rgba(0, 212, 255, 0.3); }
+  40%  { opacity: 1; transform: translateY(2px) scale(1.02); }
+  70%  { transform: translateY(-1px) scale(1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); text-shadow: none; }
+}
+html[data-theme="dark"] .countup-flash {
+  animation: countFlashV2 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ─── v8.16 Glass-panel top accent line always slightly visible ─── */
+html[data-theme="dark"] .glass-panel::before {
+  opacity: 0.4;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(201, 169, 110, 0.3) 20%,
+    rgba(201, 169, 110, 0.6) 50%,
+    rgba(201, 169, 110, 0.3) 80%,
+    transparent 100%
+  );
+  background-size: 100% 100%;
+}
+html[data-theme="dark"] .glass-panel:hover::before {
+  opacity: 1;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.3) 0%,
+    rgba(201, 169, 110, 0.8) 30%,
+    rgba(0, 212, 255, 0.6) 70%,
+    rgba(201, 169, 110, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: accentSweep 2.5s ease-in-out infinite;
+}
+
+/* ─── v8.16 Reduced-motion safety ─── */
+@media (prefers-reduced-motion: reduce) {
+  .glass-panel,
+  .price-ws-dot,
+  .price-live-dot,
+  .vibe-status,
+  .price-ws-label {
+    animation: none !important;
+  }
+}

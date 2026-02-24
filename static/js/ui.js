@@ -52,7 +52,29 @@ document.addEventListener('DOMContentLoaded', () => {
   initSectionNav();
   initNotificationCenter();
   initWatchlist();
+  init3DTiltHover();
 });
+
+/*  #5: 3D Tilt Hover — perspective tilt following mouse  */
+function init3DTiltHover() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const panels = document.querySelectorAll('.glass-panel');
+  const MAX_TILT = 4; // degrees
+
+  panels.forEach(panel => {
+    panel.addEventListener('mousemove', (e) => {
+      const rect = panel.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;   // 0..1
+      const y = (e.clientY - rect.top) / rect.height;    // 0..1
+      const rotateY = (x - 0.5) * MAX_TILT * 2;  // -4 to +4
+      const rotateX = (0.5 - y) * MAX_TILT * 2;  // -4 to +4
+      panel.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+    });
+    panel.addEventListener('mouseleave', () => {
+      panel.style.transform = 'perspective(800px) rotateX(0) rotateY(0)';
+    });
+  });
+}
 
 /*  Section Navigation (scroll-to + active highlight)  */
 function initSectionNav() {
