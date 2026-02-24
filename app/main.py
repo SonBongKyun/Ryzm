@@ -10,9 +10,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+
+templates = Jinja2Templates(directory="templates")
 
 from app.core.config import ALLOWED_ORIGINS, SMTP_HOST
 from app.core.logger import logger
@@ -207,7 +210,11 @@ app.include_router(sse_router)
 async def not_found_handler(request: Request, exc):
     if request.url.path.startswith("/api/"):
         return JSONResponse(status_code=404, content={"error": "Not found"})
-    return RedirectResponse("/")
+    return templates.TemplateResponse(
+        request=request, name="404.html",
+        context={"request": request, "active_page": ""},
+        status_code=404
+    )
 
 
 @app.exception_handler(500)

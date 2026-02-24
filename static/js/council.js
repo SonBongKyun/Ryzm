@@ -823,6 +823,8 @@ async function exportCouncilPDF() {
     if (typeof window.jspdf === 'undefined') {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+      script.integrity = 'sha256-mMzxeqEMILsTAXYmGPzJtqs6Tn8mtgcdZNC0EVTfOHU=';
+      script.crossOrigin = 'anonymous';
       document.head.appendChild(script);
       await new Promise((resolve) => { script.onload = resolve; });
     }

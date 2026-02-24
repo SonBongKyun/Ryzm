@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}404 — Page Not Found | Ryzm Terminal{% endblock %}
+{% block description %}The page you're looking for doesn't exist. Return to Ryzm Terminal.{% endblock %}
+
+{% block body %}
+
+<section class="page-hero" style="min-height:60vh;display:flex;align-items:center;">
+  <div class="page-hero-inner anim-fade-up" style="text-align:center;">
+    <div class="hero-badge">
+      <span class="hero-badge-dot" style="background:#ef476f;"></span>
+      ERROR 404
+    </div>
+    <h1 style="font-size:clamp(3rem,8vw,6rem);line-height:1;margin-bottom:0.2em;">
+      <span class="hero-highlight">404</span>
+    </h1>
+    <p style="font-size:1.1rem;color:var(--text-secondary,#94a3b8);max-width:480px;margin:0 auto 2rem;">
+      This page doesn't exist or has been moved.<br/>
+      Let's get you back on track.
+    </p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <a href="/" class="site-btn site-btn-primary site-btn-lg hero-btn-glow">
+        <i data-lucide="home" style="width:18px;height:18px;"></i>
+        Go Home
+      </a>
+      <a href="/app" class="site-btn site-btn-outline site-btn-lg">
+        <i data-lucide="terminal" style="width:18px;height:18px;"></i>
+        Launch Terminal
+      </a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const animEls = document.querySelectorAll('.anim-fade-up');
+  animEls.forEach(el => el.classList.add('anim-visible'));
+</script>
+{% endblock %}
