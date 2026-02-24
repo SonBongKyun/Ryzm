@@ -1,10 +1,10 @@
-/* ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+﻿/* ?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?
    Ryzm Terminal ??Service Worker v4.7
-   ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?� */
-const CACHE_NAME = 'ryzm-v8.13';
+   ?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?占?*/
+const CACHE_NAME = 'ryzm-v8.14';
 const API_CACHE_NAME = 'ryzm-api-v8.13';
 
-// ?�?� Precache: actual files loaded by index.html ?�?�
+// ?占?占?Precache: actual files loaded by index.html ?占?占?
 // No ?v= suffix ??SW uses ignoreSearch for cache matching
 // NOTE: '/' is NOT in precache ??HTML is always network-first
 const STATIC_ASSETS = [
@@ -20,7 +20,7 @@ const STATIC_ASSETS = [
   '/offline.html'
 ];
 
-// ?�?� API caching whitelist + TTL (ms) ?�?�
+// ?占?占?API caching whitelist + TTL (ms) ?占?占?
 // User-specific / auth endpoints are NEVER cached.
 const API_CACHE_RULES = {
   '/api/market':          5 * 60_000,
@@ -54,7 +54,7 @@ const API_NEVER_CACHE = [
   '/api/events'
 ];
 
-// 📦 Install: precache static assets (skip 206/non-ok responses) 📦
+// ?벀 Install: precache static assets (skip 206/non-ok responses) ?벀
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
@@ -73,7 +73,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// ?�?� Activate: purge old caches ?�?�
+// ?占?占?Activate: purge old caches ?占?占?
 self.addEventListener('activate', event => {
   const keep = new Set([CACHE_NAME, API_CACHE_NAME]);
   event.waitUntil(
@@ -84,13 +84,13 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// ?�?� Fetch handler ?�?�
+// ?占?占?Fetch handler ?占?占?
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;         // skip external
   if (event.request.method !== 'GET') return;              // skip mutations
 
-  // ?� API routes ?�
+  // ?占?API routes ?占?
   if (url.pathname.startsWith('/api/')) {
     // Block caching for user-specific endpoints
     if (API_NEVER_CACHE.some(p => url.pathname.startsWith(p))) {
@@ -145,7 +145,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ?� HTML navigation: always network-first (so template changes apply immediately) ?�
+  // ?占?HTML navigation: always network-first (so template changes apply immediately) ?占?
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() =>
@@ -155,7 +155,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ?� Static assets: network-first, cache fallback for offline ?�
+  // ?占?Static assets: network-first, cache fallback for offline ?占?
   // (ignoreSearch only used as offline fallback so ?v= busting always works)
   event.respondWith(
     fetch(event.request).then(resp => {
