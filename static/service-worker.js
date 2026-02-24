@@ -1,8 +1,8 @@
 /* ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
    Ryzm Terminal ??Service Worker v4.7
    ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?� */
-const CACHE_NAME = 'ryzm-v8.9';
-const API_CACHE_NAME = 'ryzm-api-v8.9';
+const CACHE_NAME = 'ryzm-v8.13';
+const API_CACHE_NAME = 'ryzm-api-v8.13';
 
 // ?�?� Precache: actual files loaded by index.html ?�?�
 // No ?v= suffix ??SW uses ignoreSearch for cache matching
@@ -16,7 +16,8 @@ const STATIC_ASSETS = [
   '/static/js/council.js',
   '/static/js/ui.js',
   '/static/js/portfolio.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/offline.html'
 ];
 
 // ?�?� API caching whitelist + TTL (ms) ?�?�
@@ -148,7 +149,7 @@ self.addEventListener('fetch', event => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() =>
-        caches.match(event.request).then(c => c || caches.match('/'))
+        caches.match(event.request).then(c => c || caches.match('/offline.html'))
       )
     );
     return;

@@ -1,5 +1,7 @@
 """
 Ryzm Terminal — Email Utility
+#15 List-Unsubscribe headers for deliverability.
+#27 Template-ready structure.
 Sends verification and password reset emails via SMTP.
 Falls back to logging when SMTP is not configured (dev mode).
 """
@@ -23,6 +25,29 @@ _email_last_cleanup = time.time()
 
 def _smtp_configured() -> bool:
     return bool(SMTP_HOST and SMTP_USER and SMTP_PASS)
+
+
+# ── #27 Reusable email template wrapper ──
+def _email_wrapper(content_html: str, accent_color: str = "#06b6d4") -> str:
+    """Wrap content in Ryzm-branded email template."""
+    return f"""
+    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
+        <div style="text-align:center;margin-bottom:20px;">
+            <span style="color:{accent_color};font-size:24px;font-weight:bold;">⚡ Ryzm Terminal</span>
+        </div>
+        {content_html}
+        <hr style="border-color:#333;margin:20px 0;">
+        <div style="text-align:center;font-size:10px;color:#555;">
+            <a href="{BASE_URL}/app?manage=notifications" style="color:#555;text-decoration:underline;">
+                Manage notification preferences
+            </a>
+            &nbsp;|&nbsp;
+            <a href="{BASE_URL}/app?unsubscribe=true" style="color:#555;text-decoration:underline;">
+                Unsubscribe
+            </a>
+        </div>
+    </div>
+    """
 
 
 def _send_email(to: str, subject: str, html_body: str) -> bool:
@@ -52,6 +77,9 @@ def _send_email(to: str, subject: str, html_body: str) -> bool:
         msg["From"] = SMTP_FROM
         msg["To"] = to
         msg["Subject"] = subject
+        # #15 Email Deliverability — List-Unsubscribe header (RFC 2369)
+        msg["List-Unsubscribe"] = f"<{BASE_URL}/app?unsubscribe=true>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
         msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
@@ -71,11 +99,7 @@ def _send_email(to: str, subject: str, html_body: str) -> bool:
 def send_verification_email(to: str, token: str) -> bool:
     """Send email verification link."""
     verify_url = f"{BASE_URL}/verify-email?token={token}"
-    html = f"""
-    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
-        <div style="text-align:center;margin-bottom:20px;">
-            <span style="color:#06b6d4;font-size:24px;font-weight:bold;">⚡ Ryzm Terminal</span>
-        </div>
+    content = f"""
         <h2 style="color:#06b6d4;font-size:16px;">Verify Your Email</h2>
         <p style="font-size:13px;line-height:1.6;">
             Welcome to Ryzm Terminal! Click the button below to verify your email address.
@@ -89,23 +113,17 @@ def send_verification_email(to: str, token: str) -> bool:
         <p style="font-size:11px;color:#666;">
             Or copy this link: {verify_url}
         </p>
-        <hr style="border-color:#333;margin:20px 0;">
         <p style="font-size:10px;color:#555;">
             If you didn't create an account, ignore this email.
         </p>
-    </div>
     """
-    return _send_email(to, "Verify your Ryzm Terminal account", html)
+    return _send_email(to, "Verify your Ryzm Terminal account", _email_wrapper(content, "#06b6d4"))
 
 
 def send_password_reset_email(to: str, token: str) -> bool:
     """Send password reset link."""
     reset_url = f"{BASE_URL}/reset-password?token={token}"
-    html = f"""
-    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
-        <div style="text-align:center;margin-bottom:20px;">
-            <span style="color:#06b6d4;font-size:24px;font-weight:bold;">⚡ Ryzm Terminal</span>
-        </div>
+    content = f"""
         <h2 style="color:#06b6d4;font-size:16px;">Password Reset</h2>
         <p style="font-size:13px;line-height:1.6;">
             You requested a password reset. Click the button below to set a new password.
@@ -120,23 +138,17 @@ def send_password_reset_email(to: str, token: str) -> bool:
         <p style="font-size:11px;color:#666;">
             Or copy this link: {reset_url}
         </p>
-        <hr style="border-color:#333;margin:20px 0;">
         <p style="font-size:10px;color:#555;">
             If you didn't request this, ignore this email. Your password will remain unchanged.
         </p>
-    </div>
     """
-    return _send_email(to, "Reset your Ryzm Terminal password", html)
+    return _send_email(to, "Reset your Ryzm Terminal password", _email_wrapper(content, "#f43f5e"))
 
 
 def send_price_alert_email(to: str, symbol: str, direction: str, target_price: float, current_price: float) -> bool:
     """Send price alert trigger notification to user."""
     arrow = "⬆️" if direction == "above" else "⬇️"
-    html = f"""
-    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
-        <div style="text-align:center;margin-bottom:20px;">
-            <span style="color:#C9A96E;font-size:24px;font-weight:bold;">⚡ Ryzm Terminal</span>
-        </div>
+    content = f"""
         <h2 style="color:#C9A96E;font-size:16px;">{arrow} Price Alert Triggered</h2>
         <div style="background:#111;border:1px solid #333;border-radius:8px;padding:16px;margin:16px 0;">
             <div style="font-size:14px;font-weight:bold;color:#fff;">{symbol}</div>
@@ -151,23 +163,14 @@ def send_price_alert_email(to: str, symbol: str, direction: str, target_price: f
                 Open Dashboard
             </a>
         </div>
-        <hr style="border-color:#333;margin:20px 0;">
-        <p style="font-size:10px;color:#555;">
-            You're receiving this because you set a price alert on Ryzm Terminal.
-        </p>
-    </div>
     """
-    return _send_email(to, f"🔔 {symbol} hit ${target_price:,.2f} ({direction})", html)
+    return _send_email(to, f"🔔 {symbol} hit ${target_price:,.2f} ({direction})", _email_wrapper(content, "#C9A96E"))
 
 
 def send_trial_welcome_email(to: str, display_name: str = "") -> bool:
     """Send welcome email when user starts Pro trial."""
     name = _html_escape(display_name or "Trader")
-    html = f"""
-    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
-        <div style="text-align:center;margin-bottom:20px;">
-            <span style="color:#C9A96E;font-size:24px;font-weight:bold;">⚡ Ryzm Terminal Pro</span>
-        </div>
+    content = f"""
         <h2 style="color:#C9A96E;font-size:16px;">Welcome to your 7-day Pro Trial, {name}!</h2>
         <p style="font-size:13px;line-height:1.6;">
             You now have full access to all Pro features:
@@ -188,19 +191,14 @@ def send_trial_welcome_email(to: str, display_name: str = "") -> bool:
         <p style="font-size:11px;color:#666;">
             Your trial ends in 7 days. Subscribe anytime to keep Pro access.
         </p>
-    </div>
     """
-    return _send_email(to, "🎉 Your Ryzm Pro Trial has started!", html)
+    return _send_email(to, "🎉 Your Ryzm Pro Trial has started!", _email_wrapper(content, "#C9A96E"))
 
 
 def send_payment_failed_email(to: str, display_name: str = "") -> bool:
     """Send email when payment fails."""
     name = _html_escape(display_name or "Trader")
-    html = f"""
-    <div style="font-family:monospace;background:#0a0a0f;color:#e0e0e0;padding:30px;max-width:500px;margin:0 auto;">
-        <div style="text-align:center;margin-bottom:20px;">
-            <span style="color:#C9A96E;font-size:24px;font-weight:bold;">⚡ Ryzm Terminal</span>
-        </div>
+    content = f"""
         <h2 style="color:#f43f5e;font-size:16px;">⚠️ Payment Failed</h2>
         <p style="font-size:13px;line-height:1.6;">
             Hi {name}, your latest Pro subscription payment could not be processed.
@@ -212,10 +210,5 @@ def send_payment_failed_email(to: str, display_name: str = "") -> bool:
                 Update Payment
             </a>
         </div>
-        <hr style="border-color:#333;margin:20px 0;">
-        <p style="font-size:10px;color:#555;">
-            If you believe this is an error, contact support.
-        </p>
-    </div>
     """
-    return _send_email(to, "⚠️ Ryzm Pro — Payment Failed", html)
+    return _send_email(to, "⚠️ Ryzm Pro — Payment Failed", _email_wrapper(content, "#f43f5e"))

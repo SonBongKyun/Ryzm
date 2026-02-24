@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
   <meta charset="UTF-8" />
@@ -40,7 +40,7 @@
   <link rel="dns-prefetch" href="https://api.alternative.me" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
-  <link rel="preload" href="/static/styles.css?v=8.12" as="style" />
+  <link rel="preload" href="/static/styles.css?v=8.13" as="style" />
 
   <!-- Lucide Icons -->
   <script defer src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
@@ -50,7 +50,7 @@
   <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="/static/styles.css?v=8.12" />
+  <link rel="stylesheet" href="/static/styles.css?v=8.13" />
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0D0D0F" />
@@ -130,7 +130,7 @@
   <!-- ?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름??
        HEADER
        ?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름??-->
-  <header class="header">
+  <header class="header" role="banner" aria-label="Main navigation">
     <!-- Logo -->
     <a href="/about" class="logo" style="text-decoration:none;color:inherit;">
       <span class="logo-dot"></span>
@@ -202,14 +202,14 @@
     </span>
 
     <!-- Briefing Toggle Button -->
-    <button id="btn-briefing" class="daily-report-btn briefing-trigger-btn" title="Show Briefing" onclick="showBriefingPanel()">
+    <button id="btn-briefing" class="daily-report-btn briefing-trigger-btn" title="Show Briefing" aria-label="Show daily briefing" onclick="showBriefingPanel()">
       <i data-lucide="zap" style="width:13px;height:13px;"></i>
       <span>Briefing</span>
       <span id="briefing-dot" class="briefing-dot"></span>
     </button>
 
     <!-- #12 Notification Bell -->
-    <button id="btn-notifications" class="daily-report-btn" title="Notifications" onclick="toggleNotificationCenter()" style="position:relative;">
+    <button id="btn-notifications" class="daily-report-btn" title="Notifications" aria-label="Toggle notification center" onclick="toggleNotificationCenter()" style="position:relative;">
       <i data-lucide="bell" style="width:13px;height:13px;"></i>
       <span id="notif-badge" class="notif-badge" style="display:none;">0</span>
     </button>
@@ -283,7 +283,7 @@
   </div>
 
   <!-- Section Navigation Bar -->
-  <nav class="section-nav" id="section-nav">
+  <nav class="section-nav" id="section-nav" role="navigation" aria-label="Dashboard sections">
     <div class="section-nav-track">
       <a class="snav-item active" data-target="risk-gauge-panel" title="Systemic Risk Gauge"><i data-lucide="shield-alert"></i><span data-i18n-text="snav_risk">Risk</span></a>
       <a class="snav-item" data-target="fg-panel" title="Fear & Greed"><i data-lucide="thermometer"></i><span data-i18n-text="snav_fg">F&G</span></a>
@@ -332,7 +332,7 @@
   <!-- ?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름??
        MAIN 3-COLUMN GRID
        ?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름?癒λ름??-->
-  <main class="main-grid" id="main-grid">
+  <main class="main-grid" id="main-grid" role="main" aria-label="Dashboard panels">
 
     <div class="panel" id="panel-left" data-panel-id="left">
       <!-- Systemic Risk Gauge v2.0 -->
@@ -1437,7 +1437,7 @@
   </div>
 
   <!-- Status Bar -->
-  <div class="status-bar">
+  <div class="status-bar" role="contentinfo" aria-label="System status">
     <div class="status-item">
       <span class="status-dot" id="connection-status"></span>
       <span data-i18n-text="system_online">SYSTEM ONLINE</span>
@@ -1453,24 +1453,24 @@
     </div>
     <div class="status-item">
       <i data-lucide="zap" style="width:12px;height:12px;"></i>
-      <span>Ryzm Terminal v7.0</span>
+      <span>Ryzm Terminal v8.13</span>
     </div>
   </div>
 
   <!-- JS Modules (v8.9 ??pre-launch hardening) -->
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-  <script defer src="/static/js/globe.js?v=8.12"></script>
-  <script defer src="/static/js/api.js?v=8.12"></script>
-  <script defer src="/static/js/binance-direct.js?v=8.12"></script>
-  <script defer src="/static/js/chart.js?v=8.12"></script>
-  <script defer src="/static/js/core.js?v=8.12"></script>
-  <script defer src="/static/js/data.js?v=8.12"></script>
-  <script defer src="/static/js/council.js?v=8.12"></script>
-  <script defer src="/static/js/ui.js?v=8.12"></script>
-  <script defer src="/static/js/portfolio.js?v=8.12"></script>
+  <script defer src="/static/js/globe.js?v=8.13"></script>
+  <script defer src="/static/js/api.js?v=8.13"></script>
+  <script defer src="/static/js/binance-direct.js?v=8.13"></script>
+  <script defer src="/static/js/chart.js?v=8.13"></script>
+  <script defer src="/static/js/core.js?v=8.13"></script>
+  <script defer src="/static/js/data.js?v=8.13"></script>
+  <script defer src="/static/js/council.js?v=8.13"></script>
+  <script defer src="/static/js/ui.js?v=8.13"></script>
+  <script defer src="/static/js/portfolio.js?v=8.13"></script>
 
   <!-- ?癒λ름??Auth Modal ?癒λ름??-->
-  <div id="auth-modal" class="auth-modal" style="display:none;">
+  <div id="auth-modal" class="auth-modal" role="dialog" aria-modal="true" aria-label="Authentication" style="display:none;">
     <div class="auth-modal-inner">
       <button class="auth-close" onclick="toggleAuthModal()">&times;</button>
       <div class="auth-logo"><span class="logo-dot"></span> Ryzm_OS</div>

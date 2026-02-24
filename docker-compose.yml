@@ -7,6 +7,14 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://ryzm:ryzm@postgres:5432/ryzm
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ryzm-data:/app
     healthcheck:
@@ -16,5 +24,42 @@ services:
       retries: 3
       start_period: 15s
 
+  # #30 PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: ryzm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ryzm
+      POSTGRES_USER: ryzm
+      POSTGRES_PASSWORD: ryzm
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ryzm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # #8 Redis for rate limiting + caching
+  redis:
+    image: redis:7-alpine
+    container_name: ryzm-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   ryzm-data:
+  postgres-data:
+  redis-data:

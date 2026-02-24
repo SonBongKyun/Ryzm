@@ -378,6 +378,32 @@ def init_council_db():
                     created_at_utc TEXT NOT NULL
                 )
             """)
+            # ── #22 Token Revocation Blocklist ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS token_blocklist (
+                    jti TEXT PRIMARY KEY,
+                    user_id INTEGER,
+                    revoked_at TEXT DEFAULT '',
+                    expires_at TEXT DEFAULT ''
+                )
+            """)
+            # ── #24 Feature Flags ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS feature_flags (
+                    key TEXT PRIMARY KEY,
+                    enabled INTEGER DEFAULT 1,
+                    rollout_pct INTEGER DEFAULT 100,
+                    updated_at TEXT DEFAULT ''
+                )
+            """)
+            # ── #3 Schema Migrations Tracking ──
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    id TEXT PRIMARY KEY,
+                    applied_at TEXT DEFAULT '',
+                    checksum TEXT DEFAULT ''
+                )
+            """)
             # Migration: add trial columns to users
             for col_name, col_def in [
                 ("trial_used", "INTEGER DEFAULT 0"),
@@ -392,6 +418,14 @@ def init_council_db():
                 ("password_reset_token", "TEXT DEFAULT NULL"),
                 ("reset_token_expires", "TEXT DEFAULT NULL"),
                 ("tos_accepted_at", "TEXT DEFAULT NULL"),
+            ]:
+                _migrate_col(c, "users", col_name, col_def)
+            # Migration: #5 2FA / TOTP columns
+            for col_name, col_def in [
+                ("totp_secret", "TEXT DEFAULT ''"),
+                ("totp_enabled", "INTEGER DEFAULT 0"),
+                ("oauth_provider", "TEXT DEFAULT ''"),
+                ("oauth_id", "TEXT DEFAULT ''"),
             ]:
                 _migrate_col(c, "users", col_name, col_def)
             # Migration: add new columns to existing council_history if missing
@@ -431,6 +465,7 @@ def init_council_db():
                 ("idx_ai_feedback_uid", "ai_feedback", "uid"),
                 ("idx_watchlist_uid", "watchlist", "uid"),
                 ("idx_notifications_uid", "notifications", "uid"),
+                ("idx_token_blocklist_user", "token_blocklist", "user_id"),
             ]
             for idx_name, table, col in _indexes:
                 try:
@@ -1799,6 +1834,246 @@ def cleanup_old_webhook_events(days: int = 30):
             c.execute("DELETE FROM webhook_events WHERE processed_at_utc < ?", (cutoff,))
     except Exception as e:
         logger.error(f"[DB] Cleanup webhook events error: {e}")
+
+
+# ───────────────────────────────────────
+# #22 JWT Token Revocation
+# ───────────────────────────────────────
+def add_revoked_token(jti: str, user_id: int, expires_at: str = ""):
+    """Add a token JTI to the revocation blocklist."""
+    try:
+        with db_session() as (conn, c):
+            if USE_PG:
+                c.execute(
+                    "INSERT INTO token_blocklist (jti, user_id, revoked_at, expires_at) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT (jti) DO NOTHING",
+                    (jti, user_id, utc_now_str(), expires_at)
+                )
+            else:
+                c.execute(
+                    "INSERT OR IGNORE INTO token_blocklist (jti, user_id, revoked_at, expires_at) VALUES (?, ?, ?, ?)",
+                    (jti, user_id, utc_now_str(), expires_at)
+                )
+    except Exception as e:
+        logger.error(f"[DB] Add revoked token error: {e}")
+
+
+def is_token_revoked(jti: str) -> bool:
+    """Check if a token JTI is in the blocklist."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT jti FROM token_blocklist WHERE jti = ?", (jti,))
+            return c.fetchone() is not None
+    except Exception:
+        return False
+
+
+def cleanup_expired_tokens():
+    """Remove expired tokens from blocklist."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("DELETE FROM token_blocklist WHERE expires_at != '' AND expires_at < ?", (utc_now_str(),))
+    except Exception as e:
+        logger.error(f"[DB] Cleanup expired tokens error: {e}")
+
+
+# ───────────────────────────────────────
+# #24 Feature Flags
+# ───────────────────────────────────────
+def get_feature_flags() -> dict:
+    """Get all feature flags as {key: {enabled, rollout_pct}}."""
+    from app.core.config import DEFAULT_FEATURE_FLAGS
+    flags = {k: {"enabled": v, "rollout_pct": 100} for k, v in DEFAULT_FEATURE_FLAGS.items()}
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            c.execute("SELECT key, enabled, rollout_pct, updated_at FROM feature_flags")
+            for row in c.fetchall():
+                r = dict(row)
+                flags[r["key"]] = {
+                    "enabled": bool(r["enabled"]),
+                    "rollout_pct": r.get("rollout_pct", 100),
+                    "updated_at": r.get("updated_at", ""),
+                }
+    except Exception as e:
+        logger.warning(f"[DB] Get feature flags error: {e}")
+    return flags
+
+
+def set_feature_flag(key: str, enabled: bool, rollout_pct: int = 100):
+    """Set or update a feature flag."""
+    try:
+        with db_session() as (conn, c):
+            if USE_PG:
+                c.execute(
+                    "INSERT INTO feature_flags (key, enabled, rollout_pct, updated_at) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT (key) DO UPDATE SET enabled=EXCLUDED.enabled, rollout_pct=EXCLUDED.rollout_pct, updated_at=EXCLUDED.updated_at",
+                    (key, int(enabled), rollout_pct, utc_now_str())
+                )
+            else:
+                c.execute(
+                    "INSERT OR REPLACE INTO feature_flags (key, enabled, rollout_pct, updated_at) VALUES (?, ?, ?, ?)",
+                    (key, int(enabled), rollout_pct, utc_now_str())
+                )
+        return True
+    except Exception as e:
+        logger.error(f"[DB] Set feature flag error: {e}")
+        return False
+
+
+def is_feature_enabled(key: str) -> bool:
+    """Quick check if a feature flag is enabled."""
+    from app.core.config import DEFAULT_FEATURE_FLAGS
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT enabled FROM feature_flags WHERE key = ?", (key,))
+            row = c.fetchone()
+            if row:
+                return bool(row[0])
+    except Exception:
+        pass
+    return DEFAULT_FEATURE_FLAGS.get(key, False)
+
+
+# ───────────────────────────────────────
+# #5 2FA / TOTP
+# ───────────────────────────────────────
+def set_user_totp(user_id: int, secret: str, enabled: bool = False):
+    """Set TOTP secret for a user. enabled=False until verified."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE users SET totp_secret = ?, totp_enabled = ? WHERE id = ?",
+                       (secret, int(enabled), user_id))
+        return True
+    except Exception as e:
+        logger.error(f"[DB] Set TOTP error: {e}")
+        return False
+
+
+def get_user_totp(user_id: int) -> dict:
+    """Get 2FA state for a user."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("SELECT totp_secret, totp_enabled FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            if row:
+                return {"secret": row[0] or "", "enabled": bool(row[1])}
+    except Exception as e:
+        logger.error(f"[DB] Get TOTP error: {e}")
+    return {"secret": "", "enabled": False}
+
+
+def disable_user_totp(user_id: int):
+    """Disable 2FA for a user."""
+    try:
+        with db_session() as (conn, c):
+            c.execute("UPDATE users SET totp_secret = '', totp_enabled = 0 WHERE id = ?", (user_id,))
+        return True
+    except Exception as e:
+        logger.error(f"[DB] Disable TOTP error: {e}")
+        return False
+
+
+# ───────────────────────────────────────
+# #10 GDPR Data Export
+# ───────────────────────────────────────
+def export_user_data(user_id: int) -> dict:
+    """Export all user data for GDPR compliance."""
+    data = {"user_id": user_id, "exported_at": utc_now_str()}
+    try:
+        with db_session(row_factory=sqlite3.Row) as (conn, c):
+            # Profile
+            c.execute("SELECT id, email, display_name, tier, created_at_utc, last_login_utc FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            data["profile"] = dict(row) if row else {}
+
+            # Get UID for notification/alert queries
+            uid = row["uid"] if row and "uid" in dict(row).keys() else None
+            c.execute("SELECT id, email, display_name, tier, created_at_utc, last_login_utc, uid FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            uid = dict(row).get("uid", "") if row else ""
+            data["profile"] = {k: v for k, v in dict(row).items() if k != "password_hash"} if row else {}
+
+            # Subscriptions
+            c.execute("SELECT plan, status, current_period_end, created_at_utc FROM subscriptions WHERE user_id = ?", (user_id,))
+            data["subscriptions"] = [dict(r) for r in c.fetchall()]
+
+            # Journal entries
+            c.execute("SELECT * FROM signal_journal WHERE user_id = ? ORDER BY created_at_utc DESC", (user_id,))
+            data["journal"] = [dict(r) for r in c.fetchall()]
+
+            # Portfolio
+            c.execute("SELECT symbol, amount, avg_price, updated_at_utc FROM portfolio_holdings WHERE user_id = ?", (user_id,))
+            data["portfolio"] = [dict(r) for r in c.fetchall()]
+
+            if uid:
+                # Price alerts
+                c.execute("SELECT symbol, target_price, direction, note, triggered, created_at_utc FROM price_alerts WHERE uid = ?", (uid,))
+                data["price_alerts"] = [dict(r) for r in c.fetchall()]
+
+                # Watchlist
+                c.execute("SELECT symbol, created_at_utc FROM watchlist WHERE uid = ?", (uid,))
+                data["watchlist"] = [dict(r) for r in c.fetchall()]
+
+                # AI usage
+                c.execute("SELECT endpoint, used_at_utc FROM ai_usage WHERE uid = ? ORDER BY used_at_utc DESC LIMIT 100", (uid,))
+                data["ai_usage"] = [dict(r) for r in c.fetchall()]
+
+                # Notifications
+                c.execute("SELECT type, title, message, created_at_utc FROM notifications WHERE uid = ? ORDER BY created_at_utc DESC LIMIT 100", (uid,))
+                data["notifications"] = [dict(r) for r in c.fetchall()]
+
+    except Exception as e:
+        logger.error(f"[DB] GDPR export error: {e}")
+        data["error"] = str(e)
+    return data
+
+
+# ───────────────────────────────────────
+# #23 Admin Revenue Metrics
+# ───────────────────────────────────────
+def admin_get_revenue_metrics() -> dict:
+    """Get revenue metrics for admin dashboard: MRR, churn, growth."""
+    metrics = {
+        "total_users": 0,
+        "pro_users": 0,
+        "free_users": 0,
+        "trial_users": 0,
+        "active_subscriptions": 0,
+        "churned_last_30d": 0,
+        "new_users_last_30d": 0,
+        "mrr_estimate": 0,
+    }
+    try:
+        from app.core.config import PRO_PRICE_USD
+        cutoff_30d = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        with db_session() as (conn, c):
+            c.execute("SELECT COUNT(*) FROM users")
+            metrics["total_users"] = c.fetchone()[0]
+
+            c.execute("SELECT COUNT(*) FROM users WHERE tier = 'pro'")
+            metrics["pro_users"] = c.fetchone()[0]
+
+            c.execute("SELECT COUNT(*) FROM users WHERE tier = 'free'")
+            metrics["free_users"] = c.fetchone()[0]
+
+            c.execute("SELECT COUNT(*) FROM users WHERE trial_used = 1 AND tier = 'pro'")
+            metrics["trial_users"] = c.fetchone()[0]
+
+            c.execute("SELECT COUNT(*) FROM subscriptions WHERE status = 'active'")
+            metrics["active_subscriptions"] = c.fetchone()[0]
+
+            c.execute("SELECT COUNT(*) FROM subscriptions WHERE status IN ('canceled', 'unpaid') AND current_period_end > ?", (cutoff_30d,))
+            metrics["churned_last_30d"] = c.fetchone()[0]
+
+            c.execute("SELECT COUNT(*) FROM users WHERE created_at_utc > ?", (cutoff_30d,))
+            metrics["new_users_last_30d"] = c.fetchone()[0]
+
+            # MRR estimate = active subscriptions × price
+            metrics["mrr_estimate"] = metrics["active_subscriptions"] * PRO_PRICE_USD
+
+    except Exception as e:
+        logger.error(f"[DB] Revenue metrics error: {e}")
+    return metrics
 
 
 # ── Initialize DB on import ──

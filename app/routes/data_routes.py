@@ -158,21 +158,26 @@ def get_briefing():
 
 
 @router.get("/api/briefing/history")
-def get_briefing_history(days: int = 7):
+def get_briefing_history(days: int = 7, page: int = 1, per_page: int = 20):
+    """#26 Pagination support."""
     try:
         from datetime import datetime, timezone, timedelta
         import sqlite3
+        per_page = min(per_page, 100)
+        page = max(page, 1)
+        offset = (page - 1) * per_page
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         with db_session(row_factory=sqlite3.Row) as (conn, c):
             c.execute(
                 """SELECT id, title, content, created_at_utc
                    FROM briefings
                    WHERE created_at_utc >= ?
-                   ORDER BY id DESC""",
-                (cutoff,)
+                   ORDER BY id DESC LIMIT ? OFFSET ?""",
+                (cutoff, per_page, offset)
             )
             rows = [dict(r) for r in c.fetchall()]
-        return {"status": "ok", "briefings": rows, "days": days}
+        return {"status": "ok", "briefings": rows, "days": days,
+                "pagination": {"page": page, "per_page": per_page}}
     except Exception as e:
         logger.error(f"[API] Briefing history error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch briefing history")
@@ -664,7 +669,7 @@ async def prometheus_metrics(request: Request):
 
     # Cache health
     for key, entry in cache.items():
-        age = _time.time() - entry.get("ts", 0)
+        age = _time.time() - entry.get("ts", entry.get("updated", 0))
         lines.append(f'ryzm_cache_age_seconds{{key="{key}"}} {age:.0f}')
 
     # API health
@@ -672,6 +677,31 @@ async def prometheus_metrics(request: Request):
     for domain, info in health.items():
         lines.append(f'ryzm_api_fails{{domain="{domain}"}} {info["fails"]}')
         lines.append(f'ryzm_api_backoff_remaining{{domain="{domain}"}} {info["backoff_remaining"]}')
+
+    # #25 Enhanced metrics — active users, SSE connections, memory
+    try:
+        import psutil
+        process = psutil.Process()
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        lines.append("# HELP process_memory_rss_mb Resident memory in MB")
+        lines.append("# TYPE process_memory_rss_mb gauge")
+        lines.append(f"process_memory_rss_mb {mem_mb:.1f}")
+        lines.append(f"process_cpu_percent {process.cpu_percent():.1f}")
+    except ImportError:
+        pass
+
+    # SSE connected clients
+    try:
+        from app.routes.sse_routes import _sse_clients
+        lines.append("# HELP ryzm_sse_clients Active SSE connections")
+        lines.append("# TYPE ryzm_sse_clients gauge")
+        lines.append(f"ryzm_sse_clients {len(_sse_clients) if hasattr(_sse_clients, '__len__') else 0}")
+    except ImportError:
+        pass
+
+    # Active WebSocket / cache data freshness
+    market_data = cache.get("market", {}).get("data", {})
+    lines.append(f"ryzm_tracked_coins {len(market_data) if isinstance(market_data, dict) else 0}")
 
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 

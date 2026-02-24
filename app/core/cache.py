@@ -1,15 +1,62 @@
 """
 Ryzm Terminal — Cache Manager
-Dict-based cache with TTL awareness (Redis-ready interface).
+#8 Redis cache with in-memory fallback.
+Dict-based cache with TTL awareness.
 """
+import json
 import time
 from datetime import datetime, timezone
 
-from app.core.config import CACHE_TTL
+from app.core.config import CACHE_TTL, REDIS_URL
 from app.core.logger import logger
 
 
-# ── Singleton cache dict ──
+# ── Redis cache backend (optional) ──
+_redis_cache = None
+_redis_cache_available = False
+
+def _init_redis_cache():
+    """Try to connect to Redis for caching. Falls back to in-memory dict."""
+    global _redis_cache, _redis_cache_available
+    if not REDIS_URL:
+        return
+    try:
+        import redis
+        _redis_cache = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=2, db=1)
+        _redis_cache.ping()
+        _redis_cache_available = True
+        logger.info("[Cache] Redis cache backend connected")
+    except Exception as e:
+        _redis_cache = None
+        _redis_cache_available = False
+        logger.warning(f"[Cache] Redis unavailable, using in-memory: {e}")
+
+_init_redis_cache()
+
+
+def redis_cache_set(key: str, data, ttl: int = None):
+    """Set a value in Redis cache (JSON serialized)."""
+    if not _redis_cache_available or not _redis_cache:
+        return False
+    try:
+        _redis_cache.setex(f"ryzm:{key}", ttl or CACHE_TTL, json.dumps(data, default=str))
+        return True
+    except Exception:
+        return False
+
+
+def redis_cache_get(key: str):
+    """Get a value from Redis cache."""
+    if not _redis_cache_available or not _redis_cache:
+        return None
+    try:
+        val = _redis_cache.get(f"ryzm:{key}")
+        return json.loads(val) if val else None
+    except Exception:
+        return None
+
+
+# ── Singleton cache dict (primary in-memory store) ──
 cache = {
     "news": {"data": [], "updated": 0},
     "market": {"data": {}, "updated": 0},

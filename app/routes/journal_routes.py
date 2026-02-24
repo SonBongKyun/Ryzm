@@ -69,12 +69,17 @@ def create_entry(body: JournalCreateRequest, request: Request):
 
 
 @router.get("")
-def list_entries(request: Request, limit: int = 50, offset: int = 0):
-    """List journal entries for the authenticated user."""
+def list_entries(request: Request, limit: int = 50, offset: int = 0, page: int = 1):
+    """List journal entries for the authenticated user. #26 pagination."""
     user_data = _require_auth(request)
     user_id = int(user_data["sub"])
 
-    entries = get_journal_entries(user_id, limit=min(limit, 100), offset=offset)
+    # Support both offset and page-based pagination
+    limit = min(limit, 100)
+    if page > 1:
+        offset = (page - 1) * limit
+
+    entries = get_journal_entries(user_id, limit=limit, offset=offset)
     stats = get_journal_stats(user_id)
 
     # Parse snapshot_json for each entry
@@ -84,7 +89,8 @@ def list_entries(request: Request, limit: int = 50, offset: int = 0):
         except (json.JSONDecodeError, TypeError):
             entry["snapshot"] = {}
 
-    return {"entries": entries, "stats": stats}
+    return {"entries": entries, "stats": stats,
+            "pagination": {"page": page, "per_page": limit, "offset": offset}}
 
 
 @router.get("/stats")

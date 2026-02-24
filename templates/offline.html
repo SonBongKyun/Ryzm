@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ryzm Terminal — Offline</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Share Tech Mono', monospace;
+      background: #0a0a0f;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    .offline-container {
+      max-width: 420px;
+      padding: 40px 24px;
+    }
+    .offline-icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+      opacity: 0.6;
+    }
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      color: #C9A96E;
+      font-size: 1.4rem;
+      margin-bottom: 12px;
+    }
+    p {
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #888;
+      margin-bottom: 24px;
+    }
+    .retry-btn {
+      background: linear-gradient(135deg, #C9A96E, #8B6914);
+      color: #0a0a0f;
+      border: none;
+      padding: 12px 32px;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .retry-btn:hover {
+      opacity: 0.9;
+    }
+    .pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container" role="main" aria-label="Offline notice">
+    <div class="offline-icon pulse">📡</div>
+    <h1>CONNECTION LOST</h1>
+    <p>
+      Ryzm Terminal requires an internet connection for real-time market data and AI analysis.
+      Please check your connection and try again.
+    </p>
+    <button class="retry-btn" onclick="location.reload()">
+      RETRY CONNECTION
+    </button>
+  </div>
+</body>
+</html>

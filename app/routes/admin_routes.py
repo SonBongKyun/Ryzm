@@ -1,5 +1,7 @@
 """
 Ryzm Terminal — Admin API Routes
+#23 Revenue metrics (MRR, churn, growth)
+#24 Feature flags management
 Infographic generation, briefing publishing, admin page, user management, system monitoring.
 """
 import json
@@ -20,6 +22,7 @@ from app.core.database import (
     db_session, utc_now_str, update_user_tier, get_user_by_uid,
     admin_get_users, admin_get_stats, admin_get_system_info, admin_delete_user,
     admin_create_announcement, admin_get_announcements, admin_toggle_announcement,
+    admin_get_revenue_metrics, get_feature_flags, set_feature_flag,
 )
 from app.core.security import require_admin
 from app.core.ai_client import call_gemini
@@ -213,3 +216,49 @@ def api_admin_toggle_announcement(ann_id: int, body: AdminToggleAnnouncementRequ
 def api_public_announcements():
     """Get active announcements for all users."""
     return admin_get_announcements(active_only=True)
+
+
+# ───────────────────────────────────────
+# #23 Revenue Metrics
+# ───────────────────────────────────────
+@router.get("/api/admin/revenue")
+def api_admin_revenue(request: Request):
+    """Revenue dashboard — MRR, churn, growth metrics."""
+    require_admin(request)
+    return admin_get_revenue_metrics()
+
+
+# ───────────────────────────────────────
+# #24 Feature Flags
+# ───────────────────────────────────────
+@router.get("/api/admin/feature-flags")
+def api_admin_get_feature_flags(request: Request):
+    """Get all feature flags."""
+    require_admin(request)
+    return get_feature_flags()
+
+
+@router.post("/api/admin/feature-flags/{flag_key}")
+def api_admin_set_feature_flag(flag_key: str, request: Request):
+    """Set or update a feature flag."""
+    require_admin(request)
+    import json as json_lib
+    try:
+        body = json_lib.loads(request._receive.__self__._body.decode() if hasattr(request, '_receive') else "{}")
+    except Exception:
+        body = {}
+    enabled = body.get("enabled", True)
+    rollout_pct = body.get("rollout_pct", 100)
+    ok = set_feature_flag(flag_key, bool(enabled), int(rollout_pct))
+    if not ok:
+        raise HTTPException(500, "Failed to set feature flag")
+    logger.info(f"[Admin] Feature flag '{flag_key}' → enabled={enabled}, rollout={rollout_pct}%")
+    return {"status": "ok", "key": flag_key, "enabled": enabled, "rollout_pct": rollout_pct}
+
+
+# ── Public: Feature flags for client ──
+@router.get("/api/feature-flags")
+def api_public_feature_flags():
+    """Get enabled feature flags (public — for frontend feature gating)."""
+    flags = get_feature_flags()
+    return {k: v["enabled"] for k, v in flags.items()}

@@ -16,7 +16,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.core.config import ALLOWED_ORIGINS, SMTP_HOST
 from app.core.logger import logger
-from app.core.security import check_rate_limit
+from app.core.security import check_rate_limit, generate_csrf_token, validate_csrf_token
 from app.routes.data_routes import router as data_router
 from app.routes.ai_routes import router as ai_router
 from app.routes.admin_routes import router as admin_router
@@ -60,7 +60,15 @@ async def lifespan(app: FastAPI):
     # Shutdown logic (if needed) goes here
 
 
-app = FastAPI(title="Ryzm Terminal API", lifespan=lifespan)
+app = FastAPI(
+    title="Ryzm Terminal API",
+    description="AI-Powered Crypto Intelligence Terminal — Real-time market analysis, council decisions, and trade validation.",
+    version="8.13",
+    docs_url="/api/docs",       # #17 API Documentation
+    redoc_url="/api/redoc",     # #17 API Documentation
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan,
+)
 
 
 # ── Security Headers Middleware ──
@@ -79,7 +87,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         elif request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         # Always tag version
-        response.headers["X-Ryzm-Version"] = "8.12"
+        response.headers["X-Ryzm-Version"] = "8.13"
         # Prevent clickjacking
         response.headers["X-Frame-Options"] = "DENY"
         # Prevent MIME-type sniffing
@@ -229,6 +237,15 @@ async def collect_client_error(request: Request):
     return Response(status_code=204)
 
 
+# ── #16 CSRF Token Endpoint ──
+@app.get("/api/csrf-token", include_in_schema=False)
+async def get_csrf_token(request: Request):
+    """Generate a CSRF token for the current session."""
+    session_id = request.cookies.get("ryzm_uid", "anonymous")
+    token = generate_csrf_token(session_id)
+    return JSONResponse({"csrf_token": token})
+
+
 # ── Favicon shortcut (prevent 404) ──
 _FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚡</text></svg>'
 
@@ -249,6 +266,14 @@ async def robots_txt():
 async def sitemap_xml():
     from fastapi.responses import FileResponse
     return FileResponse("static/sitemap.xml", media_type="application/xml",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+# #20 PWA Offline fallback page
+@app.get("/offline.html", include_in_schema=False)
+async def offline_page():
+    from fastapi.responses import FileResponse
+    return FileResponse("templates/offline.html", media_type="text/html",
                         headers={"Cache-Control": "public, max-age=86400"})
 
 

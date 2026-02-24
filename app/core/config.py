@@ -39,6 +39,26 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_DEFAULT_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# ── Redis (rate limiter + cache backend) ──
+REDIS_URL = os.getenv("REDIS_URL", "")  # e.g. redis://localhost:6379/0
+
+# ── Google OAuth ──
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+# ── 2FA (TOTP) ──
+TOTP_ISSUER = os.getenv("TOTP_ISSUER", "Ryzm Terminal")
+
+# ── Feature Flags (runtime defaults — overridden by DB at runtime) ──
+DEFAULT_FEATURE_FLAGS = {
+    "oauth_google": False,
+    "two_factor_auth": True,
+    "coupon_codes": True,
+    "light_mode": True,
+    "guided_tour": True,
+    "backtest_simulator": True,
+}
+
 # ── CORS ──
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
 

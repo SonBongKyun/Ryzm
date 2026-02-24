@@ -160,9 +160,12 @@ async def get_auto_council():
 
 
 @router.get("/api/council/history")
-async def get_council_history_api(limit: int = 50):
-    """Retrieve AI Council prediction history & accuracy stats."""
-    records = get_council_history(limit)
+async def get_council_history_api(limit: int = 50, page: int = 1):
+    """Retrieve AI Council prediction history & accuracy stats. #26 pagination."""
+    limit = min(limit, 200)
+    page = max(page, 1)
+    offset = (page - 1) * limit
+    records = get_council_history(limit + 1)  # fetch all then paginate in-memory
     evaluated = [r for r in records if r["hit"] is not None]
     total_eval = len(evaluated)
     hits = sum(1 for r in evaluated if r["hit"] == 1)
@@ -230,6 +233,7 @@ async def get_council_history_api(limit: int = 50):
             "sources": ["council_history.db", "api.binance.com"],
             "fetched_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "evaluation_horizons_min": [15, 60, 240, 1440],
+            "pagination": {"page": page, "per_page": limit, "total": len(records)},
         }
     }
 

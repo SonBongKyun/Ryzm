@@ -529,7 +529,9 @@ function openRyzmModalChart(symbol) {
   _modalResizeObserver.observe(container);
 }
 
-/*  PWA Service Worker Registration  */
+/*  PWA Service Worker Registration + Install Banner (#20)  */
+let _deferredInstallPrompt = null;
+
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
@@ -539,7 +541,70 @@ function registerServiceWorker() {
       })
       .catch(err => console.warn('SW registration failed:', err));
   }
+
+  // PWA install banner — capture the beforeinstallprompt event
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    _showInstallBanner();
+  });
+
+  // Track successful installs
+  window.addEventListener('appinstalled', () => {
+    _deferredInstallPrompt = null;
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.remove();
+    if (typeof showToast === 'function') showToast('success', 'Installed', 'Ryzm Terminal added to home screen');
+  });
 }
+
+function _showInstallBanner() {
+  if (document.getElementById('pwa-install-banner')) return;
+  // Don't show if user dismissed before (24h cooldown)
+  const dismissed = localStorage.getItem('ryzm_pwa_dismiss');
+  if (dismissed && Date.now() - Number(dismissed) < 86400000) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'pwa-install-banner';
+  banner.setAttribute('role', 'alert');
+  banner.setAttribute('aria-live', 'polite');
+  banner.innerHTML = `
+    <div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10000;
+         background:linear-gradient(135deg,rgba(201,169,110,0.15),rgba(10,10,15,0.95));
+         border:1px solid rgba(201,169,110,0.3);border-radius:12px;padding:14px 20px;
+         display:flex;align-items:center;gap:12px;backdrop-filter:blur(12px);
+         box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:420px;width:90%;font-family:monospace;">
+      <span style="font-size:28px;">⚡</span>
+      <div style="flex:1;">
+        <div style="color:#C9A96E;font-weight:bold;font-size:0.8rem;">Install Ryzm Terminal</div>
+        <div style="color:#999;font-size:0.7rem;margin-top:2px;">Add to home screen for faster access</div>
+      </div>
+      <button onclick="window._ryzmPwaInstall()" style="background:#C9A96E;color:#0a0a0f;border:none;
+              padding:8px 16px;border-radius:6px;font-weight:bold;font-size:0.7rem;cursor:pointer;
+              font-family:'Orbitron',sans-serif;white-space:nowrap;">INSTALL</button>
+      <button onclick="window._ryzmPwaDismiss()" style="background:none;border:none;color:#666;
+              font-size:18px;cursor:pointer;padding:4px;" aria-label="Dismiss install banner">&times;</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+}
+
+window._ryzmPwaInstall = async function() {
+  if (!_deferredInstallPrompt) return;
+  _deferredInstallPrompt.prompt();
+  const result = await _deferredInstallPrompt.userChoice;
+  if (result.outcome === 'accepted') {
+    _deferredInstallPrompt = null;
+  }
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.remove();
+};
+
+window._ryzmPwaDismiss = function() {
+  localStorage.setItem('ryzm_pwa_dismiss', String(Date.now()));
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.remove();
+};
 
 /*  Mini Heatmap (Upgraded)  */
 let _hmPeriod = '24h';

@@ -1,5 +1,7 @@
 """
 Ryzm Terminal — Security & Utilities
+#7  Redis rate limiter with in-memory fallback
+#16 CSRF token generation/validation
 Rate limiter, admin auth, input sanitization, AI response parsing/validation.
 """
 import re
@@ -8,14 +10,15 @@ import os
 import secrets
 import time
 import uuid
+import hashlib
 from collections import defaultdict
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import HTTPException, Request, Response
 
 from app.core.config import (
     ADMIN_TOKEN, RATE_LIMIT_WINDOW, RATE_LIMIT_MAX_GENERAL,
-    RATE_LIMIT_MAX_AI, PRO_FEATURES,
+    RATE_LIMIT_MAX_AI, PRO_FEATURES, REDIS_URL,
     CouncilResponse, ValidatorResponse, ChatResponse,
 )
 from app.core.logger import logger
@@ -28,17 +31,53 @@ PRO_RATE_LIMITS = {
 }
 
 
-# ── Rate Limiter (in-memory, per-IP) ──
+# ── #7 Redis Rate Limiter with in-memory fallback ──
+_redis_client = None
+_redis_available = False
+
+def _init_redis():
+    """Try to connect to Redis. Falls back silently to in-memory."""
+    global _redis_client, _redis_available
+    if not REDIS_URL:
+        return
+    try:
+        import redis
+        _redis_client = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=2)
+        _redis_client.ping()
+        _redis_available = True
+        logger.info("[Security] Redis rate limiter connected")
+    except Exception as e:
+        _redis_client = None
+        _redis_available = False
+        logger.warning(f"[Security] Redis unavailable, using in-memory fallback: {e}")
+
+_init_redis()
+
+
+# ── Rate Limiter (in-memory fallback) ──
 _rate_limits: Dict[str, list] = defaultdict(list)
 _rate_limit_last_cleanup = 0
 
 
 def check_rate_limit(ip: str, category: str = "general") -> bool:
     """Return True if request is allowed, False if rate limited."""
+    max_req = RATE_LIMIT_MAX_AI if category == "ai" else (10 if category == "auth" else RATE_LIMIT_MAX_GENERAL)
+
+    # Try Redis first
+    if _redis_available and _redis_client:
+        try:
+            key = f"rl:{ip}:{category}"
+            current = _redis_client.incr(key)
+            if current == 1:
+                _redis_client.expire(key, RATE_LIMIT_WINDOW)
+            return current <= max_req
+        except Exception:
+            pass  # Fall through to in-memory
+
+    # In-memory fallback
     now = time.time()
     key = f"{ip}:{category}"
     _rate_limits[key] = [t for t in _rate_limits[key] if now - t < RATE_LIMIT_WINDOW]
-    max_req = RATE_LIMIT_MAX_AI if category == "ai" else (10 if category == "auth" else RATE_LIMIT_MAX_GENERAL)
     if len(_rate_limits[key]) >= max_req:
         return False
     _rate_limits[key].append(now)
@@ -182,6 +221,19 @@ def check_pro(uid: str, feature: str) -> bool:
 def check_pro_rate_limit(uid: str, endpoint: str) -> bool:
     """Per-UID rate limit for Pro users (cost defence). Returns True if allowed."""
     limit = PRO_RATE_LIMITS.get(endpoint, 60)
+
+    # Try Redis
+    if _redis_available and _redis_client:
+        try:
+            key = f"prl:{uid}:{endpoint}"
+            current = _redis_client.incr(key)
+            if current == 1:
+                _redis_client.expire(key, 60)
+            return current <= limit
+        except Exception:
+            pass
+
+    # In-memory fallback
     key = f"pro:{uid}:{endpoint}"
     now = time.time()
     _rate_limits[key] = [t for t in _rate_limits[key] if now - t < 60]
@@ -189,3 +241,37 @@ def check_pro_rate_limit(uid: str, endpoint: str) -> bool:
         return False
     _rate_limits[key].append(now)
     return True
+
+
+# ── #16 CSRF Token Management ──
+_CSRF_SECRET = os.getenv("CSRF_SECRET", os.getenv("JWT_SECRET", "csrf-dev-key"))
+
+
+def generate_csrf_token(session_id: str = "") -> str:
+    """Generate a CSRF token tied to a session/UID."""
+    try:
+        from itsdangerous import URLSafeTimedSerializer
+        s = URLSafeTimedSerializer(_CSRF_SECRET)
+        return s.dumps(session_id or "anonymous", salt="csrf-token")
+    except ImportError:
+        # Fallback: simple HMAC-based token
+        raw = f"{session_id}:{time.time()}"
+        return hashlib.sha256(f"{_CSRF_SECRET}:{raw}".encode()).hexdigest()
+
+
+def validate_csrf_token(token: str, session_id: str = "", max_age: int = 7200) -> bool:
+    """Validate a CSRF token. Default max age: 2 hours."""
+    if not token:
+        return False
+    try:
+        from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+        s = URLSafeTimedSerializer(_CSRF_SECRET)
+        data = s.loads(token, salt="csrf-token", max_age=max_age)
+        return True
+    except (ImportError, Exception):
+        return False
+
+
+def get_redis_client():
+    """Return the Redis client (or None if unavailable)."""
+    return _redis_client if _redis_available else None

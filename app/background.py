@@ -133,6 +133,17 @@ def check_price_alerts():
                 "\n".join(alert_lines[:10]),
                 color=0xC9A96E
             )
+
+            # #28 Telegram Alerts — send to admin channel
+            try:
+                from app.services.telegram_service import is_configured as tg_ok, send_alert as tg_alert
+                if tg_ok():
+                    tg_alert(
+                        f"🔔 {triggered_count} Price Alert(s) Triggered",
+                        "\n".join(alert_lines[:10])
+                    )
+            except Exception as tg_err:
+                logger.error(f"[Alerts] Telegram send error: {tg_err}")
     except Exception as e:
         logger.error(f"[Alerts] Check error: {e}")
 
@@ -282,6 +293,15 @@ def refresh_cache():
                         "\n".join([f"• {a['name']}: {a['message']}" for a in result.get("agents", [])[:4]]),
                         color=0x06b6d4
                     )
+                    # #28 Telegram — Auto Council result
+                    try:
+                        from app.services.telegram_service import is_configured as tg_ok, send_council_result as tg_council
+                        if tg_ok():
+                            summary = "\n".join([f"• {a['name']}: {a['message']}" for a in result.get("agents", [])[:4]])
+                            prediction = result.get("prediction", "NEUTRAL")
+                            tg_council(prediction, score, summary)
+                    except Exception:
+                        pass
                     logger.info(f"[AutoCouncil] Completed — score={score}, vibe={vibe}")
         except Exception as e:
             logger.error(f"[Cache] Auto-council error: {e}")

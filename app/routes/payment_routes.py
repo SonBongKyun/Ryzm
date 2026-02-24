@@ -1,5 +1,8 @@
 """
 Ryzm Terminal — Payment API Routes (Stripe)
+#6  Coupon/promo code support + refund webhook handling
+#11 Invoice history endpoint
+#18 Multi-plan prep (plan tier configuration)
 Checkout session, webhooks, customer portal, subscription status.
 Stripe is lazy-loaded so the app runs fine without STRIPE_SECRET_KEY.
 """
@@ -26,6 +29,17 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID_PRO = os.getenv("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID_MONTHLY", ""))
 SITE_URL = os.getenv("SITE_URL", os.getenv("APP_BASE_URL", "http://localhost:8000"))
 PRO_TRIAL_DAYS = int(os.getenv("PRO_TRIAL_DAYS", "7"))
+
+# #18 Multi-plan configuration
+PLAN_CONFIG = {
+    "pro": {
+        "stripe_price_id": STRIPE_PRICE_ID_PRO,
+        "name": "Pro Monthly",
+        "price_usd": 20,
+        "interval": "month",
+    },
+    # Future: "pro_annual": { "stripe_price_id": "...", "name": "Pro Annual", "price_usd": 180, "interval": "year" },
+}
 
 _stripe = None
 
@@ -68,6 +82,7 @@ def create_checkout(request: Request):
             customer=customer_id,
             mode="subscription",
             line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
+            allow_promotion_codes=True,  # #6 Coupon/promo code support
             subscription_data={"trial_period_days": PRO_TRIAL_DAYS} if not user.get("trial_used") else {},
             success_url=f"{SITE_URL}/app?payment=success",
             cancel_url=f"{SITE_URL}/app?payment=canceled",
@@ -166,6 +181,14 @@ async def stripe_webhook(request: Request):
             # Grace period: don't immediately downgrade. Stripe retries automatically.
             # If all retries fail, subscription.deleted event will fire.
 
+        # #6 Refund handling
+        elif etype == "charge.refunded":
+            customer_id = data.get("customer", "")
+            amount_refunded = data.get("amount_refunded", 0)
+            logger.info(f"[Stripe] Refund processed: customer={customer_id}, amount={amount_refunded}")
+            # Note: Stripe handles subscription cancellation separately
+            # This just logs the refund event for audit purposes
+
     except Exception as e:
         logger.error(f"[Stripe] Webhook processing error ({etype}): {e}", exc_info=True)
         # Still return 200 to prevent Stripe retry storm
@@ -245,3 +268,64 @@ def start_trial(request: Request):
 
     logger.info(f"[Trial] User {user['id']} ({user['email']}) started {PRO_TRIAL_DAYS}-day Pro trial")
     return {"status": "ok", "message": f"Pro trial activated! {PRO_TRIAL_DAYS} days free.", "trial_days": PRO_TRIAL_DAYS}
+
+
+# ───────────────────────────────────────
+# #11 Invoice History
+# ───────────────────────────────────────
+@router.get("/invoices")
+def get_invoices(request: Request):
+    """Get invoice history from Stripe."""
+    user_data = get_current_user(request)
+    if not user_data:
+        raise HTTPException(401, "Login required")
+
+    stripe = _get_stripe()
+    user = get_user_by_id(int(user_data["sub"]))
+    if not user or not user.get("stripe_customer_id"):
+        return {"invoices": []}
+
+    try:
+        invoices = stripe.Invoice.list(customer=user["stripe_customer_id"], limit=20)
+        result = []
+        for inv in invoices.data:
+            result.append({
+                "id": inv.id,
+                "number": inv.number,
+                "status": inv.status,
+                "amount_due": inv.amount_due / 100,
+                "amount_paid": inv.amount_paid / 100,
+                "currency": inv.currency,
+                "created": inv.created,
+                "hosted_invoice_url": inv.hosted_invoice_url,
+                "invoice_pdf": inv.invoice_pdf,
+            })
+        return {"invoices": result}
+    except Exception as e:
+        logger.error(f"[Stripe] Invoice list error: {e}")
+        return {"invoices": [], "error": str(e)}
+
+
+# ───────────────────────────────────────
+# #18 Plan Configuration
+# ───────────────────────────────────────
+@router.get("/plans")
+def get_plans():
+    """Get available subscription plans."""
+    plans = []
+    for key, cfg in PLAN_CONFIG.items():
+        plans.append({
+            "id": key,
+            "name": cfg["name"],
+            "price_usd": cfg["price_usd"],
+            "interval": cfg["interval"],
+            "features": [
+                "Unlimited AI Council & Trade Validator",
+                "All 20+ Professional Panels",
+                "100 Price Alerts with Email Notifications",
+                "90-day Council History",
+                "500 Journal Entries",
+                "PDF Export & Telegram Alerts",
+            ],
+        })
+    return {"plans": plans}
