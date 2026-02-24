@@ -766,7 +766,7 @@ function initAIFeedback() {
       body: JSON.stringify({ feature, vote, reference_id: refId })
     }).then(() => {
       if (container) {
-        container.innerHTML = '<span style="color:var(--neon-cyan);font-size:0.7rem;">✓ 피드백 감사합니다!</span>';
+        container.innerHTML = '<span style="color:var(--neon-cyan);font-size:0.7rem;">✓ Thanks for your feedback!</span>';
       }
     }).catch(() => {});
   });
@@ -779,8 +779,8 @@ function injectFeedbackButtons(parentEl, feature, refId) {
   group.className = 'ai-feedback-group';
   group.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
   group.innerHTML = `
-    <button class="ai-feedback-btn" data-vote="1" data-feature="${feature}" data-ref-id="${refId || ''}" title="도움이 됐어요" style="background:none;border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--neon-green);font-size:0.75rem;">👍</button>
-    <button class="ai-feedback-btn" data-vote="-1" data-feature="${feature}" data-ref-id="${refId || ''}" title="별로예요" style="background:none;border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--neon-red);font-size:0.75rem;">👎</button>
+    <button class="ai-feedback-btn" data-vote="1" data-feature="${feature}" data-ref-id="${refId || ''}" title="Helpful" style="background:none;border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--neon-green);font-size:0.75rem;">👍</button>
+    <button class="ai-feedback-btn" data-vote="-1" data-feature="${feature}" data-ref-id="${refId || ''}" title="Not helpful" style="background:none;border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--neon-red);font-size:0.75rem;">👎</button>
   `;
   parentEl.appendChild(group);
 }
@@ -789,7 +789,7 @@ function injectFeedbackButtons(parentEl, feature, refId) {
 /* ═══ #7 Council Social Share ═══ */
 function shareCouncil(platform) {
   const data = window._lastCouncilData;
-  if (!data) { showToast?.('warning', '공유', '먼저 Council을 실행하세요.'); return; }
+  if (!data) { showToast?.('warning', 'Share', 'Please run Council first.'); return; }
   const score = data.consensus_score || 50;
   const vibe = data.vibe?.status || 'NEUTRAL';
   const pred = data.prediction || 'NEUTRAL';
@@ -801,7 +801,7 @@ function shareCouncil(platform) {
     window.open(`https://t.me/share/url?url=https://ryzm.io&text=${encodeURIComponent(text)}`, '_blank');
   } else {
     navigator.clipboard.writeText(text).then(() => {
-      showToast?.('success', '복사됨', '분석 결과가 클립보드에 복사되었습니다.');
+      showToast?.('success', 'Copied', 'Analysis copied to clipboard.');
     });
   }
 }
@@ -810,8 +810,8 @@ function shareCouncil(platform) {
 /* ═══ #14 Council PDF Export ═══ */
 async function exportCouncilPDF() {
   const data = window._lastCouncilData;
-  if (!data) { showToast?.('warning', 'PDF', '먼저 Council을 실행하세요.'); return; }
-  showToast?.('info', 'PDF', 'PDF 생성 중...');
+  if (!data) { showToast?.('warning', 'PDF', 'Please run Council first.'); return; }
+  showToast?.('info', 'PDF', 'Generating PDF...');
   try {
     const section = document.getElementById('council-section');
     if (!section) return;
@@ -836,9 +836,9 @@ async function exportCouncilPDF() {
     pdf.setTextColor(100);
     pdf.text(`Ryzm Terminal | ${new Date().toISOString().slice(0, 16)} UTC`, 10, pdf.internal.pageSize.getHeight() - 5);
     pdf.save(`Ryzm_Council_${new Date().toISOString().slice(0, 10)}.pdf`);
-    showToast?.('success', 'PDF', 'PDF가 다운로드되었습니다.');
+    showToast?.('success', 'PDF', 'PDF downloaded successfully.');
   } catch (e) {
     console.error('PDF export error:', e);
-    showToast?.('error', 'PDF', 'PDF 생성에 실패했습니다.');
+    showToast?.('error', 'PDF', 'PDF generation failed.');
   }
 }
