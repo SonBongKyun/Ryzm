@@ -14,6 +14,11 @@
   --bg-surface-2: #14141e;
   --bg-surface-3: #1a1a28;
 
+  /* A1: Secondary Accent — Cool Cyan */
+  --accent-cyan: #00D4FF;
+  --accent-cyan-glow: rgba(0, 212, 255, 0.20);
+  --accent-cyan-soft: rgba(0, 212, 255, 0.06);
+
   /* Brand Gold Accents */
   --neon-cyan: #C9A96E;
   --neon-cyan-glow: rgba(201, 169, 110, 0.25);
@@ -5597,13 +5602,14 @@ html[data-theme="dark"] .skeleton {
 #ryzm-rsi-container { height: 80px; }
 #ryzm-depth-container { height: 90px; }
 
-/* ?�═??Number Countup ?�═??*/
+/* ?�═??Number Countup (C3: Enhanced) ?�═??*/
 .countup-flash {
-  animation: countFlash 0.4s ease;
+  animation: countFlash 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes countFlash {
-  0%   { opacity: 0.5; transform: translateY(-2px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0%   { opacity: 0.4; transform: translateY(-4px) scale(1.06); text-shadow: 0 0 12px var(--accent-cyan-glow); }
+  60%  { opacity: 1; transform: translateY(1px) scale(1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); text-shadow: none; }
 }
 
 /* ?�═??AI Council Prediction Tracker ?�═??*/
@@ -8362,4 +8368,161 @@ html[data-theme="dark"] .council-container {
 }
 html[data-theme="dark"] .agent-card {
   background: linear-gradient(180deg, rgba(26,26,40,0.9), rgba(20,20,30,0.8));
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* ═══  v8.15 — Visible Impact Design Upgrades (4 items)  ═══════ */
+/* ═══════════════════════════════════════════════════════════════ */
+
+/* ─── E1: Aurora Background Animation ─── */
+@keyframes auroraShift1 {
+  0%   { transform: translate(-30%, -40%) rotate(0deg) scale(1); }
+  33%  { transform: translate(10%, -20%) rotate(60deg) scale(1.1); }
+  66%  { transform: translate(-20%, 10%) rotate(120deg) scale(0.95); }
+  100% { transform: translate(-30%, -40%) rotate(0deg) scale(1); }
+}
+@keyframes auroraShift2 {
+  0%   { transform: translate(20%, -30%) rotate(0deg) scale(1); }
+  33%  { transform: translate(-15%, 15%) rotate(-60deg) scale(1.15); }
+  66%  { transform: translate(25%, -10%) rotate(-120deg) scale(0.9); }
+  100% { transform: translate(20%, -30%) rotate(0deg) scale(1); }
+}
+@keyframes auroraShift3 {
+  0%   { transform: translate(0%, 20%) rotate(0deg) scale(1.05); }
+  33%  { transform: translate(-25%, -10%) rotate(90deg) scale(0.95); }
+  66%  { transform: translate(15%, 25%) rotate(-90deg) scale(1.1); }
+  100% { transform: translate(0%, 20%) rotate(0deg) scale(1); }
+}
+
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+html[data-theme="dark"] .aurora-bg {
+  opacity: 1;
+}
+html[data-theme="light"] .aurora-bg {
+  opacity: 0.3;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  will-change: transform;
+}
+.aurora-blob--1 {
+  width: 600px;
+  height: 600px;
+  top: -10%;
+  left: 10%;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.12) 0%, transparent 70%);
+  animation: auroraShift1 25s ease-in-out infinite;
+}
+.aurora-blob--2 {
+  width: 500px;
+  height: 500px;
+  top: 20%;
+  right: 5%;
+  background: radial-gradient(circle, rgba(201, 169, 110, 0.10) 0%, transparent 70%);
+  animation: auroraShift2 30s ease-in-out infinite;
+}
+.aurora-blob--3 {
+  width: 450px;
+  height: 450px;
+  bottom: -5%;
+  left: 30%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+  animation: auroraShift3 35s ease-in-out infinite;
+}
+
+/* ─── A2: Gradient Mesh — Subtle per-panel color tints ─── */
+html[data-theme="dark"] #panel-left > .glass-panel {
+  background: linear-gradient(
+    165deg,
+    rgba(0, 212, 255, 0.03) 0%,
+    rgba(20, 20, 30, 0.98) 35%,
+    rgba(14, 14, 20, 0.95) 100%
+  );
+}
+html[data-theme="dark"] .center-panel > .glass-panel {
+  background: linear-gradient(
+    170deg,
+    rgba(201, 169, 110, 0.04) 0%,
+    rgba(20, 20, 30, 0.98) 30%,
+    rgba(14, 14, 20, 0.95) 100%
+  );
+}
+html[data-theme="dark"] #panel-right > .glass-panel {
+  background: linear-gradient(
+    175deg,
+    rgba(139, 92, 246, 0.03) 0%,
+    rgba(20, 20, 30, 0.98) 35%,
+    rgba(14, 14, 20, 0.95) 100%
+  );
+}
+html[data-theme="dark"] .council-container .glass-panel,
+html[data-theme="dark"] .council-container .agent-card {
+  background: linear-gradient(
+    160deg,
+    rgba(201, 169, 110, 0.05) 0%,
+    rgba(26, 26, 40, 0.9) 30%,
+    rgba(20, 20, 30, 0.85) 100%
+  );
+}
+
+/* ─── A1: Cyan accent applied to key UI elements ─── */
+html[data-theme="dark"] .snav-item.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+  text-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+html[data-theme="dark"] .price-ws-badge.live .ws-dot {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan-glow);
+}
+html[data-theme="dark"] .price-change.up {
+  text-shadow: 0 0 6px rgba(6, 214, 160, 0.3);
+}
+html[data-theme="dark"] .price-change.down {
+  text-shadow: 0 0 6px rgba(239, 71, 111, 0.3);
+}
+
+/* Cyan glow on interactive focus/active elements */
+html[data-theme="dark"] .quick-btn:hover {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 4px 16px var(--accent-cyan-glow), 0 0 0 1px rgba(0,212,255,0.12);
+}
+html[data-theme="dark"] .quick-btn:active {
+  box-shadow: 0 0 8px var(--accent-cyan-glow) inset;
+}
+
+/* Timestamp & secondary info uses cyan */
+html[data-theme="dark"] .panel-ts {
+  color: var(--accent-cyan);
+  opacity: 0.7;
+}
+
+/* Council score ring cyan accent */
+html[data-theme="dark"] .cg-ring-glow {
+  filter: drop-shadow(0 0 4px var(--accent-cyan-glow));
+}
+
+/* ─── C3: Enhanced count-up glow on value change ─── */
+.price-val.counting {
+  text-shadow: 0 0 8px var(--accent-cyan-glow);
+  transition: text-shadow 0.3s ease;
+}
+.price-val {
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob { animation: none !important; }
+  .aurora-bg { opacity: 0 !important; }
 }

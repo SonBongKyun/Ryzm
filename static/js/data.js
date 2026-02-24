@@ -1040,8 +1040,8 @@ function _renderLsPanel() {
   const longPct = document.getElementById('ls-long-pct');
   const shortPct = document.getElementById('ls-short-pct');
   const ratioNum = document.getElementById('ls-ratio-num');
-  if (longPct) longPct.textContent = `${finalLong.toFixed(1)}%`;
-  if (shortPct) shortPct.textContent = `${finalShort.toFixed(1)}%`;
+  if (longPct) animateCountup(longPct, finalLong, { duration: 500, decimals: 1, suffix: '%', useComma: false });
+  if (shortPct) animateCountup(shortPct, finalShort, { duration: 500, decimals: 1, suffix: '%', useComma: false });
   if (ratioNum) {
     const ratio = finalShort > 0 ? (finalLong / finalShort).toFixed(2) : '--';
     ratioNum.textContent = ratio;
@@ -1232,7 +1232,7 @@ async function fetchMacroTicker() {
       const fx = market['USD/KRW'];
       const fxVal = document.getElementById('fx-usdkrw');
       const fxChg = document.getElementById('fx-usdkrw-chg');
-      if (fxVal) fxVal.textContent = Number(fx.price).toLocaleString('ko-KR', {minimumFractionDigits:1, maximumFractionDigits:1});
+      if (fxVal) animateCountup(fxVal, fx.price, { duration: 500, decimals: 1, useComma: true });
       if (fxChg) {
         const sign = fx.change >= 0 ? '+' : '';
         fxChg.textContent = `${sign}${fx.change}%`;
@@ -1243,7 +1243,7 @@ async function fetchMacroTicker() {
       const fx2 = market['USD/JPY'];
       const fxVal2 = document.getElementById('fx-usdjpy');
       const fxChg2 = document.getElementById('fx-usdjpy-chg');
-      if (fxVal2) fxVal2.textContent = Number(fx2.price).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      if (fxVal2) animateCountup(fxVal2, fx2.price, { duration: 500, decimals: 2, useComma: true });
       if (fxChg2) {
         const sign2 = fx2.change >= 0 ? '+' : '';
         fxChg2.textContent = `${sign2}${fx2.change}%`;
