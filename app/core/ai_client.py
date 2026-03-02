@@ -116,27 +116,3 @@ def call_gemini_json(
     return parse_gemini_json(text)
 
 
-def call_gemini_stream(
-    prompt: str,
-    *,
-    model: str = DEFAULT_MODEL,
-    max_tokens: int = 1024,
-    temperature: float = 0.7,
-):
-    """Stream Gemini response token-by-token. Yields text chunks."""
-    config = types.GenerateContentConfig(
-        max_output_tokens=max_tokens,
-        temperature=temperature,
-    )
-    try:
-        response = _get_client().models.generate_content_stream(
-            model=model,
-            contents=prompt,
-            config=config,
-        )
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
-    except Exception as e:
-        logger.error(f"[AI] Gemini stream error: {e}")
-        raise

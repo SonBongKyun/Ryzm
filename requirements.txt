@@ -20,6 +20,3 @@ qrcode[pil]==8.0
 python-json-logger==3.2.1
 authlib==1.4.1
 itsdangerous==2.2.0
-pytest==8.3.4
-pytest-asyncio==0.25.0
-psutil==7.0.0

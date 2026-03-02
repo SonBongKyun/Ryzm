@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Ryzm Operator Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"
+      integrity="sha384-XH+ZCkuxxIrxQG0DVKQhb5v4zo16WNolye2PWC/djwSjCXKORYyqyF46I6Hoo0GT"
+      crossorigin="anonymous"></script>
     <style>
         :root{--bg:#05050a;--panel:#0c0c14;--panel2:#111119;--cyan:#C9A96E;--pink:#ec4899;--green:#22c55e;--red:#ef4444;--yellow:#facc15;--text:#e2e8f0;--dim:#64748b;--border:#1e1e2e}
         *{box-sizing:border-box;margin:0;padding:0}
@@ -212,7 +214,7 @@
                 <div class="form-group" style="margin-bottom:10px"><label>Title</label><input type="text" id="ann-title" placeholder="Title..."></div>
                 <div class="form-group" style="margin-bottom:10px"><label>Content</label><textarea id="ann-content" placeholder="Announcement body..."></textarea></div>
                 <div class="form-group" style="margin-bottom:12px"><label>Level</label>
-                    <select id="ann-level"><option value="info">?πÔ∏è Info</option><option value="warning">?†Ô∏è Warning</option><option value="critical">?î¥ Critical</option></select>
+                    <select id="ann-level"><option value="info">?ÔøΩÔ∏è Info</option><option value="warning">?ÔøΩÔ∏è Warning</option><option value="critical">?ÔøΩÔøΩ Critical</option></select>
                 </div>
                 <button class="btn btn-primary" onclick="createAnnouncement()" style="width:100%"><i data-lucide="send" style="width:14px;height:14px"></i> Publish</button>
             </div>
@@ -309,7 +311,7 @@ async function loadUsers(page=1){
             <td style="font-size:0.7rem;font-family:'JetBrains Mono',monospace">${(u.created_at_utc||'').slice(0,10)}</td>
             <td style="font-size:0.7rem;font-family:'JetBrains Mono',monospace">${(u.last_login_utc||'??).slice(0,16)}</td>
             <td><div style="display:flex;gap:4px">
-                <button class="btn btn-sm ${u.tier==='pro'?'btn-cyan':'btn-pink'}" onclick="toggleTier(${u.id},'${u.tier==='pro'?'free':'pro'}')">${u.tier==='pro'?'?íFREE':'?íPRO'}</button>
+                <button class="btn btn-sm ${u.tier==='pro'?'btn-cyan':'btn-pink'}" onclick="toggleTier(${u.id},'${u.tier==='pro'?'free':'pro'}')">${u.tier==='pro'?'?ÔøΩFREE':'?ÔøΩPRO'}</button>
                 <button class="btn btn-sm btn-red" onclick="deleteUser(${u.id},'${esc(u.email)}')">DEL</button>
             </div></td></tr>`).join('')}
         const pg=document.getElementById('users-pagination');
@@ -319,7 +321,7 @@ async function loadUsers(page=1){
     }catch(e){console.error(e);toast('Connection error','error')}
 }
 async function toggleTier(userId,newTier){if(!confirm(`Change user #${userId} to ${newTier.toUpperCase()}?`))return;try{const res=await adminFetch(`/api/admin/users/${userId}/tier`,{method:'POST',body:JSON.stringify({tier:newTier})});if(res.ok){toast(`User #${userId} ??${newTier.toUpperCase()}`);loadUsers(currentUserPage)}else toast('Failed to change tier','error')}catch{toast('Connection error','error')}}
-async function deleteUser(userId,email){if(!confirm(`?†Ô∏è Delete user #${userId} (${email})?\nAll associated data will be removed!`))return;try{const res=await adminFetch(`/api/admin/users/${userId}`,{method:'DELETE'});if(res.ok){toast(`User #${userId} deleted`);loadUsers(currentUserPage)}else toast('Failed to delete user','error')}catch{toast('Connection error','error')}}
+async function deleteUser(userId,email){if(!confirm(`?ÔøΩÔ∏è Delete user #${userId} (${email})?\nAll associated data will be removed!`))return;try{const res=await adminFetch(`/api/admin/users/${userId}`,{method:'DELETE'});if(res.ok){toast(`User #${userId} deleted`);loadUsers(currentUserPage)}else toast('Failed to delete user','error')}catch{toast('Connection error','error')}}
 
 async function loadSystem(){
     try{

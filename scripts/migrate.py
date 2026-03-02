@@ -62,6 +62,16 @@ MIGRATIONS = [
         "description": "Track current schema version",
         "sql": "SELECT 1;",
     },
+    {
+        "id": "006_performance_indexes",
+        "description": "Add indexes for frequently queried columns",
+        "sql": """
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_price_alerts_uid_triggered ON price_alerts(uid, triggered);
+            CREATE INDEX IF NOT EXISTS idx_signal_journal_user_id ON signal_journal(user_id);
+            CREATE INDEX IF NOT EXISTS idx_token_blocklist_user_id ON token_blocklist(user_id);
+        """,
+    },
 ]
 
 

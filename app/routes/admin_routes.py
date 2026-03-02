@@ -8,8 +8,8 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-import requests
-from fastapi import APIRouter, HTTPException, Request, Query
+import httpx
+from fastapi import APIRouter, HTTPException, Request, Query, Body
 from fastapi.templating import Jinja2Templates
 
 from app.core.logger import logger
@@ -108,11 +108,12 @@ def publish_briefing(request: BriefingRequest, http_request: Request):
     }
 
     try:
-        resp = requests.post(DISCORD_WEBHOOK_URL, json=discord_data, timeout=10)
-        resp.raise_for_status()
+        with httpx.Client(timeout=10) as client:
+            resp = client.post(DISCORD_WEBHOOK_URL, json=discord_data)
+            resp.raise_for_status()
         logger.info("[Admin] Successfully published to Discord")
         return {"status": "success", "message": "Published to Discord & DB"}
-    except requests.RequestException as e:
+    except httpx.HTTPError as e:
         logger.error(f"[Admin] Discord publish error: {e}")
         return {"status": "partial", "message": f"Saved to DB but Discord failed: {str(e)}"}
 
@@ -239,20 +240,19 @@ def api_admin_get_feature_flags(request: Request):
 
 
 @router.post("/api/admin/feature-flags/{flag_key}")
-def api_admin_set_feature_flag(flag_key: str, request: Request):
+def api_admin_set_feature_flag(
+    flag_key: str,
+    request: Request,
+    body: dict = Body(default={}),
+):
     """Set or update a feature flag."""
     require_admin(request)
-    import json as json_lib
-    try:
-        body = json_lib.loads(request._receive.__self__._body.decode() if hasattr(request, '_receive') else "{}")
-    except Exception:
-        body = {}
     enabled = body.get("enabled", True)
     rollout_pct = body.get("rollout_pct", 100)
     ok = set_feature_flag(flag_key, bool(enabled), int(rollout_pct))
     if not ok:
         raise HTTPException(500, "Failed to set feature flag")
-    logger.info(f"[Admin] Feature flag '{flag_key}' → enabled={enabled}, rollout={rollout_pct}%")
+    logger.info(f"[Admin] Feature flag '{flag_key}' -> enabled={enabled}, rollout={rollout_pct}%")
     return {"status": "ok", "key": flag_key, "enabled": enabled, "rollout_pct": rollout_pct}
 
 

@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://ryzm:ryzm@postgres:5432/ryzm
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ryzm}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:-ryzm}
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
@@ -30,13 +30,13 @@ services:
     container_name: ryzm-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ryzm
-      POSTGRES_USER: ryzm
-      POSTGRES_PASSWORD: ryzm
+      POSTGRES_DB: ${POSTGRES_DB:-ryzm}
+      POSTGRES_USER: ${POSTGRES_USER:-ryzm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports:  # Uncomment only for local development
+    #   - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ryzm"]
       interval: 10s
@@ -49,8 +49,8 @@ services:
     container_name: ryzm-redis
     restart: unless-stopped
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
+    # ports:  # Uncomment only for local development
+    #   - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:

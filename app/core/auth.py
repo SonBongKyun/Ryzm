@@ -20,14 +20,14 @@ from app.core.logger import logger
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 if not JWT_SECRET:
     _env = os.getenv("APP_ENV", "").lower()
-    if _env == "production":
+    if _env in ("production", "staging"):
         raise RuntimeError(
-            "FATAL: JWT_SECRET environment variable is required in production. "
+            "FATAL: JWT_SECRET environment variable is required in production/staging. "
             "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
     # Dev fallback — NEVER use in production
     JWT_SECRET = "dev-only-insecure-secret-do-not-deploy"
-    logger.warning("[Auth] ⚠️  Using insecure dev JWT_SECRET. Set JWT_SECRET env var for production.")
+    logger.warning("[Auth] Using insecure dev JWT_SECRET. Set JWT_SECRET env var for production.")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "168"))  # 7 days
@@ -95,10 +95,15 @@ def revoke_token(token: str) -> bool:
 
 
 def revoke_all_user_tokens(user_id: int):
-    """Revoke all tokens for a user (e.g. on password change)."""
-    # This is a simplified approach — real production would track all active tokens
-    # For now, we rely on password changes creating new tokens and old ones expiring
-    logger.info(f"[Auth] All tokens logically revoked for user {user_id}")
+    """Revoke all tokens for a user (e.g. on password change).
+    Adds a blanket revocation entry so decode_token can check against it.
+    """
+    try:
+        from app.core.database import revoke_all_tokens_for_user
+        revoke_all_tokens_for_user(user_id)
+        logger.info(f"[Auth] All tokens revoked for user {user_id}")
+    except Exception as e:
+        logger.warning(f"[Auth] Token revocation failed for user {user_id}: {e}")
 
 
 def get_current_user(request: Request) -> Optional[dict]:

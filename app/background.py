@@ -84,6 +84,7 @@ def check_price_alerts():
             now_str = utc_now_str()
             triggered_count = 0
             triggered_details = []
+            triggered_ids = []
             for alert_id, uid, symbol, target, direction in alerts:
                 current = market.get(symbol.upper(), {}).get("price")
                 if current is None:
@@ -94,10 +95,17 @@ def check_price_alerts():
                 elif direction == "below" and current <= target:
                     hit = True
                 if hit:
-                    c.execute("UPDATE price_alerts SET triggered = 1, triggered_at_utc = ? WHERE id = ?", (now_str, alert_id))
+                    triggered_ids.append(alert_id)
                     triggered_count += 1
                     triggered_details.append((uid, symbol, direction, target, current))
                     logger.info(f"[Alerts] TRIGGERED #{alert_id}: {symbol} {direction} ${target} (current: ${current})")
+            # Batch update all triggered alerts in one query
+            if triggered_ids:
+                placeholders = ",".join(["?"] * len(triggered_ids))
+                c.execute(
+                    f"UPDATE price_alerts SET triggered = 1, triggered_at_utc = ? WHERE id IN ({placeholders})",
+                    (now_str, *triggered_ids)
+                )
             # db_session auto-commits on clean exit
 
         # Broadcast triggered alerts via SSE to connected browsers

@@ -28,9 +28,9 @@ def backup_postgresql():
     filepath = os.path.join(BACKUP_DIR, filename)
 
     try:
-        # pg_dump → gzip
+        # pg_dump → gzip (use --dbname to avoid credentials in ps output)
         process = subprocess.Popen(
-            ["pg_dump", DATABASE_URL, "--no-owner", "--no-acl"],
+            ["pg_dump", f"--dbname={DATABASE_URL}", "--no-owner", "--no-acl"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

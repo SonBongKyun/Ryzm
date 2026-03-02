@@ -268,7 +268,14 @@ def validate_csrf_token(token: str, session_id: str = "", max_age: int = 7200) -
         s = URLSafeTimedSerializer(_CSRF_SECRET)
         data = s.loads(token, salt="csrf-token", max_age=max_age)
         return True
-    except (ImportError, Exception):
+    except ImportError:
+        logger.warning("[Security] itsdangerous not installed, CSRF validation unavailable")
+        return False
+    except (SignatureExpired, BadSignature) as e:
+        logger.debug(f"[Security] CSRF token invalid: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"[Security] CSRF validation error: {e}")
         return False
 
 

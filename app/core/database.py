@@ -1868,6 +1868,27 @@ def is_token_revoked(jti: str) -> bool:
         return False
 
 
+def revoke_all_tokens_for_user(user_id: int):
+    """Revoke all tokens for a user by adding a wildcard revocation entry."""
+    try:
+        with db_session() as (conn, c):
+            # Insert a special wildcard entry with jti='*:user_id' to block all tokens
+            jti = f"*:{user_id}"
+            if USE_PG:
+                c.execute(
+                    "INSERT INTO token_blocklist (jti, user_id, revoked_at, expires_at) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT (jti) DO UPDATE SET revoked_at = EXCLUDED.revoked_at",
+                    (jti, user_id, utc_now_str(), "")
+                )
+            else:
+                c.execute(
+                    "INSERT OR REPLACE INTO token_blocklist (jti, user_id, revoked_at, expires_at) VALUES (?, ?, ?, ?)",
+                    (jti, user_id, utc_now_str(), "")
+                )
+    except Exception as e:
+        logger.error(f"[DB] Revoke all user tokens error: {e}")
+
+
 def cleanup_expired_tokens():
     """Remove expired tokens from blocklist."""
     try:

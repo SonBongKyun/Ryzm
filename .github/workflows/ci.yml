@@ -3,9 +3,9 @@ name: Ryzm CI/CD
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master]
+    branches: [master, main]
 
 env:
   PYTHON_VERSION: "3.13"
@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           pip install ruff
 
       - name: Lint with Ruff
